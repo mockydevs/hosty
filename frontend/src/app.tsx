@@ -3,11 +3,12 @@ import { ThemeProvider, useTheme } from "@/components/theme";
 import { AppLayout } from "@/layout/app-layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { DashboardPage } from "@/pages/dashboard";
+import { DatabasesPage } from "@/pages/databases";
 import { LoginPage } from "@/pages/login";
 import { SettingsPage } from "@/pages/settings";
 import { SiteDetailPage } from "@/pages/site-detail";
 import { SitesPage } from "@/pages/sites";
-import { BackupsPage, DatabasesPage, DnsPage } from "@/pages/stubs";
+import { BackupsPage, DnsPage } from "@/pages/stubs";
 /**
  * Route table + providers, separated from main.tsx so tests can mount the
  * whole app inside a MemoryRouter.

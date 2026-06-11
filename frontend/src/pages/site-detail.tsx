@@ -1,5 +1,6 @@
 import { OperationProgress } from "@/components/operation-progress";
 import { PhpCard } from "@/components/php-card";
+import { SiteDatabasesTab } from "@/components/site-databases-tab";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -291,7 +292,7 @@ export function SiteDetailPage() {
           <PhaseStub title="File management" phase="Phase 6" />
         </TabsContent>
         <TabsContent value="databases">
-          <PhaseStub title="Databases" phase="Phase 5" />
+          <SiteDatabasesTab site={s} />
         </TabsContent>
         <TabsContent value="backups">
           <PhaseStub title="Backups" phase="Phase 8" />

@@ -10,16 +10,6 @@ function Stub({ title, phase, blurb }: { title: string; phase: string; blurb: st
   );
 }
 
-export function DatabasesPage() {
-  return (
-    <Stub
-      title="Databases"
-      phase="Phase 5"
-      blurb="Provision MariaDB databases per site and manage them with Adminer."
-    />
-  );
-}
-
 export function DnsPage() {
   return (
     <Stub

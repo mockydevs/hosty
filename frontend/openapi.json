@@ -1,6 +1,19 @@
 {
   "components": {
     "schemas": {
+      "AdminerSessionResponse": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "AdminerSessionResponse",
+        "type": "object"
+      },
       "CertStatusResponse": {
         "properties": {
           "detail": {
@@ -89,6 +102,22 @@
         "title": "ChangePhpVersionRequest",
         "type": "object"
       },
+      "CreateDatabaseRequest": {
+        "properties": {
+          "name": {
+            "maxLength": 64,
+            "minLength": 2,
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateDatabaseRequest",
+        "type": "object"
+      },
       "CreateSiteRequest": {
         "properties": {
           "domain": {
@@ -113,6 +142,118 @@
           "domain"
         ],
         "title": "CreateSiteRequest",
+        "type": "object"
+      },
+      "CredentialsResponse": {
+        "properties": {
+          "database": {
+            "$ref": "#/components/schemas/DatabaseResponse"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database",
+          "password"
+        ],
+        "title": "CredentialsResponse",
+        "type": "object"
+      },
+      "DatabaseListEntry": {
+        "properties": {
+          "database": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "default": false,
+            "title": "Missing",
+            "type": "boolean"
+          },
+          "orphan_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orphan Name"
+          },
+          "site_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Domain"
+          }
+        },
+        "title": "DatabaseListEntry",
+        "type": "object"
+      },
+      "DatabaseResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "db_user": {
+            "title": "Db User",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "site_id",
+          "name",
+          "db_user",
+          "purpose",
+          "created_at"
+        ],
+        "title": "DatabaseResponse",
+        "type": "object"
+      },
+      "DeleteDatabaseRequest": {
+        "properties": {
+          "confirm_name": {
+            "title": "Confirm Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_name"
+        ],
+        "title": "DeleteDatabaseRequest",
         "type": "object"
       },
       "DeleteSiteRequest": {
@@ -938,6 +1079,217 @@
         "summary": "Setup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/databases": {
+      "get": {
+        "operationId": "list_databases_api_databases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseListEntry"
+                  },
+                  "title": "Response List Databases Api Databases Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Databases",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/api/databases/adminer-session": {
+      "post": {
+        "description": "Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.",
+        "operationId": "adminer_session_api_databases_adminer_session_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminerSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Adminer Session",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/api/databases/sites/{site_id}": {
+      "post": {
+        "operationId": "create_database_api_databases_sites__site_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Database",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/api/databases/{database_id}": {
+      "delete": {
+        "operationId": "delete_database_api_databases__database_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "database_id",
+            "required": true,
+            "schema": {
+              "title": "Database Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Database",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/api/databases/{database_id}/reset-password": {
+      "post": {
+        "operationId": "reset_password_api_databases__database_id__reset_password_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "database_id",
+            "required": true,
+            "schema": {
+              "title": "Database Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Password",
+        "tags": [
+          "databases"
         ]
       }
     },

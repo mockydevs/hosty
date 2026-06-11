@@ -174,16 +174,16 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 5 — Databases (Weeks 14–15)
 
 ### Week 14: MariaDB management
-- [ ] `services/mariadb.py`: create/drop database, create/drop user, grants — parameterized SQL only
-- [ ] Databases linked to sites in panel DB; orphan detection
-- [ ] Generated credentials shown once, stored hashed/never plaintext where possible
-- [ ] Reset-password action
+- [x] `services/mariadb.py`: create/drop database, create/drop user, grants — identifiers regex-locked + panel-generated secrets only (CLI; parameterization equivalence + revisit condition documented in ADR-007)
+- [x] Databases linked to sites in panel DB (`databases` table, migration 0004; WP installs register theirs, site delete drops them all); orphan + missing-on-server detection
+- [x] Generated credentials shown once, stored as SHA-256 hash only
+- [x] Reset-password action
 
 ### Week 15: Databases UI + Adminer
-- [ ] DB list per site + global list; create/delete with confirm
-- [ ] Adminer deployment: served on panel-controlled path behind panel auth (signed one-time auto-login if feasible — investigate, else document tradeoff)
-- [ ] Tests: SQL builders (injection attempts), full DB lifecycle on VM
-- [ ] **Milestone: create DB in UI, open it in Adminer, query it**
+- [x] DB list per site + global list; create/delete with type-name confirm; show-once credentials dialog
+- [x] Adminer deployment: internal-only Caddy listener + dedicated locked-down PHP pool, reached via the panel's authenticated `/adminer` proxy (60s HMAC ticket → scoped session cookie); credential auto-fill deferred — tradeoff documented in ADR-007
+- [x] Tests: SQL builders (injection attempts), ticket auth, proxy via mock upstream — full DB lifecycle on VM still pending (needs the dev VM)
+- [ ] **Milestone: create DB in UI, open it in Adminer, query it** — needs the dev VM
 
 ---
 
@@ -256,14 +256,4 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [ ] API p95 < 100ms for reads (profile, add caching where measured-slow only)
 - [ ] Frontend: route-level code splitting, bundle budget (< 300KB initial), Lighthouse ≥ 95 perf/accessibility
 - [ ] Accessibility pass: keyboard nav, focus traps in dialogs, aria labels
-- [ ] Mobile pass on real phone: every flow usable
-- [ ] Empty states, skeleton loaders, optimistic updates where safe
-
----
-
-# Phase 10 — Installer, Docs & v1.0 Release (Weeks 25–26)
-
-### Week 25: Production installer
-- [ ] `install.sh`: idempotent installer for fresh Ubuntu 24.04 — installs stack, creates panel user, systemd units, prints initial login
-- [ ] Panel self-update mechanism (git tag based or release tarball) — keep simple
-- [ 
+- [ ] Mobile
