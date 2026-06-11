@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Hosty production installer for a FRESH Ubuntu 24.04 server (Week 25).
+# Hosty production installer for a FRESH Ubuntu 24.04 server.
 # Idempotent: safe to re-run. Usage:
-#   curl -fsSL https://raw.githubusercontent.com/<you>/hosty/main/installer/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
 # or, from a clone:  sudo bash installer/install.sh
 set -euo pipefail
 
@@ -42,14 +42,40 @@ install -d -m 0750 "$STATE_DIR"
 (cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync)
 
 log "Frontend build"
-if [[ ! -d $APP_DIR/frontend/dist ]]; then
-  if ! command -v node >/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt-get install -qy nodejs
-  fi
-  corepack enable
-  (cd "$APP_DIR/frontend" && pnpm install && pnpm exec vite build)
+if ! command -v node >/dev/null; then
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -qy nodejs
 fi
+corepack enable
+
+# Helper: build the frontend with fallbacks for pnpm v10 build-script approval.
+build_frontend() {
+  cd "$APP_DIR/frontend"
+
+  # Strategy 1: normal install (works when lockfile already has approvals).
+  if pnpm install 2>/dev/null; then
+    pnpm exec vite build && return 0
+  fi
+
+  log "Retrying frontend install with clean node_modules..."
+  # Strategy 2: wipe cached state so pnpm re-reads pnpm-workspace.yaml.
+  rm -rf node_modules .pnpm-store
+  if pnpm install 2>/dev/null; then
+    pnpm exec vite build && return 0
+  fi
+
+  log "Retrying with --ignore-scripts + manual rebuild..."
+  # Strategy 3: skip all scripts during install, then rebuild the two packages
+  # that need native binaries.
+  rm -rf node_modules
+  pnpm install --ignore-scripts
+  pnpm rebuild @biomejs/biome esbuild 2>/dev/null || true
+  pnpm exec vite build && return 0
+
+  echo "ERROR: Frontend build failed after all attempts." >&2
+  return 1
+}
+build_frontend
 
 log "Configuration → $ENV_FILE"
 PANEL_DOMAIN="${HOSTY_PANEL_DOMAIN:-}"
