@@ -122,10 +122,16 @@ async def files_proxy(request: Request, path: str) -> Response:
         if own_client:
             await client.aclose()
 
+    response_headers = {
+        k: v for k, v in upstream_resp.headers.items() if k.lower() not in HOP_BY_HOP
+    }
+    # The panel embeds the file manager in an iframe on the site detail page;
+    # SAMEORIGIN here pre-empts the global X-Frame-Options: DENY (setdefault).
+    response_headers["X-Frame-Options"] = "SAMEORIGIN"
     response = Response(
         content=upstream_resp.content,
         status_code=upstream_resp.status_code,
-        headers={k: v for k, v in upstream_resp.headers.items() if k.lower() not in HOP_BY_HOP},
+        headers=response_headers,
     )
     if set_cookie:
         response.set_cookie(

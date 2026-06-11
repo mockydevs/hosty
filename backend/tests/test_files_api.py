@@ -226,6 +226,9 @@ async def test_files_session_and_proxy_flow(
     assert all(r.headers.get(AUTH_HEADER) == site_user for r in fake_files_upstream)
     # Filebrowser runs with baseurl=/files; the proxy must keep the prefix.
     assert all(r.url.path.startswith("/files") for r in fake_files_upstream)
+    # Embedded in an iframe: must allow same-origin framing despite the
+    # panel-wide X-Frame-Options: DENY default.
+    assert resp.headers["x-frame-options"] == "SAMEORIGIN"
 
 
 async def test_files_proxy_strips_spoofed_identity_header(
