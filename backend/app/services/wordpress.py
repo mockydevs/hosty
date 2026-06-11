@@ -292,33 +292,29 @@ async def run_action(site: Site, action: str) -> str | None:
     if action == "shuffle_salts":
         await run_wp(site.site_user, site.doc_root, ["config", "shuffle-salts"])
         return None
-    # login_link: one-time magic login URL via the wp-cli login command package
-    # (aaemnnosttv/wp-cli-login-command); installed on first use.
-    probe = await run_wp(site.site_user, site.doc_root, ["help", "login"], check=False)
-    if not probe.ok:
-        # Use the full HTTPS URL so WP-CLI / Composer clones over HTTPS, not SSH.
-        # The site Linux user has no GitHub SSH key, so git@github.com would fail.
-        await run_wp(
-            site.site_user,
-            site.doc_root,
-            [
-                "package",
-                "install",
-                "https://github.com/aaemnnosttv/wp-cli-login-command.git",
-            ],
-            timeout=300,
-        )
-        await run_wp(site.site_user, site.doc_root, ["login", "install", "--activate", "--yes"])
-    admins = await run_wp(
+    # login_link: generate a one-time WordPress admin login URL using WordPress's
+    # built-in get_password_reset_key() via `wp eval`. No external packages,
+    # no git, no Composer, no network access required.
+    _LOGIN_EVAL = (
+        "$users = get_users(['role'=>'administrator','number'=>1,'fields'=>['ID','user_login']]);\n"
+        "if(empty($users)){fwrite(STDERR,'No administrator found');exit(1);}\n"
+        "$u=$users[0];\n"
+        "$key=get_password_reset_key(get_userdata($u->ID));\n"
+        "if(is_wp_error($key)){fwrite(STDERR,$key->get_error_message());exit(1);}\n"
+        "echo network_site_url(\n"
+        "  'wp-login.php?action=rp&key='.urlencode($key).'&login='.rawurlencode($u->user_login),\n"
+        "  'login'\n"
+        ");"
+    )
+    result = await run_wp(
         site.site_user,
         site.doc_root,
-        ["user", "list", "--role=administrator", "--field=user_login"],
+        ["eval", _LOGIN_EVAL],
     )
-    admin = admins.stdout.strip().splitlines()[0] if admins.stdout.strip() else None
-    if not admin:
-        raise WordPressError("No administrator user found")
-    result = await run_wp(site.site_user, site.doc_root, ["login", "create", admin, "--url-only"])
-    return result.stdout.strip() or None
+    url = result.stdout.strip()
+    if not url:
+        raise WordPressError("login_link: wp eval returned an empty URL")
+    return url
 
 
 def generate_admin_password() -> str:
