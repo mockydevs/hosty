@@ -269,6 +269,19 @@
         "title": "DeleteSiteRequest",
         "type": "object"
       },
+      "FilesSessionResponse": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "FilesSessionResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1536,6 +1549,53 @@
         "summary": "Get Site",
         "tags": [
           "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/files-session": {
+      "post": {
+        "operationId": "files_session_api_sites__site_id__files_session_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Files Session",
+        "tags": [
+          "files"
         ]
       }
     },

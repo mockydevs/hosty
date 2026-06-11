@@ -189,11 +189,12 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 
 # Phase 6 — File Manager (Week 16)
 
-- [ ] Filebrowser: one instance, scoped per site directory, behind panel reverse-proxy path
-- [ ] Auto-auth from panel session (Filebrowser JWT) — user lands directly in their site's files
-- [ ] Embed in site detail "Files" tab (iframe) + "open full screen" link
-- [ ] Verify permission boundaries: site A user cannot browse site B (test this)
-- [ ] **Milestone: edit a file from the panel, see the change live**
+- [x] Filebrowser: one instance, scoped per site directory, behind panel reverse-proxy path (internal-only listener, provisioned + systemd unit in `installer/provision.sh` — not yet run on a VM)
+- [x] Auto-auth from panel session — proxy auth (`X-Hosty-Fb-User` header from signed HMAC ticket → scoped session cookie) instead of Filebrowser JWT; tradeoff documented in ADR-008
+- [x] Embed in site detail "Files" tab (iframe) + "open full screen" link
+- [x] Verify permission boundaries: per-site Filebrowser user scoped to its own directory; tests cover signature-bound scope, spoofed-header stripping, anonymous rejection — live two-site boundary check on VM still pending (needs the dev VM)
+- [ ] **Milestone: edit a file from the panel, see the change live** — needs the dev VM
+- [ ] Ownership normalization: Filebrowser runs as root, created files are root-owned until event-hook `chown` is configured (see ADR-008) — verify on VM
 
 ---
 
@@ -256,4 +257,26 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [ ] API p95 < 100ms for reads (profile, add caching where measured-slow only)
 - [ ] Frontend: route-level code splitting, bundle budget (< 300KB initial), Lighthouse ≥ 95 perf/accessibility
 - [ ] Accessibility pass: keyboard nav, focus traps in dialogs, aria labels
-- [ ] Mobile
+- [ ] Mobile pass on real phone: every flow usable
+- [ ] Empty states, skeleton loaders, optimistic updates where safe
+
+---
+
+# Phase 10 — Installer, Docs & v1.0 Release (Weeks 25–26)
+
+### Week 25: Production installer
+- [ ] `install.sh`: idempotent installer for fresh Ubuntu 24.04 — installs stack, creates panel user, systemd units, prints initial login
+- [ ] Panel self-update mechanism (git tag based or release tarball) — keep simple
+- [ ] Uninstall script
+- [ ] Test installer on a clean cloud VM (e.g., Hetzner/DO smallest instance) — twice (idempotency)
+
+### Week 26: Documentation & release
+- [ ] README: screenshots, features, install one-liner, requirements
+- [ ] `docs/`: admin guide, backup/restore runbook, architecture overview, API reference (auto from OpenAPI)
+- [ ] CHANGELOG.md, tag `v1.0.0`, GitHub release
+- [ ] Post-1.0 backlog file: multi-user/roles, 2FA, monitoring graphs, staging clones, Redis cache toggle, server firewall (ufw) management
+- [ ] **Milestone: a stranger can install and host a WordPress site using only the README**
+
+---
+
+## Rec

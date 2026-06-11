@@ -1,3 +1,4 @@
+import { FilesTab } from "@/components/files-tab";
 import { OperationProgress } from "@/components/operation-progress";
 import { PhpCard } from "@/components/php-card";
 import { SiteDatabasesTab } from "@/components/site-databases-tab";
@@ -289,7 +290,7 @@ export function SiteDetailPage() {
         </TabsContent>
 
         <TabsContent value="files">
-          <PhaseStub title="File management" phase="Phase 6" />
+          <FilesTab site={s} />
         </TabsContent>
         <TabsContent value="databases">
           <SiteDatabasesTab site={s} />
