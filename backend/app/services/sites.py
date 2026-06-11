@@ -89,6 +89,16 @@ def spec_for(site: Site, settings: Settings) -> SiteSpec:
     )
 
 
+def _panel_spec(settings: Settings) -> caddy.PanelSpec | None:
+    if not settings.panel_domain:
+        return None
+    return caddy.PanelSpec(
+        domain=settings.panel_domain,
+        upstream=settings.panel_upstream,
+        allowed_ips=tuple(settings.panel_allowed_ips),
+    )
+
+
 def _adminer_spec(settings: Settings) -> caddy.AdminerSpec | None:
     if not settings.adminer_enabled:
         return None
@@ -255,6 +265,7 @@ async def run_create_site(
                 caddy.build_config(
                     await _served_specs(db, settings),
                     adminer=_adminer_spec(settings),
+                    panel=_panel_spec(settings),
                     tls_internal=settings.caddy_tls_internal,
                 )
             )
@@ -263,7 +274,10 @@ async def run_create_site(
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
             await client.apply(
                 caddy.build_config(
-                    specs, adminer=_adminer_spec(settings), tls_internal=settings.caddy_tls_internal
+                    specs,
+                    adminer=_adminer_spec(settings),
+                    panel=_panel_spec(settings),
+                    tls_internal=settings.caddy_tls_internal,
                 )
             )
 
@@ -323,7 +337,10 @@ async def run_delete_site(
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
             await client.apply(
                 caddy.build_config(
-                    specs, adminer=_adminer_spec(settings), tls_internal=settings.caddy_tls_internal
+                    specs,
+                    adminer=_adminer_spec(settings),
+                    panel=_panel_spec(settings),
+                    tls_internal=settings.caddy_tls_internal,
                 )
             )
 
@@ -405,6 +422,7 @@ async def change_php_version(
             caddy.build_config(
                 await _served_specs(db, settings),
                 adminer=_adminer_spec(settings),
+                panel=_panel_spec(settings),
                 tls_internal=settings.caddy_tls_internal,
             )
         )

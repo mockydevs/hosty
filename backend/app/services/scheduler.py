@@ -81,6 +81,11 @@ async def tick(app: FastAPI) -> int:
             )
         except Exception as exc:  # one site failing must not stop the others
             log.error("scheduled_backup_failed", site_id=site_id, error=str(exc))
+
+    try:
+        await self_backup(app)
+    except Exception as exc:  # never let self-backup break site backups
+        log.error("panel_self_backup_failed", error=str(exc))
     return len(jobs)
 
 
@@ -94,3 +99,41 @@ async def loop(app: FastAPI) -> None:
             raise
         except Exception as exc:
             log.error("scheduler_tick_failed", error=str(exc))
+
+
+# --- panel self-backup (Week 23) ---------------------------------------------------
+
+SELF_BACKUP_KEEP = 7
+
+
+async def self_backup(app: FastAPI) -> str | None:
+    """Snapshot the panel's own SQLite DB into `<backups_root>/_panel/` daily.
+
+    Uses `VACUUM INTO` (consistent point-in-time copy even mid-write); prunes
+    to the newest SELF_BACKUP_KEEP. Returns the new snapshot path, or None if
+    today's snapshot already exists or the panel DB is not SQLite.
+    """
+    import os
+
+    from sqlalchemy import text
+
+    settings = app.state.settings
+    if not settings.database_url.startswith("sqlite"):
+        return None
+    target_dir = os.path.join(settings.backups_root, "_panel")
+    os.makedirs(target_dir, exist_ok=True)
+    stamp = utcnow().strftime("%Y%m%d")
+    target = os.path.join(target_dir, f"hosty-{stamp}.db")
+    if os.path.exists(target):
+        return None
+
+    async with app.state.engine.connect() as conn:
+        await conn.execute(text("VACUUM INTO :target").bindparams(target=target))
+    log.info("panel_self_backup_written", target=target)
+
+    snapshots = sorted(
+        f for f in os.listdir(target_dir) if f.startswith("hosty-") and f.endswith(".db")
+    )
+    for stale in snapshots[:-SELF_BACKUP_KEEP]:
+        os.unlink(os.path.join(target_dir, stale))
+    return target

@@ -120,11 +120,37 @@ def _adminer_server(spec: AdminerSpec) -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True)
+class PanelSpec:
+    """Production: Caddy fronts the panel itself (HTTPS, optional IP allowlist)."""
+
+    domain: str
+    upstream: str  # e.g. 127.0.0.1:8800
+    allowed_ips: tuple[str, ...] = ()
+
+
+def _panel_route(spec: PanelSpec) -> dict[str, Any]:
+    match: dict[str, Any] = {"host": [spec.domain]}
+    if spec.allowed_ips:
+        match["remote_ip"] = {"ranges": list(spec.allowed_ips)}
+    return {
+        "match": [match],
+        "handle": [
+            {
+                "handler": "reverse_proxy",
+                "upstreams": [{"dial": spec.upstream}],
+            }
+        ],
+        "terminal": True,
+    }
+
+
 def build_config(
     sites: Sequence[SiteSpec],
     *,
     adminer: AdminerSpec | None = None,
     tls_internal: bool = False,
+    panel: PanelSpec | None = None,
 ) -> dict[str, Any]:
     """Full desired-state Caddy config. Deterministic: sites sorted by domain.
 
@@ -136,7 +162,7 @@ def build_config(
     servers: dict[str, Any] = {
         SERVER_NAME: {
             "listen": [":80", ":443"],
-            "routes": [_site_route(s) for s in ordered],
+            "routes": ([_panel_route(panel)] if panel else []) + [_site_route(s) for s in ordered],
         }
     }
     if adminer is not None:

@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     filebrowser_db: str = "/var/lib/hosty/filebrowser.db"
     filebrowser_admin_user: str = "admin"  # created at provision time, password locked
     files_session_ttl_seconds: int = 30 * 60
+
+    # Phase 9: hardening
+    panel_domain: str | None = None  # production: Caddy fronts the panel on this host
+    panel_upstream: str = "127.0.0.1:8800"
+    panel_allowed_ips: list[str] = []
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 
     # Phase 7: DNS (PowerDNS)
