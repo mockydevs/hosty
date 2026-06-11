@@ -8,7 +8,7 @@ Wants=network-online.target
 Type=exec
 EnvironmentFile=/var/lib/hosty/hosty.env
 WorkingDirectory=/opt/hosty/backend
-ExecStart=/usr/local/bin/uv run --project /opt/hosty/backend uvicorn app.main:app --host 127.0.0.1 --port 8800
+ExecStart=/usr/local/bin/uv run --project /opt/hosty/backend uvicorn app.main:app --host 0.0.0.0 --port 8800
 Environment=UV_PROJECT_ENVIRONMENT=/var/lib/hosty/venv
 Restart=always
 RestartSec=3
