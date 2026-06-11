@@ -2,13 +2,14 @@ import { LoadingState } from "@/components/states";
 import { ThemeProvider, useTheme } from "@/components/theme";
 import { AppLayout } from "@/layout/app-layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { BackupsPage } from "@/pages/backups";
 import { DashboardPage } from "@/pages/dashboard";
 import { DatabasesPage } from "@/pages/databases";
+import { DnsPage, DnsZonePage } from "@/pages/dns";
 import { LoginPage } from "@/pages/login";
 import { SettingsPage } from "@/pages/settings";
 import { SiteDetailPage } from "@/pages/site-detail";
 import { SitesPage } from "@/pages/sites";
-import { BackupsPage, DnsPage } from "@/pages/stubs";
 /**
  * Route table + providers, separated from main.tsx so tests can mount the
  * whole app inside a MemoryRouter.
@@ -59,6 +60,7 @@ export function App() {
               <Route path="/sites/:siteId" element={<SiteDetailPage />} />
               <Route path="/databases" element={<DatabasesPage />} />
               <Route path="/dns" element={<DnsPage />} />
+              <Route path="/dns/:zoneId" element={<DnsZonePage />} />
               <Route path="/backups" element={<BackupsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
