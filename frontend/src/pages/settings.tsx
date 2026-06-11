@@ -1,3 +1,4 @@
+import { AuditLogCard } from "@/components/audit-log-card";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,6 +124,8 @@ export function SettingsPage() {
           />
         </CardContent>
       </Card>
+
+      <AuditLogCard />
     </div>
   );
 }

@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Audit Entries */
+        get: operations["list_audit_entries_api_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/change-password": {
         parameters: {
             query?: never;
@@ -706,6 +723,35 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** AuditEntryResponse */
+        AuditEntryResponse: {
+            /** Client Ip */
+            client_ip: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Status Code */
+            status_code: number;
+            /** User Id */
+            user_id: number | null;
+            /** Username */
+            username: string | null;
+        };
+        /** AuditPageResponse */
+        AuditPageResponse: {
+            /** Entries */
+            entries: components["schemas"]["AuditEntryResponse"][];
+            /** Total */
+            total: number;
+        };
         /** BackupResponse */
         BackupResponse: {
             /** Backup Id */
@@ -1257,6 +1303,38 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_audit_entries_api_audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     change_password_api_auth_change_password_post: {
         parameters: {
             query?: never;

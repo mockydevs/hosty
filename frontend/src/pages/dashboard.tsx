@@ -247,8 +247,8 @@ export function DashboardPage() {
         <CardHeader>
           <CardTitle className="text-base">Next up</CardTitle>
           <CardDescription>
-            Hardening, audit logging and a production installer (Phases 9-10) are what remain.
-            This dashboard will grow recent-activity and alerts as those land.
+            Hardening, audit logging and a production installer (Phases 9-10) are what remain. This
+            dashboard will grow recent-activity and alerts as those land.
           </CardDescription>
         </CardHeader>
       </Card>
