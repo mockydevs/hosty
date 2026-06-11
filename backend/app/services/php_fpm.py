@@ -8,6 +8,7 @@ version, so this layer cannot write outside the PHP pool directories.
 from __future__ import annotations
 
 import os
+import re
 
 import structlog
 
@@ -17,8 +18,15 @@ from app.system.users import validate_site_username
 
 log = structlog.get_logger("hosty.php_fpm")
 
+# 1-4 digits + M (megabytes). Keeps values shell- and ini-safe by construction.
+PHP_SIZE_RE = re.compile(r"^[1-9][0-9]{0,3}M$")
+
 
 class InvalidPhpVersionError(ValueError):
+    pass
+
+
+class InvalidPhpSettingError(ValueError):
     pass
 
 
@@ -32,6 +40,12 @@ def validate_php_version(version: str, *, allowed: list[str]) -> str:
             f"Unsupported PHP version: {version!r} (allowed: {', '.join(allowed)})"
         )
     return version
+
+
+def validate_php_size(value: str, *, name: str) -> str:
+    if not isinstance(value, str) or not PHP_SIZE_RE.fullmatch(value):
+        raise InvalidPhpSettingError(f"{name} must look like '256M', got {value!r}")
+    return value
 
 
 def fpm_unit(version: str) -> str:
@@ -50,10 +64,19 @@ def pool_file_path(site_user: str, version: str, settings: Settings) -> str:
     return f"{pool_dir}/{site_user}.conf"
 
 
-def render_pool_config(site_user: str, version: str, settings: Settings) -> str:
-    """Pure: site user + version in → exact pool config out (snapshot-tested)."""
+def render_pool_config(
+    site_user: str,
+    version: str,
+    settings: Settings,
+    *,
+    memory_limit: str = "256M",
+    upload_max_filesize: str = "64M",
+) -> str:
+    """Pure: site user + version + limits in → exact pool file out."""
     validate_site_username(site_user)
     validate_php_version(version, allowed=settings.php_versions)
+    validate_php_size(memory_limit, name="memory_limit")
+    validate_php_size(upload_max_filesize, name="upload_max_filesize")
     socket = socket_path(site_user, version, settings)
     return f"""\
 ; Managed by Hosty — do not edit by hand.
@@ -74,16 +97,29 @@ pm.max_requests = 500
 php_admin_value[error_log] = /home/{site_user}/php-error.log
 php_admin_flag[log_errors] = on
 php_admin_value[open_basedir] = none
-php_value[memory_limit] = 256M
-php_value[upload_max_filesize] = 64M
-php_value[post_max_size] = 64M
+php_value[memory_limit] = {memory_limit}
+php_value[upload_max_filesize] = {upload_max_filesize}
+php_value[post_max_size] = {upload_max_filesize}
 """
 
 
-async def install_pool(site_user: str, version: str, settings: Settings) -> None:
+async def install_pool(
+    site_user: str,
+    version: str,
+    settings: Settings,
+    *,
+    memory_limit: str = "256M",
+    upload_max_filesize: str = "64M",
+) -> None:
     """Write the pool file and reload PHP-FPM. Idempotent (overwrites)."""
     path = pool_file_path(site_user, version, settings)
-    content = render_pool_config(site_user, version, settings)
+    content = render_pool_config(
+        site_user,
+        version,
+        settings,
+        memory_limit=memory_limit,
+        upload_max_filesize=upload_max_filesize,
+    )
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(content)
     log.info("php_pool_installed", pool=path)

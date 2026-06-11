@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.clock import utcnow
@@ -46,6 +46,11 @@ class Site(Base):
     # provisioning | active | error | deleting
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="provisioning")
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    php_memory_limit: Mapped[str] = mapped_column(String(8), nullable=False, default="256M")
+    php_upload_max_filesize: Mapped[str] = mapped_column(String(8), nullable=False, default="64M")
+    wordpress: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    wp_db_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wp_db_user: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, onupdate=utcnow

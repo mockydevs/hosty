@@ -8,7 +8,9 @@ allowed to spawn processes (CI-enforced).
 from __future__ import annotations
 
 import asyncio
+import os
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import structlog
@@ -59,6 +61,7 @@ async def run(
     *,
     timeout: float = 30.0,
     cwd: str | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> CommandResult:
     cmd = validate_argv(argv)
     start = time.perf_counter()
@@ -68,6 +71,7 @@ async def run(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env={**os.environ, **env} if env is not None else None,
         )
     except FileNotFoundError as exc:
         raise CommandNotFoundError(f"Executable not found: {cmd[0]}") from exc

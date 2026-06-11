@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services import php_fpm
+from app.services import mariadb, php_fpm
 from app.services.caddy import CaddyClient
 from app.system import fs, users
 from tests.conftest import setup_and_login  # noqa: F401  (fixture file)
@@ -22,7 +22,8 @@ class FakeSystem:
         self.fail_on: str | None = None
         self.linux_users: set[str] = set()
         self.files: dict[str, str] = {}
-        self.pools: set[str] = set()
+        self.pools: set[tuple[str, str]] = set()
+        self.databases: set[str] = set()
         self.caddy_configs: list[dict] = []
 
     def _maybe_fail(self, step: str) -> None:
@@ -56,15 +57,24 @@ class FakeSystem:
         async def remove_tree(path: str, *, root: str) -> None:
             fake.calls.append(("remove_tree", path))
 
-        async def install_pool(site_user: str, version: str, settings) -> None:
+        async def install_pool(site_user: str, version: str, settings, **limits) -> None:
             fake._maybe_fail("php_pool")
-            fake.calls.append(("install_pool", site_user, version))
-            fake.pools.add(site_user)
+            fake.calls.append(("install_pool", site_user, version, limits))
+            fake.pools.add((site_user, version))
 
         async def remove_pool(site_user: str, version: str, settings) -> bool:
             fake.calls.append(("remove_pool", site_user, version))
-            fake.pools.discard(site_user)
+            fake.pools.discard((site_user, version))
             return True
+
+        async def create_database(database: str, user: str, password: str) -> None:
+            fake._maybe_fail("database")
+            fake.calls.append(("create_database", database, user))
+            fake.databases.add(database)
+
+        async def drop_database(database: str, user: str) -> None:
+            fake.calls.append(("drop_database", database, user))
+            fake.databases.discard(database)
 
         async def caddy_apply(self_client, config: dict) -> None:
             fake._maybe_fail("caddy")
@@ -79,6 +89,8 @@ class FakeSystem:
         monkeypatch.setattr(fs, "remove_tree", remove_tree)
         monkeypatch.setattr(php_fpm, "install_pool", install_pool)
         monkeypatch.setattr(php_fpm, "remove_pool", remove_pool)
+        monkeypatch.setattr(mariadb, "create_database", create_database)
+        monkeypatch.setattr(mariadb, "drop_database", drop_database)
         monkeypatch.setattr(CaddyClient, "apply", caddy_apply)
 
 

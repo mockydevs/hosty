@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.clock import utcnow
 from app.core.config import Settings
 from app.db.models import Operation, Site
-from app.services import caddy, php_fpm
+from app.services import caddy, mariadb, php_fpm
 from app.services.caddy import CaddyClient, SiteSpec
 from app.system import fs, users
 
@@ -112,6 +112,7 @@ CREATE_STEPS = [
 DELETE_STEPS = [
     ("caddy", "Remove vhost from Caddy"),
     ("php_pool", "Remove PHP-FPM pool"),
+    ("database", "Drop WordPress database"),
     ("doc_root", "Delete site files"),
     ("linux_user", "Delete Linux user"),
     ("finalize", "Remove site record"),
@@ -224,7 +225,13 @@ async def run_create_site(
             await fs.remove_tree(site_dir, root=settings.sites_root)
 
         async def do_pool() -> None:
-            await php_fpm.install_pool(site.site_user, site.php_version, settings)
+            await php_fpm.install_pool(
+                site.site_user,
+                site.php_version,
+                settings,
+                memory_limit=site.php_memory_limit,
+                upload_max_filesize=site.php_upload_max_filesize,
+            )
 
         async def undo_pool() -> None:
             await php_fpm.remove_pool(site.site_user, site.php_version, settings)
@@ -288,6 +295,11 @@ async def run_delete_site(
         async def do_pool() -> None:
             await php_fpm.remove_pool(site.site_user, site.php_version, settings)
 
+        async def do_database() -> None:
+            # No-op for plain sites; idempotent DROP IF EXISTS otherwise.
+            if site.wp_db_name and site.wp_db_user:
+                await mariadb.drop_database(site.wp_db_name, site.wp_db_user)
+
         async def do_docroot() -> None:
             await fs.remove_tree(site_dir, root=settings.sites_root)
 
@@ -304,6 +316,7 @@ async def run_delete_site(
             [
                 _Step("caddy", do_caddy, None),
                 _Step("php_pool", do_pool, None),
+                _Step("database", do_database, None),
                 _Step("doc_root", do_docroot, None),
                 _Step("linux_user", do_user, None),
                 _Step("finalize", do_finalize, None),
@@ -315,3 +328,61 @@ async def run_delete_site(
             site.status = "error"
             site.error_message = error
             await _finish(db, op, status="failed", error=error)
+
+
+# --- post-provisioning site changes (Week 11) ----------------------------------
+
+
+async def change_php_version(
+    db: AsyncSession,
+    settings: Settings,
+    site: Site,
+    new_version: str,
+    *,
+    caddy_client: CaddyClient | None = None,
+) -> None:
+    """Zero-downtime PHP switch: new pool up → Caddy repointed → old pool gone."""
+    old_version = site.php_version
+    if new_version == old_version:
+        return
+    client = _caddy_client(settings, caddy_client)
+    await php_fpm.install_pool(
+        site.site_user,
+        new_version,
+        settings,
+        memory_limit=site.php_memory_limit,
+        upload_max_filesize=site.php_upload_max_filesize,
+    )
+    site.php_version = new_version
+    try:
+        await client.apply(caddy.build_config(await _served_specs(db, settings)))
+    except Exception:
+        # Caddy still points at the old socket; drop the new pool and bail.
+        site.php_version = old_version
+        await php_fpm.remove_pool(site.site_user, new_version, settings)
+        raise
+    await php_fpm.remove_pool(site.site_user, old_version, settings)
+    await db.commit()
+
+
+async def update_php_settings(
+    settings: Settings,
+    site: Site,
+    db: AsyncSession,
+    *,
+    memory_limit: str,
+    upload_max_filesize: str,
+) -> None:
+    """Rewrite the pool with new limits and reload. Caddy is unaffected."""
+    php_fpm.validate_php_size(memory_limit, name="memory_limit")
+    php_fpm.validate_php_size(upload_max_filesize, name="upload_max_filesize")
+    await php_fpm.install_pool(
+        site.site_user,
+        site.php_version,
+        settings,
+        memory_limit=memory_limit,
+        upload_max_filesize=upload_max_filesize,
+    )
+    site.php_memory_limit = memory_limit
+    site.php_upload_max_filesize = upload_max_filesize
+    await db.commit()
