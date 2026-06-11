@@ -110,6 +110,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List All Backups */
+        get: operations["list_all_backups_api_backups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backups Meta */
+        get: operations["backups_meta_api_backups_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/s3-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get S3 Config
+         * @description Current S3 target. The secret access key is never returned.
+         */
+        get: operations["get_s3_config_api_backups_s3_config_get"];
+        /**
+         * Update S3 Config
+         * @description Validate the credentials against the bucket, then store them (secret
+         *     encrypted at rest). Leaving the secret blank keeps the existing one.
+         */
+        put: operations["update_s3_config_api_backups_s3_config_put"];
+        post?: never;
+        /** Delete S3 Config */
+        delete: operations["delete_s3_config_api_backups_s3_config_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/s3-config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test S3 Config
+         * @description Probe the stored configuration; 502 with details when unreachable.
+         */
+        post: operations["test_s3_config_api_backups_s3_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/databases": {
         parameters: {
             query?: never;
@@ -198,6 +278,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dns/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dns Meta */
+        get: operations["dns_meta_api_dns_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Zones */
+        get: operations["list_zones_api_dns_zones_get"];
+        put?: never;
+        /** Create Zone */
+        post: operations["create_zone_api_dns_zones_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Zone */
+        get: operations["get_zone_api_dns_zones__zone_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Zone */
+        delete: operations["delete_zone_api_dns_zones__zone_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}/push/cloudflare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push To Cloudflare
+         * @description One click: export every record of this zone to the Cloudflare account.
+         */
+        post: operations["push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Record */
+        put: operations["upsert_record_api_dns_zones__zone_id__records_put"];
+        post?: never;
+        /** Delete Record */
+        delete: operations["delete_record_api_dns_zones__zone_id__records_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}/templates/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Template */
+        post: operations["apply_template_api_dns_zones__zone_id__templates__template__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -263,6 +451,76 @@ export interface paths {
         post?: never;
         /** Delete Site */
         delete: operations["delete_site_api_sites__site_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/backup-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Schedule */
+        get: operations["get_schedule_api_sites__site_id__backup_schedule_get"];
+        /** Update Schedule */
+        put: operations["update_schedule_api_sites__site_id__backup_schedule_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Site Backups */
+        get: operations["list_site_backups_api_sites__site_id__backups_get"];
+        put?: never;
+        /** Start Backup */
+        post: operations["start_backup_api_sites__site_id__backups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/backups/{backup_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Backup */
+        delete: operations["delete_backup_api_sites__site_id__backups__backup_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/backups/{backup_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Restore */
+        post: operations["start_restore_api_sites__site_id__backups__backup_id__restore_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -448,6 +706,32 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** BackupResponse */
+        BackupResponse: {
+            /** Backup Id */
+            backup_id: string;
+            /** Created At */
+            created_at: string;
+            /** Databases */
+            databases: string[];
+            /** Domain */
+            domain: string;
+            /** Php Version */
+            php_version: string;
+            /** S3 */
+            s3: boolean;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Wordpress */
+            wordpress: boolean;
+        };
+        /** BackupsMetaResponse */
+        BackupsMetaResponse: {
+            /** S3 Enabled */
+            s3_enabled: boolean;
+            /** Scheduler Enabled */
+            scheduler_enabled: boolean;
+        };
         /** CertStatusResponse */
         CertStatusResponse: {
             /** Detail */
@@ -473,6 +757,19 @@ export interface components {
             /** Php Version */
             php_version: string;
         };
+        /** CloudflarePushResponse */
+        CloudflarePushResponse: {
+            /** Created */
+            created: number;
+            /** Errors */
+            errors: string[];
+            /** Skipped */
+            skipped: number;
+            /** Updated */
+            updated: number;
+            /** Zone */
+            zone: string;
+        };
         /** CreateDatabaseRequest */
         CreateDatabaseRequest: {
             /** Name */
@@ -484,6 +781,16 @@ export interface components {
             domain: string;
             /** Php Version */
             php_version?: string | null;
+        };
+        /** CreateZoneRequest */
+        CreateZoneRequest: {
+            /** Name */
+            name: string;
+            /**
+             * Point To Server
+             * @default false
+             */
+            point_to_server: boolean;
         };
         /** CredentialsResponse */
         CredentialsResponse: {
@@ -522,15 +829,46 @@ export interface components {
             /** Site Id */
             site_id: number;
         };
+        /** DeleteBackupRequest */
+        DeleteBackupRequest: {
+            /** Confirm Id */
+            confirm_id: string;
+        };
         /** DeleteDatabaseRequest */
         DeleteDatabaseRequest: {
             /** Confirm Name */
             confirm_name: string;
         };
+        /** DeleteRecordRequest */
+        DeleteRecordRequest: {
+            /**
+             * Name
+             * @default @
+             */
+            name: string;
+            /** Type */
+            type: string;
+        };
         /** DeleteSiteRequest */
         DeleteSiteRequest: {
             /** Confirm Domain */
             confirm_domain: string;
+        };
+        /** DeleteZoneRequest */
+        DeleteZoneRequest: {
+            /** Confirm Name */
+            confirm_name: string;
+        };
+        /** DnsMetaResponse */
+        DnsMetaResponse: {
+            /** Cloudflare Enabled */
+            cloudflare_enabled: boolean;
+            /** Default Ttl */
+            default_ttl: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Server Ip */
+            server_ip: string;
         };
         /** FilesSessionResponse */
         FilesSessionResponse: {
@@ -579,6 +917,11 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["OperationStep"][];
         };
+        /** OperationStartedResponse */
+        OperationStartedResponse: {
+            /** Operation Id */
+            operation_id: number;
+        };
         /** OperationStep */
         OperationStep: {
             /** Label */
@@ -594,6 +937,69 @@ export interface components {
             memory_limit: string;
             /** Upload Max Filesize */
             upload_max_filesize: string;
+        };
+        /** RRSetResponse */
+        RRSetResponse: {
+            /** Name */
+            name: string;
+            /** Records */
+            records: string[];
+            /** Ttl */
+            ttl: number;
+            /** Type */
+            type: string;
+        };
+        /** RestoreRequest */
+        RestoreRequest: {
+            /** Confirm Domain */
+            confirm_domain: string;
+            /**
+             * Scope
+             * @default full
+             * @enum {string}
+             */
+            scope: "full" | "files" | "db";
+        };
+        /** S3ConfigResponse */
+        S3ConfigResponse: {
+            /** Access Key */
+            access_key: string;
+            /** Bucket */
+            bucket: string;
+            /** Configured */
+            configured: boolean;
+            /** Endpoint */
+            endpoint: string;
+            /** Has Secret */
+            has_secret: boolean;
+            /** Prefix */
+            prefix: string;
+            /** Region */
+            region: string;
+            /** Source */
+            source: ("db" | "env") | null;
+        };
+        /** ScheduleResponse */
+        ScheduleResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "daily" | "weekly";
+            /** Hour */
+            hour: number;
+            /** Include Databases */
+            include_databases: boolean;
+            /** Include Files */
+            include_files: boolean;
+            /** Last Run At */
+            last_run_at: string | null;
+            /** Retention */
+            retention: number;
+            /** S3 Mirror */
+            s3_mirror: boolean;
         };
         /** ServiceStatusResponse */
         ServiceStatusResponse: {
@@ -681,6 +1087,77 @@ export interface components {
              */
             token_type: string;
         };
+        /** UpdateS3ConfigRequest */
+        UpdateS3ConfigRequest: {
+            /** Access Key */
+            access_key: string;
+            /** Bucket */
+            bucket: string;
+            /** Endpoint */
+            endpoint: string;
+            /**
+             * Prefix
+             * @default hosty
+             */
+            prefix: string;
+            /**
+             * Region
+             * @default
+             */
+            region: string;
+            /** Secret Key */
+            secret_key?: string | null;
+        };
+        /** UpdateScheduleRequest */
+        UpdateScheduleRequest: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Frequency
+             * @default daily
+             * @enum {string}
+             */
+            frequency: "daily" | "weekly";
+            /**
+             * Hour
+             * @default 3
+             */
+            hour: number;
+            /**
+             * Include Databases
+             * @default true
+             */
+            include_databases: boolean;
+            /**
+             * Include Files
+             * @default true
+             */
+            include_files: boolean;
+            /**
+             * Retention
+             * @default 7
+             */
+            retention: number;
+            /**
+             * S3 Mirror
+             * @default true
+             */
+            s3_mirror: boolean;
+        };
+        /** UpsertRecordRequest */
+        UpsertRecordRequest: {
+            /**
+             * Name
+             * @default @
+             */
+            name: string;
+            /** Records */
+            records: string[];
+            /** Ttl */
+            ttl?: number | null;
+            /** Type */
+            type: string;
+        };
         /** UserResponse */
         UserResponse: {
             /** Id */
@@ -748,6 +1225,28 @@ export interface components {
             update_available: string | null;
             /** Version */
             version: string | null;
+        };
+        /** ZoneDetailResponse */
+        ZoneDetailResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Rrsets */
+            rrsets: components["schemas"]["RRSetResponse"][];
+            /** Serial */
+            serial: number;
+        };
+        /** ZoneSummaryResponse */
+        ZoneSummaryResponse: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Serial */
+            serial: number;
         };
     };
     responses: never;
@@ -933,6 +1432,137 @@ export interface operations {
             };
         };
     };
+    list_all_backups_api_backups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupResponse"][];
+                };
+            };
+        };
+    };
+    backups_meta_api_backups_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupsMetaResponse"];
+                };
+            };
+        };
+    };
+    get_s3_config_api_backups_s3_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["S3ConfigResponse"];
+                };
+            };
+        };
+    };
+    update_s3_config_api_backups_s3_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateS3ConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["S3ConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_s3_config_api_backups_s3_config_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_s3_config_api_backups_s3_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupsMetaResponse"];
+                };
+            };
+        };
+    };
     list_databases_api_databases_get: {
         parameters: {
             query?: never;
@@ -1060,6 +1690,270 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CredentialsResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dns_meta_api_dns_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DnsMetaResponse"];
+                };
+            };
+        };
+    };
+    list_zones_api_dns_zones_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneSummaryResponse"][];
+                };
+            };
+        };
+    };
+    create_zone_api_dns_zones_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateZoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_zone_api_dns_zones__zone_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_zone_api_dns_zones__zone_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteZoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflarePushResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_record_api_dns_zones__zone_id__records_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_record_api_dns_zones__zone_id__records_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_template_api_dns_zones__zone_id__templates__template__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1231,6 +2125,204 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_api_sites__site_id__backup_schedule_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_schedule_api_sites__site_id__backup_schedule_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_site_backups_api_sites__site_id__backups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_backup_api_sites__site_id__backups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationStartedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_backup_api_sites__site_id__backups__backup_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteBackupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_restore_api_sites__site_id__backups__backup_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationStartedResponse"];
                 };
             };
             /** @description Validation Error */

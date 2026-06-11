@@ -14,6 +14,75 @@
         "title": "AdminerSessionResponse",
         "type": "object"
       },
+      "BackupResponse": {
+        "properties": {
+          "backup_id": {
+            "title": "Backup Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "databases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Databases",
+            "type": "array"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "php_version": {
+            "title": "Php Version",
+            "type": "string"
+          },
+          "s3": {
+            "title": "S3",
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "wordpress": {
+            "title": "Wordpress",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "domain",
+          "backup_id",
+          "created_at",
+          "size_bytes",
+          "databases",
+          "wordpress",
+          "php_version",
+          "s3"
+        ],
+        "title": "BackupResponse",
+        "type": "object"
+      },
+      "BackupsMetaResponse": {
+        "properties": {
+          "s3_enabled": {
+            "title": "S3 Enabled",
+            "type": "boolean"
+          },
+          "scheduler_enabled": {
+            "title": "Scheduler Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "s3_enabled",
+          "scheduler_enabled"
+        ],
+        "title": "BackupsMetaResponse",
+        "type": "object"
+      },
       "CertStatusResponse": {
         "properties": {
           "detail": {
@@ -102,6 +171,42 @@
         "title": "ChangePhpVersionRequest",
         "type": "object"
       },
+      "CloudflarePushResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          },
+          "zone": {
+            "title": "Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone",
+          "created",
+          "updated",
+          "skipped",
+          "errors"
+        ],
+        "title": "CloudflarePushResponse",
+        "type": "object"
+      },
       "CreateDatabaseRequest": {
         "properties": {
           "name": {
@@ -142,6 +247,26 @@
           "domain"
         ],
         "title": "CreateSiteRequest",
+        "type": "object"
+      },
+      "CreateZoneRequest": {
+        "properties": {
+          "name": {
+            "maxLength": 253,
+            "minLength": 3,
+            "title": "Name",
+            "type": "string"
+          },
+          "point_to_server": {
+            "default": false,
+            "title": "Point To Server",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateZoneRequest",
         "type": "object"
       },
       "CredentialsResponse": {
@@ -243,6 +368,19 @@
         "title": "DatabaseResponse",
         "type": "object"
       },
+      "DeleteBackupRequest": {
+        "properties": {
+          "confirm_id": {
+            "title": "Confirm Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_id"
+        ],
+        "title": "DeleteBackupRequest",
+        "type": "object"
+      },
       "DeleteDatabaseRequest": {
         "properties": {
           "confirm_name": {
@@ -256,6 +394,25 @@
         "title": "DeleteDatabaseRequest",
         "type": "object"
       },
+      "DeleteRecordRequest": {
+        "properties": {
+          "name": {
+            "default": "@",
+            "maxLength": 254,
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "DeleteRecordRequest",
+        "type": "object"
+      },
       "DeleteSiteRequest": {
         "properties": {
           "confirm_domain": {
@@ -267,6 +424,47 @@
           "confirm_domain"
         ],
         "title": "DeleteSiteRequest",
+        "type": "object"
+      },
+      "DeleteZoneRequest": {
+        "properties": {
+          "confirm_name": {
+            "title": "Confirm Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_name"
+        ],
+        "title": "DeleteZoneRequest",
+        "type": "object"
+      },
+      "DnsMetaResponse": {
+        "properties": {
+          "cloudflare_enabled": {
+            "title": "Cloudflare Enabled",
+            "type": "boolean"
+          },
+          "default_ttl": {
+            "title": "Default Ttl",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "server_ip": {
+            "title": "Server Ip",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "server_ip",
+          "default_ttl",
+          "cloudflare_enabled"
+        ],
+        "title": "DnsMetaResponse",
         "type": "object"
       },
       "FilesSessionResponse": {
@@ -409,6 +607,19 @@
         "title": "OperationResponse",
         "type": "object"
       },
+      "OperationStartedResponse": {
+        "properties": {
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "OperationStartedResponse",
+        "type": "object"
+      },
       "OperationStep": {
         "properties": {
           "label": {
@@ -450,6 +661,178 @@
           "upload_max_filesize"
         ],
         "title": "PhpSettingsRequest",
+        "type": "object"
+      },
+      "RRSetResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "ttl": {
+            "title": "Ttl",
+            "type": "integer"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "ttl",
+          "records"
+        ],
+        "title": "RRSetResponse",
+        "type": "object"
+      },
+      "RestoreRequest": {
+        "properties": {
+          "confirm_domain": {
+            "title": "Confirm Domain",
+            "type": "string"
+          },
+          "scope": {
+            "default": "full",
+            "enum": [
+              "full",
+              "files",
+              "db"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_domain"
+        ],
+        "title": "RestoreRequest",
+        "type": "object"
+      },
+      "S3ConfigResponse": {
+        "properties": {
+          "access_key": {
+            "title": "Access Key",
+            "type": "string"
+          },
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "has_secret": {
+            "title": "Has Secret",
+            "type": "boolean"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "region": {
+            "title": "Region",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "db",
+                  "env"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "configured",
+          "source",
+          "endpoint",
+          "bucket",
+          "region",
+          "prefix",
+          "access_key",
+          "has_secret"
+        ],
+        "title": "S3ConfigResponse",
+        "type": "object"
+      },
+      "ScheduleResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "hour": {
+            "title": "Hour",
+            "type": "integer"
+          },
+          "include_databases": {
+            "title": "Include Databases",
+            "type": "boolean"
+          },
+          "include_files": {
+            "title": "Include Files",
+            "type": "boolean"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "retention": {
+            "title": "Retention",
+            "type": "integer"
+          },
+          "s3_mirror": {
+            "title": "S3 Mirror",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "frequency",
+          "hour",
+          "retention",
+          "include_files",
+          "include_databases",
+          "s3_mirror",
+          "last_run_at"
+        ],
+        "title": "ScheduleResponse",
         "type": "object"
       },
       "ServiceStatusResponse": {
@@ -671,6 +1054,150 @@
         "title": "TokenResponse",
         "type": "object"
       },
+      "UpdateS3ConfigRequest": {
+        "properties": {
+          "access_key": {
+            "maxLength": 128,
+            "minLength": 3,
+            "title": "Access Key",
+            "type": "string"
+          },
+          "bucket": {
+            "maxLength": 63,
+            "minLength": 3,
+            "title": "Bucket",
+            "type": "string"
+          },
+          "endpoint": {
+            "maxLength": 255,
+            "minLength": 8,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "prefix": {
+            "default": "hosty",
+            "maxLength": 64,
+            "title": "Prefix",
+            "type": "string"
+          },
+          "region": {
+            "default": "",
+            "maxLength": 32,
+            "title": "Region",
+            "type": "string"
+          },
+          "secret_key": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Key"
+          }
+        },
+        "required": [
+          "endpoint",
+          "bucket",
+          "access_key"
+        ],
+        "title": "UpdateS3ConfigRequest",
+        "type": "object"
+      },
+      "UpdateScheduleRequest": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "daily",
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "hour": {
+            "default": 3,
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Hour",
+            "type": "integer"
+          },
+          "include_databases": {
+            "default": true,
+            "title": "Include Databases",
+            "type": "boolean"
+          },
+          "include_files": {
+            "default": true,
+            "title": "Include Files",
+            "type": "boolean"
+          },
+          "retention": {
+            "default": 7,
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Retention",
+            "type": "integer"
+          },
+          "s3_mirror": {
+            "default": true,
+            "title": "S3 Mirror",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "UpdateScheduleRequest",
+        "type": "object"
+      },
+      "UpsertRecordRequest": {
+        "properties": {
+          "name": {
+            "default": "@",
+            "maxLength": 254,
+            "title": "Name",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Records",
+            "type": "array"
+          },
+          "ttl": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "records"
+        ],
+        "title": "UpsertRecordRequest",
+        "type": "object"
+      },
       "UserResponse": {
         "properties": {
           "id": {
@@ -877,6 +1404,65 @@
           "theme_count"
         ],
         "title": "WpStatusResponse",
+        "type": "object"
+      },
+      "ZoneDetailResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rrsets": {
+            "items": {
+              "$ref": "#/components/schemas/RRSetResponse"
+            },
+            "title": "Rrsets",
+            "type": "array"
+          },
+          "serial": {
+            "title": "Serial",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "serial",
+          "rrsets"
+        ],
+        "title": "ZoneDetailResponse",
+        "type": "object"
+      },
+      "ZoneSummaryResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "serial": {
+            "title": "Serial",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "serial"
+        ],
+        "title": "ZoneSummaryResponse",
         "type": "object"
       }
     },
@@ -1095,6 +1681,178 @@
         ]
       }
     },
+    "/api/backups": {
+      "get": {
+        "operationId": "list_all_backups_api_backups_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupResponse"
+                  },
+                  "title": "Response List All Backups Api Backups Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List All Backups",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/backups/meta": {
+      "get": {
+        "operationId": "backups_meta_api_backups_meta_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupsMetaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Backups Meta",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/backups/s3-config": {
+      "delete": {
+        "operationId": "delete_s3_config_api_backups_s3_config_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete S3 Config",
+        "tags": [
+          "backups"
+        ]
+      },
+      "get": {
+        "description": "Current S3 target. The secret access key is never returned.",
+        "operationId": "get_s3_config_api_backups_s3_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get S3 Config",
+        "tags": [
+          "backups"
+        ]
+      },
+      "put": {
+        "description": "Validate the credentials against the bucket, then store them (secret\nencrypted at rest). Leaving the secret blank keeps the existing one.",
+        "operationId": "update_s3_config_api_backups_s3_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateS3ConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update S3 Config",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/backups/s3-config/test": {
+      "post": {
+        "description": "Probe the stored configuration; 502 with details when unreachable.",
+        "operationId": "test_s3_config_api_backups_s3_config_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupsMetaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Test S3 Config",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
     "/api/databases": {
       "get": {
         "operationId": "list_databases_api_databases_get",
@@ -1303,6 +2061,396 @@
         "summary": "Reset Password",
         "tags": [
           "databases"
+        ]
+      }
+    },
+    "/api/dns/meta": {
+      "get": {
+        "operationId": "dns_meta_api_dns_meta_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsMetaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dns Meta",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/dns/zones": {
+      "get": {
+        "operationId": "list_zones_api_dns_zones_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ZoneSummaryResponse"
+                  },
+                  "title": "Response List Zones Api Dns Zones Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Zones",
+        "tags": [
+          "dns"
+        ]
+      },
+      "post": {
+        "operationId": "create_zone_api_dns_zones_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateZoneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Zone",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/dns/zones/{zone_id}": {
+      "delete": {
+        "operationId": "delete_zone_api_dns_zones__zone_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteZoneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Zone",
+        "tags": [
+          "dns"
+        ]
+      },
+      "get": {
+        "operationId": "get_zone_api_dns_zones__zone_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Zone",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/dns/zones/{zone_id}/push/cloudflare": {
+      "post": {
+        "description": "One click: export every record of this zone to the Cloudflare account.",
+        "operationId": "push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudflarePushResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Push To Cloudflare",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/dns/zones/{zone_id}/records": {
+      "delete": {
+        "operationId": "delete_record_api_dns_zones__zone_id__records_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Record",
+        "tags": [
+          "dns"
+        ]
+      },
+      "put": {
+        "operationId": "upsert_record_api_dns_zones__zone_id__records_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upsert Record",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/dns/zones/{zone_id}/templates/{template}": {
+      "post": {
+        "operationId": "apply_template_api_dns_zones__zone_id__templates__template__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "template",
+            "required": true,
+            "schema": {
+              "title": "Template",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Apply Template",
+        "tags": [
+          "dns"
         ]
       }
     },
@@ -1549,6 +2697,329 @@
         "summary": "Get Site",
         "tags": [
           "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/backup-schedule": {
+      "get": {
+        "operationId": "get_schedule_api_sites__site_id__backup_schedule_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Schedule",
+        "tags": [
+          "backups"
+        ]
+      },
+      "put": {
+        "operationId": "update_schedule_api_sites__site_id__backup_schedule_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Schedule",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/backups": {
+      "get": {
+        "operationId": "list_site_backups_api_sites__site_id__backups_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupResponse"
+                  },
+                  "title": "Response List Site Backups Api Sites  Site Id  Backups Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Site Backups",
+        "tags": [
+          "backups"
+        ]
+      },
+      "post": {
+        "operationId": "start_backup_api_sites__site_id__backups_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStartedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Backup",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/backups/{backup_id}": {
+      "delete": {
+        "operationId": "delete_backup_api_sites__site_id__backups__backup_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "backup_id",
+            "required": true,
+            "schema": {
+              "title": "Backup Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteBackupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Backup",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/backups/{backup_id}/restore": {
+      "post": {
+        "operationId": "start_restore_api_sites__site_id__backups__backup_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "backup_id",
+            "required": true,
+            "schema": {
+              "title": "Backup Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStartedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Restore",
+        "tags": [
+          "backups"
         ]
       }
     },
