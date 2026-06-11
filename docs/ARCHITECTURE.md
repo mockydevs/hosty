@@ -128,3 +128,26 @@ enforces the directory boundary, the panel enforces identity.
 **Known limitation (verify on VM):** Filebrowser runs as root, so files it
 creates are root-owned until ownership normalization (event-hook `chown`) is
 configured — tracked as an open Phase 6 item.
+
+### ADR-009: Backend runs inside the dev VM, not over SSH
+
+**Status:** accepted (Week 2 decision, implemented Week 16)
+
+The Week 2 roadmap left open whether the backend connects to the dev VM over
+SSH or runs inside it. **Decision: inside.** The system layer
+(`system/runner.py`) execs commands on the local machine — exactly how
+production works (root systemd service, ADR-002). An SSH transport would add
+a remote-execution abstraction that production doesn't have and that every
+system-layer test would then have to fake.
+
+Mechanics (`installer/dev-vm/`): Multipass VM `hosty-dev` (Ubuntu 24.04),
+repo mounted at `/home/ubuntu/hosty` so host edits are live inside the VM.
+Provisioning is the same `installer/provision.sh` production will use, plus
+`vm-setup.sh` for backend deps. **Stateful things live outside the mount**
+(`/var/lib/hosty`: venv, SQLite DB, dev.env) — Multipass mounts don't support
+SQLite's file locking and make venvs slow. The frontend dev server stays on
+the host and proxies `/api`, `/files`, `/adminer` to the VM IP
+(`HOSTY_API_TARGET`). Rejected: WSL2 (not production-like enough — no real
+systemd boot, different networking) and a cloud VM as the default (costs
+money, needs credentials; still the right choice for installer testing in
+Phase 10).

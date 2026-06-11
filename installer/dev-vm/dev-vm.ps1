@@ -5,6 +5,12 @@
 .DESCRIPTION
   Launches and manages the hosty-dev Multipass VM (Ubuntu 24.04), mounts the
   repo at /home/ubuntu/hosty, and runs provisioning/backend/tests inside it.
+
+  NB: every in-VM step is its own script file invoked as plain argv
+  (multipass exec ... sudo bash <path>). Never pass compound quoted commands:
+  multipass exec on Windows joins arguments without re-quoting, so
+  `bash -lc "a b"` arrives as `bash -lc a b` and drops into an interactive
+  shell instead of running the command.
 .EXAMPLE
   .\installer\dev-vm\dev-vm.ps1 up
 #>
@@ -23,9 +29,10 @@ if (-not (Get-Command multipass -ErrorAction SilentlyContinue)) {
     throw "Multipass not found - install from https://canonical.com/multipass"
 }
 
-function Invoke-VM([string]$Script) {
-    multipass exec $VM -- sudo bash -lc $Script
-    if ($LASTEXITCODE -ne 0) { throw "Command failed in VM (exit $LASTEXITCODE)" }
+function Invoke-VMScript([string]$ScriptPath) {
+    # Plain argv only - no quoting needed, see NB in the header.
+    multipass exec $VM -- sudo bash $ScriptPath
+    if ($LASTEXITCODE -ne 0) { throw "$ScriptPath failed in VM (exit $LASTEXITCODE)" }
 }
 
 function Get-VMIp {
@@ -61,25 +68,24 @@ switch ($Command) {
             multipass mount $RepoDir "${VM}:$Mount"
             if ($LASTEXITCODE -ne 0) { throw "multipass mount failed" }
         }
-        Invoke-VM "bash $Mount/installer/provision.sh"
-        Invoke-VM "bash $Mount/installer/dev-vm/vm-setup.sh"
+        Invoke-VMScript "$Mount/installer/provision.sh"
+        Invoke-VMScript "$Mount/installer/dev-vm/vm-setup.sh"
         $ip = Get-VMIp
         Write-Host ""
         Write-Host "VM ready. IP: $ip"
         Write-Host "Next: .\installer\dev-vm\dev-vm.ps1 backend  ->  http://${ip}:8800/api/docs"
     }
     "provision" {
-        Invoke-VM "bash $Mount/installer/provision.sh && bash $Mount/installer/dev-vm/vm-setup.sh"
+        Invoke-VMScript "$Mount/installer/provision.sh"
+        Invoke-VMScript "$Mount/installer/dev-vm/vm-setup.sh"
     }
     "backend" {
         $ip = Get-VMIp
         Write-Host "API -> http://${ip}:8800  (Ctrl+C stops it)"
-        Invoke-VM "set -a; . /var/lib/hosty/dev.env; set +a; cd $Mount/backend && UV_PROJECT_ENVIRONMENT=/var/lib/hosty/venv exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8800"
+        Invoke-VMScript "$Mount/installer/dev-vm/run-backend.sh"
     }
-    "test" {
-        Invoke-VM "set -a; . /var/lib/hosty/dev.env; set +a; cd $Mount/backend && UV_PROJECT_ENVIRONMENT=/var/lib/hosty/venv uv run pytest -m vm"
-    }
-    "smoke" { Invoke-VM "bash $Mount/installer/dev-vm/smoke.sh" }
+    "test" { Invoke-VMScript "$Mount/installer/dev-vm/run-vm-tests.sh" }
+    "smoke" { Invoke-VMScript "$Mount/installer/dev-vm/smoke.sh" }
     "shell" { multipass shell $VM }
     "ip" { Get-VMIp }
     "status" { multipass info $VM }

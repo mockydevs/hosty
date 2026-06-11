@@ -29,4 +29,5 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Editor/tool temp artif
+# Editor/tool temp artifacts
+_tmp_*

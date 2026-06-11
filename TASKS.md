@@ -59,12 +59,12 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] Write `docs/CONVENTIONS.md`: commit format, branch strategy, code style rules
 
 ### Week 2: Dev environment that mirrors production
-- [ ] Create reproducible dev VM: Multipass or Vagrant box running Ubuntu 24.04
-- [ ] Provisioning script installs: Caddy, PHP-FPM (8.3), MariaDB, PowerDNS, Filebrowser, WP-CLI
-- [ ] Document one-command dev setup in README (`make dev` or `just dev`)
-- [ ] Backend connects to VM over SSH or runs inside it — decide and document
-- [ ] Smoke test: manually create a vhost in Caddy on the VM, serve a PHP file
-- [ ] **Milestone: clone → running dev environment in under 15 minutes**
+- [ ] Create reproducible dev VM: Multipass Ubuntu 24.04, scripted in `installer/dev-vm/` (`dev-vm.ps1` / `dev-vm.sh`) — first boot on a real machine still pending
+- [x] Provisioning script installs: Caddy, PHP-FPM (8.2–8.4), MariaDB, PowerDNS, Filebrowser, WP-CLI (`installer/provision.sh`, shellcheck-clean — not yet run on a VM)
+- [x] Document one-command dev setup in README (`dev-vm up` instead of make/just — works on Windows hosts too)
+- [x] Backend connects to VM over SSH or runs inside it — decided: runs inside, as root, repo mounted; ADR-009
+- [ ] Smoke test: create a vhost in Caddy on the VM, serve a PHP file — scripted (`installer/dev-vm/smoke.sh`), pending first run
+- [ ] **Milestone: clone → running dev environment in under 15 minutes** — pending first boot
 
 ---
 
@@ -279,4 +279,17 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 
 ---
 
-## Rec
+## Recurring (every week)
+
+- [ ] All CI checks green before merge — never bypass
+- [ ] Update ADRs when any decision changes
+- [ ] 30 min: dependency updates review
+- [ ] Keep `TASKS.md` honest — check items off, add discovered tasks immediately
+
+## Definition of Done (every task)
+
+1. Typed, linted, formatted — CI green
+2. Tests for new logic (unit minimum; integration for system-touching code)
+3. Errors handled and surfaced clearly in UI
+4. Works on mobile viewport if it has UI
+5. No TODO without a corresponding tracked task

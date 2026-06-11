@@ -10,7 +10,10 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: {
-    proxy: { "/api": "http://127.0.0.1:8800" },
+    // Point at the dev VM with: HOSTY_API_TARGET=http://<vm-ip>:8800 pnpm dev
+    proxy: ((target) => ({ "/api": target, "/files": target, "/adminer": target }))(
+      process.env.HOSTY_API_TARGET ?? "http://127.0.0.1:8800",
+    ),
   },
   build: {
     sourcemap: false,
