@@ -1,8 +1,9 @@
 import { FilesTab } from "@/components/files-tab";
 import { OperationProgress } from "@/components/operation-progress";
 import { PhpCard } from "@/components/php-card";
+import { SiteBackupsTab } from "@/components/site-backups-tab";
 import { SiteDatabasesTab } from "@/components/site-databases-tab";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,11 +20,7 @@ import { WordPressTab } from "@/components/wordpress-tab";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { SiteStatusBadge } from "@/pages/sites";
-/**
- * Site detail: Overview (info + SSL status + danger zone) with stub tabs for
- * Files / Databases / Backups arriving in later phases. Shows live operation
- * progress while the site is provisioning or being deleted.
- */
+/** Site detail: overview plus per-site WordPress, files, databases, and backups workflows. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -292,17 +289,7 @@ export function SiteDetailPage() {
           <SiteDatabasesTab site={s} />
         </TabsContent>
         <TabsContent value="backups">
-          <EmptyState
-            title="Backups for this site"
-            description={`Run, schedule and restore backups of ${s.domain} from the Backups page.`}
-          >
-            <Link
-              to="/backups"
-              className="mt-2 inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Open Backups
-            </Link>
-          </EmptyState>
+          <SiteBackupsTab site={s} />
         </TabsContent>
       </Tabs>
 

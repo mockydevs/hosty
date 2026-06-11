@@ -73,10 +73,12 @@ Requirements:
 Start or reprovision the VM:
 
 ```powershell
+cd C:\Users\Master\Code\hosty
 .\installer\dev-vm\dev-vm.ps1 up
 ```
 
 ```bash
+cd /path/to/hosty
 installer/dev-vm/dev-vm.sh up
 ```
 
@@ -102,20 +104,76 @@ destroy    delete the VM
 Examples:
 
 ```powershell
+cd C:\Users\Master\Code\hosty
 .\installer\dev-vm\dev-vm.ps1 backend
 .\installer\dev-vm\dev-vm.ps1 test
 ```
 
 ```bash
+cd /path/to/hosty
 installer/dev-vm/dev-vm.sh backend
 installer/dev-vm/dev-vm.sh test
 ```
+
+## Test In The Browser
+
+After `dev-vm up` finishes, it prints a VM IP address such as
+`172.17.74.67`. Use that IP in the commands below.
+
+Open a new PowerShell window, go to the repository root, and start the backend
+inside the VM:
+
+```powershell
+cd C:\Users\Master\Code\hosty
+.\installer\dev-vm\dev-vm.ps1 backend
+```
+
+Keep that terminal running. Then open the backend API docs in a browser:
+
+```text
+http://<vm-ip>:8800/api/docs
+```
+
+Example:
+
+```text
+http://172.17.74.67:8800/api/docs
+```
+
+To test the full web panel, open another PowerShell window and run the frontend
+from the host machine:
+
+```powershell
+cd C:\Users\Master\Code\hosty\frontend
+$env:HOSTY_API_TARGET = "http://<vm-ip>:8800"
+pnpm install
+pnpm dev
+```
+
+Example:
+
+```powershell
+cd C:\Users\Master\Code\hosty\frontend
+$env:HOSTY_API_TARGET = "http://172.17.74.67:8800"
+pnpm install
+pnpm dev
+```
+
+Open the Vite URL printed by `pnpm dev`, usually:
+
+```text
+http://localhost:5173
+```
+
+Create the admin account on first visit. Keep both terminals running while
+testing: one for `dev-vm backend`, and one for `pnpm dev`.
 
 ## Frontend Development
 
 Run the API in the VM first:
 
 ```powershell
+cd C:\Users\Master\Code\hosty
 .\installer\dev-vm\dev-vm.ps1 backend
 ```
 
@@ -123,14 +181,15 @@ Then start Vite on the host. Replace `<vm-ip>` with the value printed by
 `dev-vm ip`.
 
 ```powershell
-cd frontend
+cd C:\Users\Master\Code\hosty\frontend
 $env:HOSTY_API_TARGET = "http://<vm-ip>:8800"
 pnpm install
 pnpm dev
 ```
 
 ```bash
-cd frontend
+cd /path/to/hosty/frontend
+pnpm install
 HOSTY_API_TARGET=http://<vm-ip>:8800 pnpm dev
 ```
 
