@@ -48,7 +48,7 @@ if [[ ! -d $APP_DIR/frontend/dist ]]; then
     apt-get install -qy nodejs
   fi
   corepack enable
-  (cd "$APP_DIR/frontend" && pnpm install --frozen-lockfile && pnpm exec vite build)
+  (cd "$APP_DIR/frontend" && pnpm install && pnpm exec vite build)
 fi
 
 log "Configuration → $ENV_FILE"
