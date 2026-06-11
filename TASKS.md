@@ -201,15 +201,17 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 7 — DNS (Weeks 17–18)
 
 ### Week 17: PowerDNS integration
-- [ ] PowerDNS auth server + REST API enabled in provisioning script
-- [ ] `services/dns.py`: zones CRUD, records CRUD (A, AAAA, CNAME, MX, TXT, SRV, CAA)
+- [x] PowerDNS auth server + REST API enabled in provisioning script
+- [x] `services/dns.py`: zones CRUD, records CRUD (A, AAAA, CNAME, MX, TXT, SRV, CAA)
 - [ ] Auto-create zone with sane defaults (SOA, NS, A → server IP) when a site is created (optional toggle)
-- [ ] Record validation (Pydantic models per record type)
+- [x] Record validation (Pydantic models per record type)
 
 ### Week 18: DNS UI
-- [ ] Zone list + record editor table (inline edit, TTL, type-specific fields)
-- [ ] Common templates: "point to this server", "Google Workspace MX", "SPF/DMARC for external mail"
-- [ ] Tests: record validation matrix, zone lifecycle on VM
+- [x] Zone list + record editor table (inline edit, TTL, type-specific fields)
+- [x] Common templates: "point to this server", "Google Workspace MX", "SPF/DMARC for external mail"
+- [x] Cloudflare integration: `services/cloudflare.py` + one-click **Push to Cloudflare** per zone — creates/updates/skips records, never deletes; needs `HOSTY_CLOUDFLARE_API_TOKEN` (Zone.DNS edit) and the domain already added in Cloudflare
+- [ ] Verify Cloudflare push against a real Cloudflare account/token
+- [x] Tests: record validation matrix + zone lifecycle (mocked PowerDNS); VM run pending
 - [ ] **Milestone: `dig @server domain` returns records managed in UI**
 
 ---
@@ -217,20 +219,20 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 8 — Backups (Weeks 19–21)
 
 ### Week 19: Backup engine
-- [ ] `services/backup.py`: per-site backup = files tar.zst + mysqldump, manifest.json (versions, checksums)
-- [ ] Run as background job with progress; concurrency limit
-- [ ] Local retention policy (keep N, prune)
-- [ ] Restore: full and files-only/db-only, to same site
+- [x] `services/backup.py`: per-site backup = files tar.zst + mysqldump, manifest.json (versions, checksums)
+- [x] Run as background job with progress; concurrency limit (global lock, operation steps polled by the UI)
+- [x] Local retention policy (keep N, prune)
+- [x] Restore: full and files-only/db-only, to same site (checksum-verified first)
 
 ### Week 20: S3 remote storage
-- [ ] S3-compatible target config (endpoint, bucket, creds encrypted at rest in panel DB)
-- [ ] Upload with multipart + retry; verify checksum after upload
-- [ ] Restore-from-S3 path
+- [x] S3-compatible target config: UI-managed credentials, secret encrypted at rest in the panel DB, verified before save; per-site choice of what to back up (files / databases / S3 mirror)
+- [x] Upload with multipart + retry (boto3); size-verified after upload
+- [x] Restore-from-S3 path (auto-fetch when the backup is not local)
 - [ ] Test against MinIO in dev VM (no cloud account needed)
 
 ### Week 21: Backup scheduling + UI
-- [ ] Scheduler (APScheduler or systemd timers — ADR) for per-site cron schedules
-- [ ] Backups UI: list with size/date/location badges, run-now, restore wizard with explicit confirmation, schedule editor
+- [x] Scheduler: in-process asyncio tick (ADR-010), per-site daily/weekly at HH:00
+- [x] Backups UI: list with size/date/location badges, run-now, restore wizard with explicit confirmation, schedule editor
 - [ ] Failure notifications surfaced on dashboard
 - [ ] Disaster drill: restore a WP site from S3 onto a fresh VM — document the runbook
 - [ ] **Milestone: scheduled backup lands in MinIO and restores cleanly**
@@ -289,3 +291,7 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 ## Definition of Done (every task)
 
 1. Typed, linted, formatted — CI green
+2. Tests for new logic (unit minimum; integration for system-touching code)
+3. Errors handled and surfaced clearly in UI
+4. Works on mobile viewport if it has UI
+5. No TODO without a corresponding tracked task

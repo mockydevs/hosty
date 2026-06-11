@@ -87,4 +87,10 @@ switch ($Command) {
         Invoke-VMScript "$Mount/installer/dev-vm/run-backend.sh"
     }
     "test" { Invoke-VMScript "$Mount/installer/dev-vm/run-vm-tests.sh" }
-    "smoke" { Invoke-VMScript "$Mount/installer/dev-vm/smoke
+    "smoke" { Invoke-VMScript "$Mount/installer/dev-vm/smoke.sh" }
+    "shell" { multipass shell $VM }
+    "ip" { Get-VMIp }
+    "status" { multipass info $VM }
+    "down" { multipass stop $VM }
+    "destroy" { multipass delete --purge $VM }
+}

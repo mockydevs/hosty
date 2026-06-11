@@ -46,6 +46,8 @@ systemctl enable --now caddy
 
 log "MariaDB"
 apt-get install -qy mariadb-server
+apt-get install -qy zstd   # Phase 8: tar --zstd backups
+install -d -m 0700 /var/lib/hosty/backups
 systemctl enable --now mariadb
 
 log "PowerDNS"
@@ -69,12 +71,16 @@ if [[ ! -f /var/lib/powerdns/pdns.sqlite3 ]]; then
 fi
 rm -f /etc/powerdns/pdns.d/bind.conf   # drop the default bind backend
 if [[ ! -f /etc/powerdns/pdns.d/hosty.conf ]]; then
+  PDNS_API_KEY=$(openssl rand -hex 16)
+  install -d -m 0750 /etc/hosty
+  printf '%s' "$PDNS_API_KEY" > /etc/hosty/pdns-api-key   # for HOSTY_PDNS_API_KEY
+  chmod 640 /etc/hosty/pdns-api-key
   cat > /etc/powerdns/pdns.d/hosty.conf <<CONF
 launch=gsqlite3
 gsqlite3-database=/var/lib/powerdns/pdns.sqlite3
 # REST API on localhost only (Phase 7: panel manages zones through it)
 api=yes
-api-key=$(openssl rand -hex 16)
+api-key=${PDNS_API_KEY}
 webserver=yes
 webserver-address=127.0.0.1
 webserver-port=8083

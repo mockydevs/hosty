@@ -160,3 +160,28 @@ the host and proxies `/api`, `/files`, `/adminer` to the VM IP
 systemd boot, different networking) and a cloud VM as the default (costs
 money, needs credentials; still the right choice for installer testing in
 Phase 10).
+
+### ADR-010: Backups — local-first with optional S3 mirror; in-process scheduler
+
+**Status:** accepted (Phase 8)
+
+- A backup is a directory: `files.tar.zst` + one `mysqldump` per database +
+  `manifest.json` (sha256 checksums, written last — no manifest means
+  incomplete, ignored, eventually pruned). Restores verify every checksum
+  before touching anything.
+- Local retention (keep newest N per site) prunes only local copies; the
+  panel NEVER deletes S3 objects.
+- S3 (MinIO-compatible) credentials are managed in the UI and stored in the
+  panel DB with the secret key encrypted at rest (Fernet keyed from
+  HOSTY_SECRET_KEY — see `app/core/secrets.py`). Credentials are verified
+  against the bucket before being saved. `HOSTY_S3_*` env vars remain as a
+  bootstrap fallback only.
+- What each backup contains is per-site configuration (files / databases /
+  S3 mirror), honored by both run-now and the scheduler.
+- Scheduler is a 60-second asyncio tick inside the panel process (no
+  APScheduler/cron dependency): daily at HH:00 or weekly (Monday), serialized
+  by a global lock so only one backup/restore runs at a time.
+- An S3 mirror failure marks the operation failed but keeps the durable local
+  backup; the error message says exactly that.
+- Restores have no rollback by design (they overwrite in place); scope can be
+  full, files-only, or databases-only, fetched from S3 when not local.
