@@ -1,4 +1,5 @@
 import { OperationProgress } from "@/components/operation-progress";
+import { PhpCard } from "@/components/php-card";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WordPressTab } from "@/components/wordpress-tab";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { SiteStatusBadge } from "@/pages/sites";
@@ -235,6 +237,7 @@ export function SiteDetailPage() {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="wordpress">WordPress</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="databases">Databases</TabsTrigger>
           <TabsTrigger value="backups">Backups</TabsTrigger>
@@ -262,6 +265,7 @@ export function SiteDetailPage() {
               </CardContent>
             </Card>
             {s.status === "active" && <SslStatusCard siteId={s.id} />}
+            {s.status === "active" && <PhpCard site={s} />}
           </div>
 
           <Card className="border-destructive/40">
@@ -277,6 +281,10 @@ export function SiteDetailPage() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="wordpress">
+          <WordPressTab site={s} />
         </TabsContent>
 
         <TabsContent value="files">

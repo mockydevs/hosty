@@ -151,23 +151,23 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 4 — PHP & WordPress (Weeks 11–13)
 
 ### Week 11: PHP-FPM pool management
-- [ ] Install + manage PHP 8.2/8.3/8.4 via ondrej PPA in provisioning script
-- [ ] Pool config template per site (unique user, socket, sane limits) — snapshot tested
-- [ ] Switch PHP version per site: rewrite pool + Caddy upstream + reload, zero downtime
-- [ ] Per-site PHP settings (memory_limit, upload_max_filesize) editable in UI
+- [x] Install + manage PHP 8.2/8.3/8.4 via ondrej PPA in provisioning script (`installer/provision.sh`, idempotent — not yet run on a VM)
+- [x] Pool config template per site (unique user, socket, sane limits) — snapshot tested
+- [x] Switch PHP version per site: rewrite pool + Caddy upstream + reload, zero downtime (new pool up → Caddy repointed → old pool removed; failure reverts)
+- [x] Per-site PHP settings (memory_limit, upload_max_filesize) editable in UI
 
 ### Week 12: WordPress one-click install
-- [ ] `services/wordpress.py` wrapping WP-CLI: download (cached), config, install, set admin
-- [ ] Auto-provision MariaDB database + user per WP site (least privilege, random creds)
-- [ ] Install runs as the site's Linux user (never root)
-- [ ] Idempotency + failure rollback (partial install cleaned up)
+- [x] `services/wordpress.py` wrapping WP-CLI: download (cached via shared `WP_CLI_CACHE_DIR`), config, install, set admin
+- [x] Auto-provision MariaDB database + user per WP site (least privilege, random creds; minimal `services/mariadb.py` — Phase 5 extends it and should revisit CLI → driver, see module docstring)
+- [x] Install runs as the site's Linux user via `runuser` (never root; argv builders unit-tested)
+- [x] Idempotency + failure rollback (DB dropped, doc root restored to skeleton; `core is-installed` guards re-install)
 
 ### Week 13: WordPress management UI
-- [ ] Install wizard: site title, admin user, locale, version
-- [ ] WP site card: version, update available, plugin/theme counts (via WP-CLI)
-- [ ] Actions: update core, enable/disable maintenance mode, regenerate salts, one-click admin login (magic link via WP-CLI)
-- [ ] Tests: full WP install integration test on VM
-- [ ] **Milestone: one click → working WordPress with HTTPS**
+- [x] Install wizard: site title, admin user/password/email, locale, version
+- [x] WP site card: version, update available, plugin/theme counts (via WP-CLI)
+- [x] Actions: update core, enable/disable maintenance mode, regenerate salts, one-click admin login (magic link via wp-cli login-command package, installed on first use)
+- [ ] Tests: full WP install integration test on VM — needs the dev VM (Week 2 item)
+- [ ] **Milestone: one click → working WordPress with HTTPS** — needs the dev VM
 
 ---
 
@@ -266,11 +266,4 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 ### Week 25: Production installer
 - [ ] `install.sh`: idempotent installer for fresh Ubuntu 24.04 — installs stack, creates panel user, systemd units, prints initial login
 - [ ] Panel self-update mechanism (git tag based or release tarball) — keep simple
-- [ ] Uninstall script
-- [ ] Test installer on a clean cloud VM (e.g., Hetzner/DO smallest instance) — twice (idempotency)
-
-### Week 26: Documentation & release
-- [ ] README: screenshots, features, install one-liner, requirements
-- [ ] `docs/`: admin guide, backup/restore runbook, architecture overview, API reference (auto from OpenAPI)
-- [ ] CHANGELOG.md, tag `v1.0.0`, GitHub release
-- [ ] Post-1.0 backlog file: multi-user/roles, 2FA, monitoring graphs, staging clones, Redis cache to
+- [ 

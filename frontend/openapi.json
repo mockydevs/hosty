@@ -76,6 +76,19 @@
         "title": "ChangePasswordRequest",
         "type": "object"
       },
+      "ChangePhpVersionRequest": {
+        "properties": {
+          "php_version": {
+            "title": "Php Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "php_version"
+        ],
+        "title": "ChangePhpVersionRequest",
+        "type": "object"
+      },
       "CreateSiteRequest": {
         "properties": {
           "domain": {
@@ -265,6 +278,26 @@
         "title": "OperationStep",
         "type": "object"
       },
+      "PhpSettingsRequest": {
+        "properties": {
+          "memory_limit": {
+            "pattern": "^[1-9][0-9]{0,3}M$",
+            "title": "Memory Limit",
+            "type": "string"
+          },
+          "upload_max_filesize": {
+            "pattern": "^[1-9][0-9]{0,3}M$",
+            "title": "Upload Max Filesize",
+            "type": "string"
+          }
+        },
+        "required": [
+          "memory_limit",
+          "upload_max_filesize"
+        ],
+        "title": "PhpSettingsRequest",
+        "type": "object"
+      },
       "ServiceStatusResponse": {
         "properties": {
           "active_state": {
@@ -364,6 +397,14 @@
             "title": "Id",
             "type": "integer"
           },
+          "php_memory_limit": {
+            "title": "Php Memory Limit",
+            "type": "string"
+          },
+          "php_upload_max_filesize": {
+            "title": "Php Upload Max Filesize",
+            "type": "string"
+          },
           "php_version": {
             "title": "Php Version",
             "type": "string"
@@ -375,6 +416,10 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "wordpress": {
+            "title": "Wordpress",
+            "type": "boolean"
           }
         },
         "required": [
@@ -385,6 +430,9 @@
           "php_version",
           "status",
           "error_message",
+          "php_memory_limit",
+          "php_upload_max_filesize",
+          "wordpress",
           "created_at"
         ],
         "title": "SiteResponse",
@@ -530,6 +578,151 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WpActionResponse": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "WpActionResponse",
+        "type": "object"
+      },
+      "WpInstallAccepted": {
+        "properties": {
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "WpInstallAccepted",
+        "type": "object"
+      },
+      "WpInstallRequest": {
+        "properties": {
+          "admin_email": {
+            "maxLength": 254,
+            "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+            "title": "Admin Email",
+            "type": "string"
+          },
+          "admin_password": {
+            "maxLength": 128,
+            "minLength": 12,
+            "title": "Admin Password",
+            "type": "string"
+          },
+          "admin_user": {
+            "maxLength": 60,
+            "minLength": 3,
+            "pattern": "^[a-zA-Z0-9_.\\-@ ]+$",
+            "title": "Admin User",
+            "type": "string"
+          },
+          "locale": {
+            "default": "en_US",
+            "title": "Locale",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "default": "latest",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "admin_user",
+          "admin_password",
+          "admin_email"
+        ],
+        "title": "WpInstallRequest",
+        "type": "object"
+      },
+      "WpStatusResponse": {
+        "properties": {
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "plugin_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plugin Count"
+          },
+          "theme_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Count"
+          },
+          "update_available": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Update Available"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "installed",
+          "version",
+          "update_available",
+          "plugin_count",
+          "theme_count"
+        ],
+        "title": "WpStatusResponse",
         "type": "object"
       }
     },
@@ -994,6 +1187,120 @@
         ]
       }
     },
+    "/api/sites/{site_id}/php": {
+      "post": {
+        "operationId": "change_php_version_api_sites__site_id__php_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePhpVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Php Version",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/php-settings": {
+      "patch": {
+        "operationId": "update_php_settings_api_sites__site_id__php_settings_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhpSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Php Settings",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
     "/api/sites/{site_id}/ssl": {
       "get": {
         "operationId": "site_ssl_status_api_sites__site_id__ssl_get",
@@ -1036,6 +1343,164 @@
           }
         ],
         "summary": "Site Ssl Status",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/wordpress": {
+      "get": {
+        "operationId": "wordpress_status_api_sites__site_id__wordpress_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WpStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Wordpress Status",
+        "tags": [
+          "sites"
+        ]
+      },
+      "post": {
+        "operationId": "install_wordpress_api_sites__site_id__wordpress_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WpInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WpInstallAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Install Wordpress",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/wordpress/actions/{action}": {
+      "post": {
+        "operationId": "wordpress_action_api_sites__site_id__wordpress_actions__action__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "title": "Action",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WpActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Wordpress Action",
         "tags": [
           "sites"
         ]

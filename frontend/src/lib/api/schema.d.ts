@@ -180,6 +180,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sites/{site_id}/php": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Php Version */
+        post: operations["change_php_version_api_sites__site_id__php_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/php-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Php Settings */
+        patch: operations["update_php_settings_api_sites__site_id__php_settings_patch"];
+        trace?: never;
+    };
     "/api/sites/{site_id}/ssl": {
         parameters: {
             query?: never;
@@ -191,6 +225,41 @@ export interface paths {
         get: operations["site_ssl_status_api_sites__site_id__ssl_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/wordpress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wordpress Status */
+        get: operations["wordpress_status_api_sites__site_id__wordpress_get"];
+        put?: never;
+        /** Install Wordpress */
+        post: operations["install_wordpress_api_sites__site_id__wordpress_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/wordpress/actions/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Wordpress Action */
+        post: operations["wordpress_action_api_sites__site_id__wordpress_actions__action__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -289,6 +358,11 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** ChangePhpVersionRequest */
+        ChangePhpVersionRequest: {
+            /** Php Version */
+            php_version: string;
+        };
         /** CreateSiteRequest */
         CreateSiteRequest: {
             /** Domain */
@@ -352,6 +426,13 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** PhpSettingsRequest */
+        PhpSettingsRequest: {
+            /** Memory Limit */
+            memory_limit: string;
+            /** Upload Max Filesize */
+            upload_max_filesize: string;
+        };
         /** ServiceStatusResponse */
         ServiceStatusResponse: {
             /** Active State */
@@ -392,12 +473,18 @@ export interface components {
             error_message: string | null;
             /** Id */
             id: number;
+            /** Php Memory Limit */
+            php_memory_limit: string;
+            /** Php Upload Max Filesize */
+            php_upload_max_filesize: string;
             /** Php Version */
             php_version: string;
             /** Site User */
             site_user: string;
             /** Status */
             status: string;
+            /** Wordpress */
+            wordpress: boolean;
         };
         /** SystemStatsResponse */
         SystemStatsResponse: {
@@ -453,6 +540,52 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WpActionResponse */
+        WpActionResponse: {
+            /** Action */
+            action: string;
+            /** Url */
+            url?: string | null;
+        };
+        /** WpInstallAccepted */
+        WpInstallAccepted: {
+            /** Operation Id */
+            operation_id: number;
+        };
+        /** WpInstallRequest */
+        WpInstallRequest: {
+            /** Admin Email */
+            admin_email: string;
+            /** Admin Password */
+            admin_password: string;
+            /** Admin User */
+            admin_user: string;
+            /**
+             * Locale
+             * @default en_US
+             */
+            locale: string;
+            /** Title */
+            title: string;
+            /**
+             * Version
+             * @default latest
+             */
+            version: string;
+        };
+        /** WpStatusResponse */
+        WpStatusResponse: {
+            /** Installed */
+            installed: boolean;
+            /** Plugin Count */
+            plugin_count: number | null;
+            /** Theme Count */
+            theme_count: number | null;
+            /** Update Available */
+            update_available: string | null;
+            /** Version */
+            version: string | null;
         };
     };
     responses: never;
@@ -810,6 +943,76 @@ export interface operations {
             };
         };
     };
+    change_php_version_api_sites__site_id__php_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePhpVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_php_settings_api_sites__site_id__php_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhpSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     site_ssl_status_api_sites__site_id__ssl_get: {
         parameters: {
             query?: never;
@@ -828,6 +1031,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CertStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wordpress_status_api_sites__site_id__wordpress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WpStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_wordpress_api_sites__site_id__wordpress_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WpInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WpInstallAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wordpress_action_api_sites__site_id__wordpress_actions__action__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WpActionResponse"];
                 };
             };
             /** @description Validation Error */
