@@ -242,42 +242,42 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 9 — Hardening, Quality, Performance (Weeks 22–24)
 
 ### Week 22: Security audit
-- [ ] Threat-model pass: every endpoint — authz checked? input validated? action logged?
-- [ ] Audit log: who did what when (all mutating operations) + UI view
-- [ ] Dependency audit: `uv` + `pnpm audit`, enable Dependabot/Renovate
-- [ ] Panel served only via HTTPS on its own port/domain through Caddy; optional IP allowlist
-- [ ] Run a scanner (e.g., OWASP ZAP baseline) against the panel; fix findings
-- [ ] Verify again: no `shell=True`, no string-built SQL, no root-run WP-CLI (grep CI check that fails the build)
+- [x] Threat-model pass: every endpoint — authz checked? input validated? action logged? (`docs/SECURITY.md`)
+- [x] Audit log: who did what when (all mutating operations, bodies never stored) + Settings UI view
+- [x] Dependency audit: Dependabot enabled (uv + npm + actions, weekly)
+- [x] Panel served via HTTPS through Caddy (`HOSTY_PANEL_DOMAIN` vhost, published at startup) + IP allowlist at both Caddy and app layer
+- [ ] Run a scanner (e.g., OWASP ZAP baseline) against the panel; fix findings — VM round
+- [x] Verify again: no `shell=True`, no string-built SQL outside the validated module, no root-run WP-CLI (`scripts/forbidden_patterns.sh`, fails the build)
 
 ### Week 23: Reliability & test depth
-- [ ] Coverage target: ≥85% on `system/` and `services/`, enforced in CI
-- [ ] Chaos cases: kill MariaDB mid-provision, Caddy API down, disk full during backup — graceful errors, no corrupt state
-- [ ] Panel self-recovery: systemd unit for panel with restart policy; panel DB backup of itself
-- [ ] Playwright E2E suite: auth, create site, install WP, backup/restore (runs in CI against VM weekly)
+- [x] Coverage target: ≥85% on `system/` and `services/`, enforced in CI (`--cov-fail-under=85`)
+- [x] Chaos cases: MariaDB dies mid-WP-install and at provisioning, Caddy API down on create AND delete (delete retryable), disk full mid-backup — graceful errors, rollbacks verified, no corrupt state (`tests/test_chaos.py`)
+- [x] Panel self-recovery: `installer/systemd/hosty.service` (Restart=always + start limits); daily panel DB self-backup via `VACUUM INTO`, 7 kept
+- [x] Playwright E2E suite (auth, create site, install WP, backup) + weekly CI workflow — first execution pending the VM round (needs a runner that reaches the VM)
 
 ### Week 24: Performance & UX polish
-- [ ] API p95 < 100ms for reads (profile, add caching where measured-slow only)
-- [ ] Frontend: route-level code splitting, bundle budget (< 300KB initial), Lighthouse ≥ 95 perf/accessibility
-- [ ] Accessibility pass: keyboard nav, focus traps in dialogs, aria labels
-- [ ] Mobile pass on real phone: every flow usable
-- [ ] Empty states, skeleton loaders, optimistic updates where safe
+- [ ] API p95 < 100ms for reads (profile, add caching where measured-slow only) — measure on the VM
+- [x] Frontend: route-level code splitting (every page lazy); initial payload 114KB gzipped, <300KB budget enforced in CI (`scripts/check_bundle_budget.mjs`); Lighthouse ≥95 — VM round
+- [x] Accessibility pass: all icon buttons labeled, native-dialog focus traps, ARIA tabs with arrow-key nav, labeled forms with `role="alert"` errors
+- [ ] Mobile pass on real phone: every flow usable — VM round
+- [x] Empty states, skeleton loaders throughout; optimistic updates deliberately omitted (system mutations are pipelines with progress UI)
 
 ---
 
 # Phase 10 — Installer, Docs & v1.0 Release (Weeks 25–26)
 
 ### Week 25: Production installer
-- [ ] `install.sh`: idempotent installer for fresh Ubuntu 24.04 — installs stack, creates panel user, systemd units, prints initial login
-- [ ] Panel self-update mechanism (git tag based or release tarball) — keep simple
-- [ ] Uninstall script
-- [ ] Test installer on a clean cloud VM (e.g., Hetzner/DO smallest instance) — twice (idempotency)
+- [x] `install.sh`: idempotent installer for fresh Ubuntu 24.04 — stack, frontend build, migrations, systemd unit, prints panel URL + first-boot instructions
+- [x] Panel self-update mechanism (`update.sh`, git ref/tag based)
+- [x] Uninstall script (keeps user data by default; `--purge-all` for everything)
+- [ ] Test installer on a clean cloud VM (e.g., Hetzner/DO smallest instance) — twice (idempotency) — VM round
 
 ### Week 26: Documentation & release
-- [ ] README: screenshots, features, install one-liner, requirements
-- [ ] `docs/`: admin guide, backup/restore runbook, architecture overview, API reference (auto from OpenAPI)
-- [ ] CHANGELOG.md, tag `v1.0.0`, GitHub release
-- [ ] Post-1.0 backlog file: multi-user/roles, 2FA, monitoring graphs, staging clones, Redis cache toggle, server firewall (ufw) management
-- [ ] **Milestone: a stranger can install and host a WordPress site using only the README**
+- [x] README: features, install one-liner, requirements (screenshots placeholder — captured during the VM round)
+- [x] `docs/`: admin guide, backup/restore runbook, architecture overview, security model; API reference served live at `/api/docs` (static export in backlog)
+- [x] CHANGELOG.md (`v1.0.0-rc.1`); final `v1.0.0` tag + GitHub release after the VM verification round
+- [x] Post-1.0 backlog file (`docs/BACKLOG.md`)
+- [ ] **Milestone: a stranger can install and host a WordPress site using only the README** — proven by the installer test in the VM round
 
 ---
 
