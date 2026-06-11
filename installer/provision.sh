@@ -14,7 +14,7 @@ log "Base packages"
 apt-get update -q
 apt-get install -qy --no-install-recommends \
   ca-certificates curl gnupg software-properties-common debian-keyring \
-  debian-archive-keyring apt-transport-https unzip less
+  debian-archive-keyring apt-transport-https unzip less sqlite3
 
 log "PHP ${PHP_VERSIONS[*]} via ondrej/php PPA"
 if ! grep -rq "ondrej/php" /etc/apt/sources.list.d/ 2>/dev/null; then
@@ -49,8 +49,41 @@ apt-get install -qy mariadb-server
 systemctl enable --now mariadb
 
 log "PowerDNS"
+# An authoritative DNS server needs port 53's TCP wildcard bind, which
+# systemd-resolved's stub listener (127.0.0.53:53) blocks. Disable the stub
+# and point resolv.conf at resolved's upstream file so the system keeps DNS.
+if [[ ! -f /etc/systemd/resolved.conf.d/hosty-no-stub.conf ]]; then
+  install -d -m 0755 /etc/systemd/resolved.conf.d
+  printf '[Resolve]\nDNSStubListener=no\n' > /etc/systemd/resolved.conf.d/hosty-no-stub.conf
+  ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+  systemctl restart systemd-resolved
+fi
 apt-get install -qy pdns-server pdns-backend-sqlite3
-systemctl enable --now pdns
+# The package ships no usable backend (pdns refuses to start without one).
+# Configure gsqlite3 — Phase 7 manages zones through it.
+if [[ ! -f /var/lib/powerdns/pdns.sqlite3 ]]; then
+  install -d -m 0755 /var/lib/powerdns
+  sqlite3 /var/lib/powerdns/pdns.sqlite3 \
+    < /usr/share/pdns-backend-sqlite3/schema/schema.sqlite3.sql
+  chown pdns:pdns /var/lib/powerdns/pdns.sqlite3
+fi
+rm -f /etc/powerdns/pdns.d/bind.conf   # drop the default bind backend
+if [[ ! -f /etc/powerdns/pdns.d/hosty.conf ]]; then
+  cat > /etc/powerdns/pdns.d/hosty.conf <<CONF
+launch=gsqlite3
+gsqlite3-database=/var/lib/powerdns/pdns.sqlite3
+# REST API on localhost only (Phase 7: panel manages zones through it)
+api=yes
+api-key=$(openssl rand -hex 16)
+webserver=yes
+webserver-address=127.0.0.1
+webserver-port=8083
+CONF
+  chmod 640 /etc/powerdns/pdns.d/hosty.conf
+  chown root:pdns /etc/powerdns/pdns.d/hosty.conf
+fi
+systemctl enable pdns
+systemctl restart pdns
 
 log "WP-CLI"
 if ! command -v wp >/dev/null; then
@@ -63,8 +96,9 @@ install -d -m 0777 /var/cache/hosty/wp-cli   # shared WP-CLI download cache
 log "Adminer"
 install -d -m 0755 /var/lib/hosty/adminer
 if [[ ! -f /var/lib/hosty/adminer/adminer.php ]]; then
-  curl -fsSL -o /var/lib/hosty/adminer/adminer.php \
-    https://github.com/vrana/adminer/releases/latest/download/adminer.php
+  # NB: don't use github .../latest/download/adminer.php — Adminer v5 renamed
+  # its release assets (adminer-<version>.php), so that URL now 404s.
+  curl -fsSL -o /var/lib/hosty/adminer/adminer.php https://www.adminer.org/latest.php
 fi
 chown -R www-data:www-data /var/lib/hosty/adminer
 
