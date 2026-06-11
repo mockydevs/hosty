@@ -151,10 +151,6 @@ function DeleteSiteDialog({
   );
 }
 
-function PhaseStub({ title, phase }: { title: string; phase: string }) {
-  return <EmptyState title={`${title} arrive in ${phase}`} description="Stay tuned." />;
-}
-
 export function SiteDetailPage() {
   const params = useParams();
   const siteId = Number(params.siteId);
@@ -296,7 +292,17 @@ export function SiteDetailPage() {
           <SiteDatabasesTab site={s} />
         </TabsContent>
         <TabsContent value="backups">
-          <PhaseStub title="Backups" phase="Phase 8" />
+          <EmptyState
+            title="Backups for this site"
+            description={`Run, schedule and restore backups of ${s.domain} from the Backups page.`}
+          >
+            <Link
+              to="/backups"
+              className="mt-2 inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Open Backups
+            </Link>
+          </EmptyState>
         </TabsContent>
       </Tabs>
 
