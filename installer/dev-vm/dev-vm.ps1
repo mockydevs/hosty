@@ -58,11 +58,13 @@ switch ($Command) {
         if (-not (Test-VMExists)) {
             multipass launch 24.04 --name $VM --cpus 2 --memory 4G --disk 20G `
                 --cloud-init (Join-Path $PSScriptRoot "cloud-init.yaml")
-            if ($LASTEXITCODE -ne 0) { throw "multipass launch failed" }
+            # The existence check can fail transiently (daemon still starting),
+            # in which case launch errors with "already exists" - that's fine.
+            if ($LASTEXITCODE -ne 0 -and -not (Test-VMExists)) {
+                throw "multipass launch failed"
+            }
         }
-        else {
-            multipass start $VM
-        }
+        multipass start $VM
         $info = multipass info $VM | Out-String
         if ($info -notmatch [regex]::Escape($Mount)) {
             multipass mount $RepoDir "${VM}:$Mount"
@@ -85,10 +87,4 @@ switch ($Command) {
         Invoke-VMScript "$Mount/installer/dev-vm/run-backend.sh"
     }
     "test" { Invoke-VMScript "$Mount/installer/dev-vm/run-vm-tests.sh" }
-    "smoke" { Invoke-VMScript "$Mount/installer/dev-vm/smoke.sh" }
-    "shell" { multipass shell $VM }
-    "ip" { Get-VMIp }
-    "status" { multipass info $VM }
-    "down" { multipass stop $VM }
-    "destroy" { multipass delete --purge $VM }
-}
+    "smoke" { Invoke-VMScript "$Mount/installer/dev-vm/smoke
