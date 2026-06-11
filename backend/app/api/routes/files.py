@@ -95,7 +95,9 @@ async def files_proxy(request: Request, path: str) -> Response:
 
     site_user, set_cookie = _session_site_user(request)
 
-    upstream = f"http://{settings.filebrowser_internal_addr}{path or '/'}"
+    # Filebrowser runs with baseurl=/files (assets resolve under the proxy
+    # path), and it strips that prefix itself — forward the full path.
+    upstream = f"http://{settings.filebrowser_internal_addr}/files{path or '/'}"
     params = [(k, v) for k, v in request.query_params.multi_items() if k != "hosty_ticket"]
     headers = {
         k: v

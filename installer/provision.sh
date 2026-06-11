@@ -112,7 +112,7 @@ install -d -m 0755 /var/lib/hosty
 if [[ ! -f /var/lib/hosty/filebrowser.db ]]; then
   filebrowser -d /var/lib/hosty/filebrowser.db config init \
     --auth.method=proxy --auth.header=X-Hosty-Fb-User \
-    --root=/var/www --scope=/.hosty-quarantine \
+    --root=/var/www --scope=/.hosty-quarantine --baseurl=/files \
     --address=127.0.0.1 --port=8082 --signup=false
 fi
 install -d -m 0755 /var/www/.hosty-quarantine
@@ -134,7 +134,7 @@ fi
 # Admin user for the panel's user-management API (header auth; password is
 # random and locked — never used). CLI needs the BoltDB lock: stop the daemon.
 systemctl stop hosty-filebrowser 2>/dev/null || true
-filebrowser -d /var/lib/hosty/filebrowser.db config set --scope=/.hosty-quarantine
+filebrowser -d /var/lib/hosty/filebrowser.db config set --scope=/.hosty-quarantine --baseurl=/files
 ADMIN_ADD_OUT=$(filebrowser -d /var/lib/hosty/filebrowser.db users add admin \
   "$(openssl rand -base64 24)" --perm.admin --lockPassword 2>&1) \
   || echo "$ADMIN_ADD_OUT" | grep -qi "already exists" \

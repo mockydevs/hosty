@@ -67,6 +67,8 @@ def build_config_init_argv(settings: Settings) -> list[str]:
         f"--auth.header={AUTH_HEADER}",
         f"--root={settings.sites_root}",
         f"--scope={QUARANTINE_SCOPE}",
+        # Served behind the panel's /files proxy: assets must resolve there.
+        "--baseurl=/files",
         f"--address={host}",
         f"--port={port or '8082'}",
         "--signup=false",

@@ -38,6 +38,7 @@ def test_config_init_argv(fb_settings):
     # Proxy auth auto-creates unknown users with the DEFAULT scope; it must
     # quarantine, never expose the sites root.
     assert f"--scope={filebrowser.QUARANTINE_SCOPE}" in argv
+    assert "--baseurl=/files" in argv  # assets must resolve under the panel proxy
     assert "--address=127.0.0.1" in argv and "--port=8082" in argv
 
 
@@ -223,6 +224,8 @@ async def test_files_session_and_proxy_flow(
     assert resp.status_code == 200
     site_user = (await admin_client.get(f"/api/sites/{site_id}")).json()["site_user"]
     assert all(r.headers.get(AUTH_HEADER) == site_user for r in fake_files_upstream)
+    # Filebrowser runs with baseurl=/files; the proxy must keep the prefix.
+    assert all(r.url.path.startswith("/files") for r in fake_files_upstream)
 
 
 async def test_files_proxy_strips_spoofed_identity_header(
