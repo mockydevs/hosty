@@ -87,7 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await engine.dispose()
 
     app = FastAPI(
-        title="Hosty API",
+        title="HostyPanel API",
         version=__version__,
         lifespan=lifespan,
         docs_url="/api/docs",

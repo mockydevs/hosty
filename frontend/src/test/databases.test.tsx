@@ -59,7 +59,7 @@ describe("DatabasesPage", () => {
 
     expect(await screen.findByText("shop_db")).toBeInTheDocument();
     expect(screen.getByText("stray_db")).toBeInTheDocument();
-    expect(screen.getByText("orphan — not managed by Hosty")).toBeInTheDocument();
+    expect(screen.getByText("orphan — not managed by HostyPanel")).toBeInTheDocument();
     expect(screen.getByText("custom")).toBeInTheDocument();
   });
 

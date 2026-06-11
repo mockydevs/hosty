@@ -183,7 +183,7 @@ export function LoginPage() {
         <CardHeader className="items-center text-center">
           <div className="flex items-center gap-2">
             <Server className="h-6 w-6" aria-hidden />
-            <CardTitle className="text-xl">Hosty</CardTitle>
+            <CardTitle className="text-xl">HostyPanel</CardTitle>
           </div>
           <CardDescription>
             {setupRequired

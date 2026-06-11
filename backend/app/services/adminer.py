@@ -31,7 +31,7 @@ ADMINER_SOCKET = "/run/php/hosty-adminer.sock"
 def render_adminer_pool(settings: Settings) -> str:
     """Pure: dedicated low-privilege pool for Adminer (snapshot-tested)."""
     return f"""\
-; Managed by Hosty — do not edit by hand.
+; Managed by HostyPanel — do not edit by hand.
 [{ADMINER_POOL_NAME}]
 user = www-data
 group = www-data

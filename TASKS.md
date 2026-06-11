@@ -1,6 +1,6 @@
 # Hosty — Hosting Panel Project Plan
 
-A clean, modern, fast, reliable, responsive hosting control panel (CyberPanel-lite, no email).
+A clean, modern, fast, reliable, responsive hosting control panel — **HostyPanel** (no email hosting).
 Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 
 ---

@@ -83,7 +83,7 @@ function Brand() {
   return (
     <div className="flex items-center gap-2 px-5 py-4">
       <Server className="h-5 w-5" aria-hidden />
-      <span className="text-lg font-semibold tracking-tight">Hosty</span>
+      <span className="text-lg font-semibold tracking-tight">HostyPanel</span>
     </div>
   );
 }

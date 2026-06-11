@@ -79,7 +79,7 @@ def render_pool_config(
     validate_php_size(upload_max_filesize, name="upload_max_filesize")
     socket = socket_path(site_user, version, settings)
     return f"""\
-; Managed by Hosty — do not edit by hand.
+; Managed by HostyPanel — do not edit by hand.
 [{site_user}]
 user = {site_user}
 group = {site_user}

@@ -201,7 +201,7 @@ export function DatabasesPage() {
                     <span className="flex items-center gap-2">
                       <DatabaseIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                       {entry.orphan_name}
-                      <Badge variant="outline">orphan — not managed by Hosty</Badge>
+                      <Badge variant="outline">orphan — not managed by HostyPanel</Badge>
                     </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">—</TableCell>

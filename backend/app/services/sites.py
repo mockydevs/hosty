@@ -36,7 +36,7 @@ http_response_code(200);
 <!doctype html>
 <title>{domain}</title>
 <h1>{domain}</h1>
-<p>This site was just created with Hosty. Replace
+<p>This site was just created with HostyPanel. Replace
 <code>public_html/index.php</code> with your content.</p>
 """
 

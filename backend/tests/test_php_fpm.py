@@ -46,7 +46,7 @@ def test_pool_path_rejects_bad_user(settings):
 def test_render_pool_config_snapshot(settings):
     """Site user + version in → exact pool file out."""
     expected = """\
-; Managed by Hosty — do not edit by hand.
+; Managed by HostyPanel — do not edit by hand.
 [site-a-abc123]
 user = site-a-abc123
 group = site-a-abc123
