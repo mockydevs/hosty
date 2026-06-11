@@ -87,6 +87,7 @@ HOSTY_DATABASE_URL=sqlite+aiosqlite:///$STATE_DIR/hosty.db
 HOSTY_COOKIE_SECURE=true
 HOSTY_CREATE_TABLES_ON_STARTUP=false
 HOSTY_FRONTEND_DIST=$APP_DIR/frontend/dist
+HOSTY_PDNS_API_KEY=$(cat /etc/hosty/pdns-api-key 2>/dev/null || echo "")
 ENV
   [[ -n $PANEL_DOMAIN ]] && echo "HOSTY_PANEL_DOMAIN=$PANEL_DOMAIN" >> "$ENV_FILE"
   chmod 600 "$ENV_FILE"

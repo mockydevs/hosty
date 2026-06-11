@@ -16,6 +16,11 @@ log() { printf '\n==> %s\n' "$*"; }
 [[ -d $APP_DIR/.git ]] || { echo "ERROR: $APP_DIR is not a git repo. Run the installer first." >&2; exit 1; }
 [[ -f $ENV_FILE ]]     || { echo "ERROR: $ENV_FILE not found. Run the installer first." >&2; exit 1; }
 
+# Migrate existing env files to include PDNS API key if missing.
+if ! grep -q "^HOSTY_PDNS_API_KEY=" "$ENV_FILE"; then
+  echo "HOSTY_PDNS_API_KEY=$(cat /etc/hosty/pdns-api-key 2>/dev/null || echo "")" >> "$ENV_FILE"
+fi
+
 # ── Pull latest code ─────────────────────────────────────────────────────────
 log "Updating source to $REF"
 git -C "$APP_DIR" fetch --tags origin
