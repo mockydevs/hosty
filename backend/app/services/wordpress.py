@@ -74,7 +74,14 @@ async def run_wp(
     result = await runner.run(
         build_wp_argv(site_user, doc_root, args),
         timeout=timeout,
-        env={"WP_CLI_CACHE_DIR": WP_CLI_CACHE_DIR, "HOME": f"/home/{site_user}"},
+        env={
+            "WP_CLI_CACHE_DIR": WP_CLI_CACHE_DIR,
+            "HOME": f"/home/{site_user}",
+            # Prevent git from blocking on interactive host-key / credential prompts.
+            "GIT_TERMINAL_PROMPT": "0",
+            # Tell Composer (used internally by wp package) to never ask questions.
+            "COMPOSER_NO_INTERACTION": "1",
+        },
     )
     if check and not result.ok:
         message = (result.stderr.strip() or result.stdout.strip())[:300]
@@ -289,10 +296,16 @@ async def run_action(site: Site, action: str) -> str | None:
     # (aaemnnosttv/wp-cli-login-command); installed on first use.
     probe = await run_wp(site.site_user, site.doc_root, ["help", "login"], check=False)
     if not probe.ok:
+        # Use the full HTTPS URL so WP-CLI / Composer clones over HTTPS, not SSH.
+        # The site Linux user has no GitHub SSH key, so git@github.com would fail.
         await run_wp(
             site.site_user,
             site.doc_root,
-            ["package", "install", "aaemnnosttv/wp-cli-login-command"],
+            [
+                "package",
+                "install",
+                "https://github.com/aaemnnosttv/wp-cli-login-command.git",
+            ],
             timeout=300,
         )
         await run_wp(site.site_user, site.doc_root, ["login", "install", "--activate", "--yes"])
