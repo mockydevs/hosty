@@ -28,6 +28,12 @@ const DatabasesPage = lazy(() =>
 );
 const DnsPage = lazy(() => import("@/pages/dns").then((m) => ({ default: m.DnsPage })));
 const DnsZonePage = lazy(() => import("@/pages/dns").then((m) => ({ default: m.DnsZonePage })));
+const CloudflareZonesPage = lazy(() =>
+  import("@/pages/cloudflare").then((m) => ({ default: m.CloudflareZonesPage })),
+);
+const CloudflareZonePage = lazy(() =>
+  import("@/pages/cloudflare").then((m) => ({ default: m.CloudflareZonePage })),
+);
 const BackupsPage = lazy(() => import("@/pages/backups").then((m) => ({ default: m.BackupsPage })));
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage })),
@@ -75,6 +81,8 @@ export function App() {
                 <Route path="/sites/:siteId" element={<SiteDetailPage />} />
                 <Route path="/databases" element={<DatabasesPage />} />
                 <Route path="/dns" element={<DnsPage />} />
+                <Route path="/dns/cloudflare" element={<CloudflareZonesPage />} />
+                <Route path="/dns/cloudflare/:cfZoneId" element={<CloudflareZonePage />} />
                 <Route path="/dns/:zoneId" element={<DnsZonePage />} />
                 <Route path="/backups" element={<BackupsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

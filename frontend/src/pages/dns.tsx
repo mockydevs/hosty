@@ -22,7 +22,17 @@ import type { components } from "@/lib/api/schema";
  * one-click "push all records to Cloudflare".
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CloudUpload, Globe2, Mail, Pencil, Plus, Server, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Cloud,
+  CloudUpload,
+  Globe2,
+  Mail,
+  Pencil,
+  Plus,
+  Server,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
@@ -60,9 +70,19 @@ export function DnsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">DNS</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" aria-hidden /> New zone
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {meta.data?.cloudflare_enabled && (
+            <Link
+              to="/dns/cloudflare"
+              className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <Cloud className="h-4 w-4" aria-hidden /> Cloudflare zones
+            </Link>
+          )}
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" aria-hidden /> New zone
+          </Button>
+        </div>
       </div>
 
       {zones.isPending ? (

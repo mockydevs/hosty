@@ -1,3 +1,5 @@
-onlyBuiltDependencies:
-  - "@biomejs/biome"
-  - esbuild
+# Approve dependency build scripts (they download platform-specific binaries).
+# pnpm v11+ syntax. pnpm version is pinned via "packageManager" in package.json.
+allowBuilds:
+  "@biomejs/biome": true
+  esbuild: true

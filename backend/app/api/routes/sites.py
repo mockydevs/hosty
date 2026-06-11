@@ -57,6 +57,7 @@ class SiteResponse(BaseModel):
     php_memory_limit: str
     php_upload_max_filesize: str
     wordpress: bool
+    behind_cloudflare: bool
     created_at: datetime
 
 
@@ -199,7 +200,7 @@ async def site_ssl_status(site_id: int, db: AsyncSession = Depends(get_db)) -> A
     site = await db.get(Site, site_id)
     if site is None:
         raise NotFoundError("Site not found")
-    result = await ssl_service.probe(site.domain)
+    result = await ssl_service.probe(site.domain, verify=not site.behind_cloudflare)
     return CertStatusResponse(
         domain=result.domain,
         status=result.status,
@@ -207,6 +208,66 @@ async def site_ssl_status(site_id: int, db: AsyncSession = Depends(get_db)) -> A
         not_after=result.not_after,
         detail=result.detail,
     )
+
+
+@router.post("/{site_id}/ssl/renew", response_model=CertStatusResponse)
+async def renew_site_ssl(
+    request: Request,
+    site_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """Re-apply the Caddy config so it (re)attempts certificate issuance.
+
+    Caddy renews valid certificates on its own; this endpoint covers the
+    retry cases (initial issuance failed, DNS fixed after creation) and
+    returns a fresh probe of the resulting certificate status.
+    """
+    site = await _get_active_site(db, site_id)
+    try:
+        await sites_service.resync_caddy(db, _settings(request))
+    except Exception as exc:
+        raise SiteOperationError(f"Certificate renewal failed: {exc}") from exc
+    result = await ssl_service.probe(site.domain, verify=not site.behind_cloudflare)
+    return CertStatusResponse(
+        domain=result.domain,
+        status=result.status,
+        issuer=result.issuer,
+        not_after=result.not_after,
+        detail=result.detail,
+    )
+
+
+class CloudflareProxyRequest(BaseModel):
+    behind_cloudflare: bool
+
+
+@router.patch("/{site_id}/cloudflare-proxy", response_model=SiteResponse)
+async def set_cloudflare_proxy(
+    request: Request,
+    site_id: int,
+    body: CloudflareProxyRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """Toggle 'behind the Cloudflare proxy' for a site.
+
+    When enabled, Caddy issues an internal origin certificate for the domain
+    instead of attempting ACME HTTP-01 (which the proxy would break); Cloudflare
+    terminates public TLS at the edge (SSL mode "Full").
+    """
+    site = await _get_active_site(db, site_id)
+    if site.behind_cloudflare == body.behind_cloudflare:
+        return site
+    previous = site.behind_cloudflare
+    site.behind_cloudflare = body.behind_cloudflare
+    try:
+        await sites_service.resync_caddy(db, _settings(request))
+    except Exception as exc:
+        site.behind_cloudflare = previous
+        await db.commit()
+        raise SiteOperationError(f"Could not update the web server: {exc}") from exc
+    await db.commit()
+    await db.refresh(site)
+    return site
 
 
 # --- operations ----------------------------------------------------------------

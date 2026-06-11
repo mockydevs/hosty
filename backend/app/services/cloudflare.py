@@ -176,10 +176,27 @@ class CloudflareClient:
             raise CloudflareError(f"Cloudflare API error: {messages[:300]}")
         return payload
 
+    async def verify_token(self) -> dict[str, Any]:
+        """Validate the token itself (GET /user/tokens/verify); raises if invalid."""
+        payload = await self._request("GET", "/user/tokens/verify")
+        return payload.get("result") or {}
+
     async def find_zone(self, name: str) -> dict[str, Any] | None:
         payload = await self._request("GET", "/zones", params={"name": name})
         result = payload.get("result") or []
         return result[0] if result else None
+
+    async def list_zones(self) -> list[dict[str, Any]]:
+        zones: list[dict[str, Any]] = []
+        page = 1
+        while page <= 10:  # 10 * 50 zones is plenty for a hosting panel
+            payload = await self._request("GET", "/zones", params={"page": page, "per_page": 50})
+            zones.extend(payload.get("result") or [])
+            info = payload.get("result_info") or {}
+            if page >= int(info.get("total_pages") or 1):
+                break
+            page += 1
+        return zones
 
     async def list_records(self, zone_id: str) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
@@ -202,6 +219,9 @@ class CloudflareClient:
 
     async def update_record(self, zone_id: str, record_id: str, payload: dict[str, Any]) -> None:
         await self._request("PUT", f"/zones/{zone_id}/dns_records/{record_id}", json=payload)
+
+    async def delete_record(self, zone_id: str, record_id: str) -> None:
+        await self._request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
 
 
 # --- push algorithm ----------------------------------------------------------------

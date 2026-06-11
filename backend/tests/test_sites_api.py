@@ -208,3 +208,141 @@ async def test_list_sites(admin_client, fake_system):
     rows = (await admin_client.get("/api/sites")).json()
     assert [r["domain"] for r in rows] == ["a.example", "b.example"]
     assert all(r["status"] == "active" for r in rows)
+
+
+async def test_renew_ssl_resyncs_caddy_and_reprobes(admin_client, fake_system, monkeypatch):
+    from app.services import ssl as ssl_service
+    from app.services.ssl import CertStatus
+
+    body = (await admin_client.post("/api/sites", json={"domain": "renew.example"})).json()
+    site_id = body["site"]["id"]
+    applies_before = len(fake_system.caddy_configs)
+
+    async def fake_probe(domain: str, **kwargs) -> CertStatus:
+        return CertStatus(domain=domain, status="active", issuer="Let's Encrypt")
+
+    monkeypatch.setattr(ssl_service, "probe", fake_probe)
+
+    resp = await admin_client.post(f"/api/sites/{site_id}/ssl/renew")
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["domain"] == "renew.example"
+    assert out["status"] == "active"
+    assert out["issuer"] == "Let's Encrypt"
+    # The full desired-state config was re-applied to Caddy.
+    assert len(fake_system.caddy_configs) == applies_before + 1
+    hosts = [
+        r["match"][0]["host"][0]
+        for r in fake_system.caddy_configs[-1]["apps"]["http"]["servers"]["hosty"]["routes"]
+    ]
+    assert "renew.example" in hosts
+
+
+async def test_renew_ssl_caddy_failure_returns_502(admin_client, fake_system):
+    body = (await admin_client.post("/api/sites", json={"domain": "broken.example"})).json()
+    site_id = body["site"]["id"]
+
+    fake_system.fail_on = "caddy"
+    resp = await admin_client.post(f"/api/sites/{site_id}/ssl/renew")
+    assert resp.status_code == 502
+    assert resp.json()["error"]["code"] == "site_operation_failed"
+
+
+async def test_renew_ssl_requires_active_site(admin_client, fake_system):
+    assert (await admin_client.post("/api/sites/9999/ssl/renew")).status_code == 404
+
+
+def _tls_policies(config: dict) -> list[dict]:
+    return ((config.get("apps", {}).get("tls") or {}).get("automation") or {}).get("policies", [])
+
+
+async def test_cloudflare_proxy_toggle_updates_caddy(admin_client, fake_system):
+    body = (await admin_client.post("/api/sites", json={"domain": "proxied.example"})).json()
+    site_id = body["site"]["id"]
+    assert body["site"]["behind_cloudflare"] is False
+
+    # Enable: the domain gets an internal-issuer TLS policy.
+    resp = await admin_client.patch(
+        f"/api/sites/{site_id}/cloudflare-proxy", json={"behind_cloudflare": True}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["behind_cloudflare"] is True
+    policies = _tls_policies(fake_system.caddy_configs[-1])
+    assert policies == [{"subjects": ["proxied.example"], "issuers": [{"module": "internal"}]}]
+
+    # Toggling to the same value is a no-op (no extra Caddy apply).
+    applies = len(fake_system.caddy_configs)
+    resp = await admin_client.patch(
+        f"/api/sites/{site_id}/cloudflare-proxy", json={"behind_cloudflare": True}
+    )
+    assert resp.status_code == 200
+    assert len(fake_system.caddy_configs) == applies
+
+    # Disable: the policy disappears again.
+    resp = await admin_client.patch(
+        f"/api/sites/{site_id}/cloudflare-proxy", json={"behind_cloudflare": False}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["behind_cloudflare"] is False
+    assert _tls_policies(fake_system.caddy_configs[-1]) == []
+
+
+async def test_cloudflare_proxy_toggle_rolls_back_on_caddy_failure(admin_client, fake_system):
+    body = (await admin_client.post("/api/sites", json={"domain": "stuck.example"})).json()
+    site_id = body["site"]["id"]
+
+    fake_system.fail_on = "caddy"
+    resp = await admin_client.patch(
+        f"/api/sites/{site_id}/cloudflare-proxy", json={"behind_cloudflare": True}
+    )
+    assert resp.status_code == 502
+    site = (await admin_client.get(f"/api/sites/{site_id}")).json()
+    assert site["behind_cloudflare"] is False
+
+
+async def test_ssl_status_uses_unverified_probe_for_proxied_site(
+    admin_client, fake_system, monkeypatch
+):
+    from app.services import ssl as ssl_service
+    from app.services.ssl import CertStatus
+
+    body = (await admin_client.post("/api/sites", json={"domain": "edge.example"})).json()
+    site_id = body["site"]["id"]
+    await admin_client.patch(
+        f"/api/sites/{site_id}/cloudflare-proxy", json={"behind_cloudflare": True}
+    )
+
+    seen: dict = {}
+
+    async def fake_probe(domain: str, *, verify: bool = True, **kwargs) -> CertStatus:
+        seen["verify"] = verify
+        return CertStatus(domain=domain, status="origin_internal", issuer="Caddy internal CA")
+
+    monkeypatch.setattr(ssl_service, "probe", fake_probe)
+    resp = await admin_client.get(f"/api/sites/{site_id}/ssl")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "origin_internal"
+    assert seen["verify"] is False
+
+
+async def test_probe_unverified_reports_origin_internal(monkeypatch):
+    from app.services import ssl as ssl_service
+
+    class FakeWriter:
+        def get_extra_info(self, key):
+            return None
+
+        def close(self):
+            pass
+
+    async def yes_dns(domain):
+        return True
+
+    async def fake_open_connection(*a, **k):
+        return None, FakeWriter()
+
+    monkeypatch.setattr(ssl_service, "_resolves", yes_dns)
+    monkeypatch.setattr(ssl_service.asyncio, "open_connection", fake_open_connection)
+    status = await ssl_service.probe("edge.example", verify=False)
+    assert status.status == "origin_internal"
+    assert status.issuer == "Caddy internal CA"

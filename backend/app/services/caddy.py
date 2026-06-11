@@ -31,6 +31,9 @@ class SiteSpec:
     domain: str
     doc_root: str
     php_socket: str
+    # Behind the Cloudflare proxy: issue an internal origin certificate instead
+    # of attempting ACME (HTTP-01 cannot complete through the proxy).
+    internal_tls: bool = False
 
 
 def _site_route(site: SiteSpec) -> dict[str, Any]:
@@ -182,6 +185,21 @@ def build_config(
                 ]
             }
         }
+    else:
+        # Sites behind the Cloudflare proxy get internal origin certificates
+        # (Cloudflare terminates public TLS at the edge; SSL mode "Full").
+        proxied = [s.domain for s in ordered if s.internal_tls]
+        if proxied:
+            config["apps"]["tls"] = {
+                "automation": {
+                    "policies": [
+                        {
+                            "subjects": proxied,
+                            "issuers": [{"module": "internal"}],
+                        }
+                    ]
+                }
+            }
     return config
 
 

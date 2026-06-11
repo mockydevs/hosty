@@ -295,6 +295,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dns/cloudflare/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cloudflare Config
+         * @description Whether a token is configured and where it came from. Never returns the token.
+         */
+        get: operations["get_cloudflare_config_api_dns_cloudflare_config_get"];
+        /**
+         * Update Cloudflare Config
+         * @description Verify the token against Cloudflare, then store it (encrypted at rest).
+         */
+        put: operations["update_cloudflare_config_api_dns_cloudflare_config_put"];
+        post?: never;
+        /** Delete Cloudflare Config */
+        delete: operations["delete_cloudflare_config_api_dns_cloudflare_config_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloudflare Zones */
+        get: operations["list_cloudflare_zones_api_dns_cloudflare_zones_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/zones/{cf_zone_id}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloudflare Records */
+        get: operations["list_cloudflare_records_api_dns_cloudflare_zones__cf_zone_id__records_get"];
+        put?: never;
+        /** Create Cloudflare Record */
+        post: operations["create_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/zones/{cf_zone_id}/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Cloudflare Record */
+        put: operations["update_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__put"];
+        post?: never;
+        /** Delete Cloudflare Record */
+        delete: operations["delete_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dns/meta": {
         parameters: {
             query?: never;
@@ -543,6 +621,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sites/{site_id}/cloudflare-proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Cloudflare Proxy
+         * @description Toggle 'behind the Cloudflare proxy' for a site.
+         *
+         *     When enabled, Caddy issues an internal origin certificate for the domain
+         *     instead of attempting ACME HTTP-01 (which the proxy would break); Cloudflare
+         *     terminates public TLS at the edge (SSL mode "Full").
+         */
+        patch: operations["set_cloudflare_proxy_api_sites__site_id__cloudflare_proxy_patch"];
+        trace?: never;
+    };
     "/api/sites/{site_id}/files-session": {
         parameters: {
             query?: never;
@@ -605,6 +707,30 @@ export interface paths {
         get: operations["site_ssl_status_api_sites__site_id__ssl_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/ssl/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew Site Ssl
+         * @description Re-apply the Caddy config so it (re)attempts certificate issuance.
+         *
+         *     Caddy renews valid certificates on its own; this endpoint covers the
+         *     retry cases (initial issuance failed, DNS fixed after creation) and
+         *     returns a fresh probe of the resulting certificate status.
+         */
+        post: operations["renew_site_ssl_api_sites__site_id__ssl_renew_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -803,6 +929,18 @@ export interface components {
             /** Php Version */
             php_version: string;
         };
+        /** CloudflareConfigResponse */
+        CloudflareConfigResponse: {
+            /** Configured */
+            configured: boolean;
+            /** Source */
+            source: string | null;
+        };
+        /** CloudflareProxyRequest */
+        CloudflareProxyRequest: {
+            /** Behind Cloudflare */
+            behind_cloudflare: boolean;
+        };
         /** CloudflarePushResponse */
         CloudflarePushResponse: {
             /** Created */
@@ -815,6 +953,36 @@ export interface components {
             updated: number;
             /** Zone */
             zone: string;
+        };
+        /** CloudflareRecordResponse */
+        CloudflareRecordResponse: {
+            /** Content */
+            content: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Priority */
+            priority?: number | null;
+            /** Proxied */
+            proxied?: boolean | null;
+            /** Ttl */
+            ttl: number;
+            /** Type */
+            type: string;
+        };
+        /** CloudflareZoneResponse */
+        CloudflareZoneResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Name Servers */
+            name_servers: string[];
+            /** Paused */
+            paused: boolean;
+            /** Status */
+            status: string;
         };
         /** CreateDatabaseRequest */
         CreateDatabaseRequest: {
@@ -1074,6 +1242,8 @@ export interface components {
         };
         /** SiteResponse */
         SiteResponse: {
+            /** Behind Cloudflare */
+            behind_cloudflare: boolean;
             /**
              * Created At
              * Format: date-time
@@ -1133,6 +1303,11 @@ export interface components {
              */
             token_type: string;
         };
+        /** UpdateCloudflareConfigRequest */
+        UpdateCloudflareConfigRequest: {
+            /** Api Token */
+            api_token: string;
+        };
         /** UpdateS3ConfigRequest */
         UpdateS3ConfigRequest: {
             /** Access Key */
@@ -1189,6 +1364,27 @@ export interface components {
              * @default true
              */
             s3_mirror: boolean;
+        };
+        /** UpsertCloudflareRecordRequest */
+        UpsertCloudflareRecordRequest: {
+            /** Content */
+            content: string;
+            /** Name */
+            name: string;
+            /** Priority */
+            priority?: number | null;
+            /**
+             * Proxied
+             * @default false
+             */
+            proxied: boolean;
+            /**
+             * Ttl
+             * @default 1
+             */
+            ttl: number;
+            /** Type */
+            type: string;
         };
         /** UpsertRecordRequest */
         UpsertRecordRequest: {
@@ -1768,6 +1964,225 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CredentialsResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloudflare_config_api_dns_cloudflare_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflareConfigResponse"];
+                };
+            };
+        };
+    };
+    update_cloudflare_config_api_dns_cloudflare_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCloudflareConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflareConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cloudflare_config_api_dns_cloudflare_config_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_cloudflare_zones_api_dns_cloudflare_zones_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflareZoneResponse"][];
+                };
+            };
+        };
+    };
+    list_cloudflare_records_api_dns_cloudflare_zones__cf_zone_id__records_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cf_zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflareRecordResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cf_zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertCloudflareRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cf_zone_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertCloudflareRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cf_zone_id: string;
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2414,6 +2829,41 @@ export interface operations {
             };
         };
     };
+    set_cloudflare_proxy_api_sites__site_id__cloudflare_proxy_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudflareProxyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     files_session_api_sites__site_id__files_session_post: {
         parameters: {
             query?: never;
@@ -2516,6 +2966,37 @@ export interface operations {
         };
     };
     site_ssl_status_api_sites__site_id__ssl_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_site_ssl_api_sites__site_id__ssl_renew_post: {
         parameters: {
             query?: never;
             header?: never;

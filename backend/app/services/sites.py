@@ -86,6 +86,7 @@ def spec_for(site: Site, settings: Settings) -> SiteSpec:
         domain=site.domain,
         doc_root=site.doc_root,
         php_socket=php_fpm.socket_path(site.site_user, site.php_version, settings),
+        internal_tls=site.behind_cloudflare,
     )
 
 
@@ -394,6 +395,30 @@ async def run_delete_site(
 
 
 # --- post-provisioning site changes (Week 11) ----------------------------------
+
+
+async def resync_caddy(
+    db: AsyncSession,
+    settings: Settings,
+    *,
+    caddy_client: CaddyClient | None = None,
+) -> None:
+    """Re-apply the full desired-state Caddy config.
+
+    Re-applying nudges Caddy to (re)attempt ACME issuance for any domain that
+    does not yet have a valid certificate — e.g. after the user fixes DNS.
+    Caddy renews valid certificates automatically; this is for retrying, not
+    for routine renewal.
+    """
+    client = _caddy_client(settings, caddy_client)
+    await client.apply(
+        caddy.build_config(
+            await _served_specs(db, settings),
+            adminer=_adminer_spec(settings),
+            panel=_panel_spec(settings),
+            tls_internal=settings.caddy_tls_internal,
+        )
+    )
 
 
 async def change_php_version(

@@ -6,11 +6,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_db
 from app.core.config import Settings
 from app.core.errors import ConflictError, NotFoundError
-from app.services import cloudflare, dns
+from app.services import cloudflare, cloudflare_config, dns
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -108,13 +109,13 @@ def _point_to_server_patches(zone: str, settings: Settings) -> list[dict[str, An
 
 
 @router.get("/meta", response_model=DnsMetaResponse)
-async def dns_meta(request: Request) -> DnsMetaResponse:
+async def dns_meta(request: Request, db: AsyncSession = Depends(get_db)) -> DnsMetaResponse:
     settings = _settings(request)
     return DnsMetaResponse(
         enabled=settings.dns_enabled,
         server_ip=settings.public_ip,
         default_ttl=settings.dns_default_ttl,
-        cloudflare_enabled=bool(settings.cloudflare_api_token),
+        cloudflare_enabled=await cloudflare_config.load(db, settings) is not None,
     )
 
 
@@ -204,16 +205,26 @@ class CloudflarePushResponse(BaseModel):
     errors: list[str]
 
 
+async def _cf_client(request: Request, db: AsyncSession) -> cloudflare.CloudflareClient:
+    """Cloudflare client from the stored token (DB first, env fallback)."""
+    injected = getattr(request.app.state, "cloudflare_client", None)
+    if injected is not None:
+        return injected
+    config = await cloudflare_config.load(db, _settings(request))
+    if config is None:
+        raise ConflictError(
+            "Add a Cloudflare API token in Settings (or set HOSTY_CLOUDFLARE_API_TOKEN) first"
+        )
+    return cloudflare.CloudflareClient(config.api_token)
+
+
 @router.post("/zones/{zone_id}/push/cloudflare", response_model=CloudflarePushResponse)
-async def push_to_cloudflare(request: Request, zone_id: str) -> CloudflarePushResponse:
+async def push_to_cloudflare(
+    request: Request, zone_id: str, db: AsyncSession = Depends(get_db)
+) -> CloudflarePushResponse:
     """One click: export every record of this zone to the Cloudflare account."""
-    settings = _settings(request)
-    if not settings.cloudflare_api_token:
-        raise ConflictError("Set HOSTY_CLOUDFLARE_API_TOKEN to enable Cloudflare push")
     detail = _zone_detail(await _client(request).get_zone(zone_id))
-    cf = getattr(request.app.state, "cloudflare_client", None) or cloudflare.CloudflareClient(
-        settings.cloudflare_api_token
-    )
+    cf = await _cf_client(request, db)
     result = await cloudflare.push_zone(
         cf, dns.canonical(detail.name), [r.model_dump() for r in detail.rrsets]
     )
@@ -224,3 +235,164 @@ async def push_to_cloudflare(request: Request, zone_id: str) -> CloudflarePushRe
         skipped=result.skipped,
         errors=result.errors,
     )
+
+
+# --- Cloudflare account management (token + zones + records) ------------------------
+
+
+class CloudflareConfigResponse(BaseModel):
+    configured: bool
+    source: str | None  # db | env
+
+
+class UpdateCloudflareConfigRequest(BaseModel):
+    api_token: str = Field(min_length=10, max_length=256)
+
+
+class CloudflareZoneResponse(BaseModel):
+    id: str
+    name: str
+    status: str
+    paused: bool
+    name_servers: list[str]
+
+
+class CloudflareRecordResponse(BaseModel):
+    id: str
+    type: str
+    name: str
+    content: str
+    ttl: int
+    proxied: bool | None = None
+    priority: int | None = None
+
+
+class UpsertCloudflareRecordRequest(BaseModel):
+    type: str = Field(pattern=r"^(A|AAAA|CNAME|TXT|MX|NS)$")
+    name: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1, max_length=2048)
+    ttl: int = Field(default=1, ge=1, le=86400)  # 1 = Cloudflare "automatic"
+    proxied: bool = False
+    priority: int | None = Field(default=None, ge=0, le=65535)
+
+
+def _cf_config_response(config: cloudflare_config.CloudflareConfig | None):
+    return CloudflareConfigResponse(
+        configured=config is not None, source=config.source if config else None
+    )
+
+
+def _record_response(r: dict) -> CloudflareRecordResponse:
+    return CloudflareRecordResponse(
+        id=str(r.get("id", "")),
+        type=str(r.get("type", "")),
+        name=str(r.get("name", "")),
+        content=str(r.get("content", "")),
+        ttl=int(r.get("ttl") or 1),
+        proxied=r.get("proxied"),
+        priority=r.get("priority"),
+    )
+
+
+def _record_payload(body: UpsertCloudflareRecordRequest) -> dict:
+    payload: dict = {
+        "type": body.type,
+        "name": body.name.strip().rstrip("."),
+        "content": body.content.strip(),
+        "ttl": body.ttl,
+    }
+    if body.type in ("A", "AAAA", "CNAME"):
+        payload["proxied"] = body.proxied
+    if body.type == "MX":
+        payload["priority"] = body.priority if body.priority is not None else 10
+    return payload
+
+
+@router.get("/cloudflare/config", response_model=CloudflareConfigResponse)
+async def get_cloudflare_config(request: Request, db: AsyncSession = Depends(get_db)) -> Any:
+    """Whether a token is configured and where it came from. Never returns the token."""
+    return _cf_config_response(await cloudflare_config.load(db, _settings(request)))
+
+
+@router.put("/cloudflare/config", response_model=CloudflareConfigResponse)
+async def update_cloudflare_config(
+    request: Request, body: UpdateCloudflareConfigRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Verify the token against Cloudflare, then store it (encrypted at rest)."""
+    token = body.api_token.strip()
+    injected = getattr(request.app.state, "cloudflare_client", None)
+    cf = injected or cloudflare.CloudflareClient(token)
+    await cf.verify_token()  # raises cloudflare_error (502) on a bad token
+    saved = await cloudflare_config.save(db, _settings(request), api_token=token)
+    return _cf_config_response(saved)
+
+
+@router.delete("/cloudflare/config", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_cloudflare_config(db: AsyncSession = Depends(get_db)) -> None:
+    if not await cloudflare_config.clear(db):
+        raise NotFoundError("No Cloudflare token stored")
+
+
+@router.get("/cloudflare/zones", response_model=list[CloudflareZoneResponse])
+async def list_cloudflare_zones(request: Request, db: AsyncSession = Depends(get_db)) -> Any:
+    cf = await _cf_client(request, db)
+    return [
+        CloudflareZoneResponse(
+            id=str(z.get("id", "")),
+            name=str(z.get("name", "")),
+            status=str(z.get("status", "")),
+            paused=bool(z.get("paused", False)),
+            name_servers=[str(ns) for ns in (z.get("name_servers") or [])],
+        )
+        for z in await cf.list_zones()
+    ]
+
+
+@router.get(
+    "/cloudflare/zones/{cf_zone_id}/records", response_model=list[CloudflareRecordResponse]
+)
+async def list_cloudflare_records(
+    request: Request, cf_zone_id: str, db: AsyncSession = Depends(get_db)
+) -> Any:
+    cf = await _cf_client(request, db)
+    return [_record_response(r) for r in await cf.list_records(cf_zone_id)]
+
+
+@router.post(
+    "/cloudflare/zones/{cf_zone_id}/records",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def create_cloudflare_record(
+    request: Request,
+    cf_zone_id: str,
+    body: UpsertCloudflareRecordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    cf = await _cf_client(request, db)
+    await cf.create_record(cf_zone_id, _record_payload(body))
+
+
+@router.put(
+    "/cloudflare/zones/{cf_zone_id}/records/{record_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def update_cloudflare_record(
+    request: Request,
+    cf_zone_id: str,
+    record_id: str,
+    body: UpsertCloudflareRecordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    cf = await _cf_client(request, db)
+    await cf.update_record(cf_zone_id, record_id, _record_payload(body))
+
+
+@router.delete(
+    "/cloudflare/zones/{cf_zone_id}/records/{record_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_cloudflare_record(
+    request: Request, cf_zone_id: str, record_id: str, db: AsyncSession = Depends(get_db)
+) -> None:
+    cf = await _cf_client(request, db)
+    await cf.delete_record(cf_zone_id, record_id)

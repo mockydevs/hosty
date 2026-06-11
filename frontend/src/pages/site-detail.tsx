@@ -22,14 +22,17 @@ import type { components } from "@/lib/api/schema";
 import { SiteStatusBadge } from "@/pages/sites";
 /** Site detail: overview plus per-site WordPress, files, databases, and backups workflows. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { ArrowLeft, RefreshCw, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 
 type Operation = components["schemas"]["OperationResponse"];
+type Site = components["schemas"]["SiteResponse"];
 
-function SslStatusCard({ siteId }: { siteId: number }) {
+function SslStatusCard({ site }: { site: Site }) {
+  const siteId = site.id;
+  const queryClient = useQueryClient();
   const ssl = useQuery({
     queryKey: ["sites", siteId, "ssl"],
     queryFn: async () => {
@@ -42,17 +45,57 @@ function SslStatusCard({ siteId }: { siteId: number }) {
     staleTime: 60_000,
   });
 
+  const renew = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/sites/{site_id}/ssl/renew", {
+        params: { path: { site_id: siteId } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Certificate renewal failed"));
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["sites", siteId, "ssl"], data);
+      if (data.status === "active") toast.success(`Certificate for ${data.domain} is active`);
+      else toast.info(data.detail ?? "Renewal requested; the certificate is not active yet");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const proxy = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.PATCH("/api/sites/{site_id}/cloudflare-proxy", {
+        params: { path: { site_id: siteId } },
+        body: { behind_cloudflare: !site.behind_cloudflare },
+      });
+      if (error || !data) {
+        throw new Error(apiErrorMessage(error, "Could not update the proxy setting"));
+      }
+      return data;
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["sites"] });
+      toast.success(
+        data.behind_cloudflare
+          ? 'Origin certificate enabled — set the Cloudflare SSL mode to "Full"'
+          : "Switched back to Let's Encrypt certificates",
+      );
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const ok = ssl.data?.status === "active" || ssl.data?.status === "origin_internal";
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">HTTPS certificate</CardTitle>
-        {ssl.data?.status === "active" ? (
+        {ok ? (
           <ShieldCheck className="h-4 w-4 text-success" aria-hidden />
         ) : (
           <ShieldQuestion className="h-4 w-4 text-muted-foreground" aria-hidden />
         )}
       </CardHeader>
-      <CardContent className="space-y-1 text-sm">
+      <CardContent className="space-y-2 text-sm">
         {ssl.isPending ? (
           <p className="text-muted-foreground">Checking…</p>
         ) : ssl.isError ? (
@@ -65,6 +108,14 @@ function SslStatusCard({ siteId }: { siteId: number }) {
               {ssl.data.not_after &&
                 ` · expires ${new Date(ssl.data.not_after).toLocaleDateString()}`}
             </p>
+            <p className="text-xs text-muted-foreground">
+              Certificates renew automatically before they expire.
+            </p>
+          </>
+        ) : ssl.data.status === "origin_internal" ? (
+          <>
+            <Badge variant="success">Origin certificate</Badge>
+            <p className="text-muted-foreground">{ssl.data.detail}</p>
           </>
         ) : (
           <>
@@ -72,8 +123,31 @@ function SslStatusCard({ siteId }: { siteId: number }) {
               {ssl.data.status === "dns_unresolved" ? "DNS not pointing here" : "No certificate"}
             </Badge>
             <p className="text-muted-foreground">{ssl.data.detail}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={renew.isPending}
+              onClick={() => renew.mutate()}
+            >
+              <RefreshCw className="mr-2 h-3.5 w-3.5" aria-hidden />
+              Retry certificate
+            </Button>
           </>
         )}
+        <label className="flex items-start gap-2 pt-1 text-xs" htmlFor="cf-proxy-toggle">
+          <input
+            id="cf-proxy-toggle"
+            type="checkbox"
+            className="mt-0.5"
+            checked={site.behind_cloudflare}
+            disabled={proxy.isPending}
+            onChange={() => proxy.mutate()}
+          />
+          <span className="text-muted-foreground">
+            Behind Cloudflare proxy (orange cloud) — serve an internal origin certificate instead of
+            Let's Encrypt
+          </span>
+        </label>
       </CardContent>
     </Card>
   );
@@ -259,7 +333,7 @@ export function SiteDetailPage() {
                 </div>
               </CardContent>
             </Card>
-            {s.status === "active" && <SslStatusCard siteId={s.id} />}
+            {s.status === "active" && <SslStatusCard site={s} />}
             {s.status === "active" && <PhpCard site={s} />}
           </div>
 

@@ -40,35 +40,17 @@ log "Database migrations (alembic upgrade head)"
 # ── Frontend rebuild ─────────────────────────────────────────────────────────
 log "Frontend rebuild"
 
-build_frontend() {
+# pnpm version is pinned via "packageManager" in frontend/package.json;
+# corepack fetches exactly that version. Build-script approvals live in
+# frontend/pnpm-workspace.yaml (allowBuilds).
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+command -v pnpm >/dev/null || corepack enable
+
+(
   cd "$APP_DIR/frontend"
-
-  # Ensure pnpm is available.
-  command -v pnpm >/dev/null || { corepack enable; }
-
-  # Strategy 1: normal install.
-  if pnpm install 2>/dev/null; then
-    pnpm exec vite build && return 0
-  fi
-
-  log "Retrying frontend with clean node_modules..."
-  # Strategy 2: wipe cached state so pnpm re-reads workspace config.
-  rm -rf node_modules .pnpm-store
-  if pnpm install 2>/dev/null; then
-    pnpm exec vite build && return 0
-  fi
-
-  log "Retrying with --ignore-scripts + manual rebuild..."
-  # Strategy 3: skip scripts, then rebuild the two packages that need native binaries.
-  rm -rf node_modules
-  pnpm install --ignore-scripts
-  pnpm rebuild @biomejs/biome esbuild 2>/dev/null || true
-  pnpm exec vite build && return 0
-
-  echo "ERROR: Frontend build failed after all attempts." >&2
-  return 1
-}
-build_frontend
+  pnpm install --frozen-lockfile
+  pnpm exec vite build
+)
 
 # ── Restart service ──────────────────────────────────────────────────────────
 log "Restarting hosty service"

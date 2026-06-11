@@ -18,7 +18,7 @@ from datetime import datetime
 @dataclass(frozen=True)
 class CertStatus:
     domain: str
-    # active | no_certificate | dns_unresolved
+    # active | origin_internal | no_certificate | dns_unresolved
     status: str
     issuer: str | None = None
     not_after: datetime | None = None
@@ -49,8 +49,15 @@ async def _resolves(domain: str) -> bool:
         return False
 
 
-async def probe(domain: str, *, host: str = "127.0.0.1", port: int = 443) -> CertStatus:
-    """Handshake against the local Caddy with SNI=domain; report cert status."""
+async def probe(
+    domain: str, *, host: str = "127.0.0.1", port: int = 443, verify: bool = True
+) -> CertStatus:
+    """Handshake against the local Caddy with SNI=domain; report cert status.
+
+    `verify=False` is for sites behind the Cloudflare proxy: the origin serves
+    Caddy's internal certificate (untrusted by design), so we only check that a
+    TLS handshake completes and report it as `origin_internal`.
+    """
     if not await _resolves(domain):
         return CertStatus(
             domain=domain,
@@ -61,7 +68,11 @@ async def probe(domain: str, *, host: str = "127.0.0.1", port: int = 443) -> Cer
             ),
         )
     context = ssl.create_default_context()
-    context.check_hostname = True
+    if verify:
+        context.check_hostname = True
+    else:
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
     try:
         _, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port, ssl=context, server_hostname=domain),
@@ -78,6 +89,19 @@ async def probe(domain: str, *, host: str = "127.0.0.1", port: int = 443) -> Cer
             ),
         )
     try:
+        if not verify:
+            # With verification off, getpeercert() returns nothing useful; the
+            # successful handshake is the signal.
+            return CertStatus(
+                domain=domain,
+                status="origin_internal",
+                issuer="Caddy internal CA",
+                detail=(
+                    "The origin serves an internal certificate; visitors get "
+                    "Cloudflare's edge certificate. Set the Cloudflare SSL mode "
+                    'to "Full".'
+                ),
+            )
         ssl_object = writer.get_extra_info("ssl_object")
         cert = ssl_object.getpeercert() if ssl_object else None
         return parse_peer_cert(domain, cert or {})

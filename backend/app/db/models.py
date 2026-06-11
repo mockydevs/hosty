@@ -49,6 +49,9 @@ class Site(Base):
     php_memory_limit: Mapped[str] = mapped_column(String(8), nullable=False, default="256M")
     php_upload_max_filesize: Mapped[str] = mapped_column(String(8), nullable=False, default="64M")
     wordpress: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Proxied through Cloudflare (orange cloud): serve an internal origin cert
+    # instead of attempting ACME HTTP-01, which the proxy would break.
+    behind_cloudflare: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     wp_db_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wp_db_user: Mapped[str | None] = mapped_column(String(32), nullable=True)
     backup_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

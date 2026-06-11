@@ -46,36 +46,17 @@ if ! command -v node >/dev/null; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -qy nodejs
 fi
+# pnpm version is pinned via "packageManager" in frontend/package.json;
+# corepack fetches exactly that version (no floating to latest).
+# Build-script approvals live in frontend/pnpm-workspace.yaml (allowBuilds).
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 corepack enable
 
-# Helper: build the frontend with fallbacks for pnpm v10 build-script approval.
-build_frontend() {
+(
   cd "$APP_DIR/frontend"
-
-  # Strategy 1: normal install (works when lockfile already has approvals).
-  if pnpm install 2>/dev/null; then
-    pnpm exec vite build && return 0
-  fi
-
-  log "Retrying frontend install with clean node_modules..."
-  # Strategy 2: wipe cached state so pnpm re-reads pnpm-workspace.yaml.
-  rm -rf node_modules .pnpm-store
-  if pnpm install 2>/dev/null; then
-    pnpm exec vite build && return 0
-  fi
-
-  log "Retrying with --ignore-scripts + manual rebuild..."
-  # Strategy 3: skip all scripts during install, then rebuild the two packages
-  # that need native binaries.
-  rm -rf node_modules
-  pnpm install --ignore-scripts
-  pnpm rebuild @biomejs/biome esbuild 2>/dev/null || true
-  pnpm exec vite build && return 0
-
-  echo "ERROR: Frontend build failed after all attempts." >&2
-  return 1
-}
-build_frontend
+  pnpm install --frozen-lockfile
+  pnpm exec vite build
+)
 
 log "Configuration → $ENV_FILE"
 PANEL_DOMAIN="${HOSTY_PANEL_DOMAIN:-}"

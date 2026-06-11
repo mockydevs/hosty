@@ -132,6 +132,7 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] Create-site flow as a transactional pipeline with compensating rollback: Linux user → doc root + skeleton → PHP-FPM pool → Caddy vhost → DB record (any step fails ⇒ undo previous steps)
 - [x] Delete-site flow (with "type the domain to confirm" semantics; steps idempotent so a failed delete is retryable)
 - [x] SSL: surface Caddy cert status per domain; handle DNS-not-pointing failure case with clear error (`services/ssl.py` probe)
+- [x] SSL: retry/renew certificate issuance from the panel (`POST /api/sites/{id}/ssl/renew` re-applies Caddy config; button on the HTTPS certificate card)
 - [x] Background task handling for slow operations (FastAPI BackgroundTasks) + operation status endpoint (`/api/operations/{id}` with per-step progress)
 
 ### Week 10: Sites UI
@@ -211,6 +212,10 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] Common templates: "point to this server", "Google Workspace MX", "SPF/DMARC for external mail"
 - [x] Cloudflare integration: `services/cloudflare.py` + one-click **Push to Cloudflare** per zone — creates/updates/skips records, never deletes; needs `HOSTY_CLOUDFLARE_API_TOKEN` (Zone.DNS edit) and the domain already added in Cloudflare
 - [ ] Verify Cloudflare push against a real Cloudflare account/token
+- [x] Cloudflare token managed in the UI: Settings card verifies the token (`/user/tokens/verify`) and stores it encrypted in `panel_settings` (`services/cloudflare_config.py`); env var remains a bootstrap fallback
+- [x] Cloudflare account management: list zones + add/edit/delete DNS records (A/AAAA/CNAME/TXT/MX/NS, proxied toggle) under `/api/dns/cloudflare/*` with `/dns/cloudflare` UI
+- [ ] Verify Cloudflare zone/record management against a real Cloudflare account
+- [x] Cloudflare proxy support: per-site "Behind Cloudflare" toggle (`PATCH /api/sites/{id}/cloudflare-proxy`, migration 0008) — Caddy issues an internal origin certificate for proxied domains instead of attempting ACME HTTP-01; SSL probe reports `origin_internal`; hint shown when proxying a record in the Cloudflare UI (requires Cloudflare SSL mode "Full")
 - [x] Tests: record validation matrix + zone lifecycle (mocked PowerDNS); VM run pending
 - [ ] **Milestone: `dig @server domain` returns records managed in UI**
 
