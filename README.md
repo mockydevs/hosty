@@ -52,10 +52,19 @@ Optional install-time settings:
 - `HOSTY_REPO_URL`: alternate Git repository.
 - `HOSTY_REF`: branch, tag, or commit to install.
 
-Maintenance commands after install:
+### Update Hosty
+
+To update to the latest version of Hosty, run the following command:
 
 ```bash
 sudo bash /opt/hosty/installer/update.sh
+```
+
+### Uninstall Hosty
+
+To uninstall Hosty, run the following command:
+
+```bash
 sudo bash /opt/hosty/installer/uninstall.sh
 ```
 
