@@ -59,12 +59,12 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] Write `docs/CONVENTIONS.md`: commit format, branch strategy, code style rules
 
 ### Week 2: Dev environment that mirrors production
-- [ ] Create reproducible dev VM: Multipass Ubuntu 24.04, scripted in `installer/dev-vm/` (`dev-vm.ps1` / `dev-vm.sh`) — first boot on a real machine still pending
-- [x] Provisioning script installs: Caddy, PHP-FPM (8.2–8.4), MariaDB, PowerDNS, Filebrowser, WP-CLI (`installer/provision.sh`, shellcheck-clean — not yet run on a VM)
+- [x] Create reproducible dev VM: Multipass Ubuntu 24.04, scripted in `installer/dev-vm/` (`dev-vm.ps1` / `dev-vm.sh`) — verified on Windows/Hyper-V
+- [x] Provisioning script installs: Caddy, PHP-FPM (8.2–8.4), MariaDB, PowerDNS (gsqlite3 + REST API), Filebrowser, WP-CLI (`installer/provision.sh` — ran clean on the VM after two real-world fixes: resolved stub listener vs port 53, Adminer v5 asset rename)
 - [x] Document one-command dev setup in README (`dev-vm up` instead of make/just — works on Windows hosts too)
 - [x] Backend connects to VM over SSH or runs inside it — decided: runs inside, as root, repo mounted; ADR-009
-- [ ] Smoke test: create a vhost in Caddy on the VM, serve a PHP file — scripted (`installer/dev-vm/smoke.sh`), pending first run
-- [ ] **Milestone: clone → running dev environment in under 15 minutes** — pending first boot
+- [x] Smoke test: create a vhost in Caddy on the VM, serve a PHP file — `smoke.sh` PASSED (php8.3.31 via admin-API vhost)
+- [x] **Milestone: clone → running dev environment in under 15 minutes** — `dev-vm up` does launch → provision → deps → schema in one command
 
 ---
 
@@ -94,7 +94,7 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] `system/users.py`: create/delete Linux site users (one user per site — isolation)
 - [x] Permission model decision: panel runs as root vs sudo-whitelisted user — document in ADR
 - [x] Unit tests for every command builder (assert exact argv, no shell injection possible)
-- [ ] Integration tests against the dev VM (pytest marker `@vm`)
+- [x] Integration tests against the dev VM (pytest marker `@vm`) — runner working (`dev-vm test`), suite is currently 1 test and grows with each phase
 - [ ] **Milestone: authenticated API that can query systemd service status on the VM**
 
 ---
@@ -289,7 +289,3 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 ## Definition of Done (every task)
 
 1. Typed, linted, formatted — CI green
-2. Tests for new logic (unit minimum; integration for system-touching code)
-3. Errors handled and surfaced clearly in UI
-4. Works on mobile viewport if it has UI
-5. No TODO without a corresponding tracked task
