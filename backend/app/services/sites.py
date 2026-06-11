@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import utcnow
 from app.core.config import Settings
-from app.db.models import Operation, Site
+from app.db.models import Database, Operation, Site
 from app.services import caddy, mariadb, php_fpm
 from app.services.caddy import CaddyClient, SiteSpec
 from app.system import fs, users
@@ -86,6 +86,18 @@ def spec_for(site: Site, settings: Settings) -> SiteSpec:
         domain=site.domain,
         doc_root=site.doc_root,
         php_socket=php_fpm.socket_path(site.site_user, site.php_version, settings),
+    )
+
+
+def _adminer_spec(settings: Settings) -> caddy.AdminerSpec | None:
+    if not settings.adminer_enabled:
+        return None
+    from app.services.adminer import ADMINER_SOCKET
+
+    return caddy.AdminerSpec(
+        listen_addr=settings.adminer_internal_addr,
+        root=settings.adminer_root,
+        php_socket=ADMINER_SOCKET,
     )
 
 
@@ -237,11 +249,15 @@ async def run_create_site(
             await php_fpm.remove_pool(site.site_user, site.php_version, settings)
 
         async def do_caddy() -> None:
-            await client.apply(caddy.build_config(await _served_specs(db, settings)))
+            await client.apply(
+                caddy.build_config(
+                    await _served_specs(db, settings), adminer=_adminer_spec(settings)
+                )
+            )
 
         async def undo_caddy() -> None:
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
-            await client.apply(caddy.build_config(specs))
+            await client.apply(caddy.build_config(specs, adminer=_adminer_spec(settings)))
 
         async def do_finalize() -> None:
             site.status = "active"
@@ -290,14 +306,21 @@ async def run_delete_site(
 
         async def do_caddy() -> None:
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
-            await client.apply(caddy.build_config(specs))
+            await client.apply(caddy.build_config(specs, adminer=_adminer_spec(settings)))
 
         async def do_pool() -> None:
             await php_fpm.remove_pool(site.site_user, site.php_version, settings)
 
         async def do_database() -> None:
-            # No-op for plain sites; idempotent DROP IF EXISTS otherwise.
-            if site.wp_db_name and site.wp_db_user:
+            # Idempotent DROP IF EXISTS for every panel-managed database.
+            rows = (
+                (await db.execute(select(Database).where(Database.site_id == site.id)))
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                await mariadb.drop_database(row.name, row.db_user)
+            if site.wp_db_name and site.wp_db_user:  # legacy safety net
                 await mariadb.drop_database(site.wp_db_name, site.wp_db_user)
 
         async def do_docroot() -> None:
@@ -355,7 +378,9 @@ async def change_php_version(
     )
     site.php_version = new_version
     try:
-        await client.apply(caddy.build_config(await _served_specs(db, settings)))
+        await client.apply(
+            caddy.build_config(await _served_specs(db, settings), adminer=_adminer_spec(settings))
+        )
     except Exception:
         # Caddy still points at the old socket; drop the new pool and bail.
         site.php_version = old_version

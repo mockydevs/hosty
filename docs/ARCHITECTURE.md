@@ -85,3 +85,29 @@ attempts. Higher layers never import `subprocess`/`asyncio.subprocess` directly
 
 **Status:** accepted · code avoids 3.11+-only APIs (e.g. `datetime.UTC`) so it
 runs on constrained dev sandboxes; CI and production pin 3.12.
+
+### ADR-007: MariaDB via validated-identifier CLI; Adminer behind a panel proxy
+
+**Status:** accepted (Week 14-15)
+
+**Database SQL:** the panel executes MariaDB statements through the `mariadb`
+CLI (root unix socket) rather than a driver. True parameter binding is not
+available that way, but none of the inputs are free-form: database/user names
+must match `^[a-z][a-z0-9_]{1,63}$` (validated twice — Pydantic and the
+service layer) and passwords are panel-generated hex tokens, validated as
+such before being embedded. Identifiers cannot be parameterized even with a
+driver. **Revisit** if databases ever accept arbitrary external input
+(e.g. import tooling): switch to a driver + bound parameters then.
+
+**Credentials:** shown exactly once (creation / reset-password response);
+only a SHA-256 hash is stored in the panel DB.
+
+**Adminer:** served by Caddy on an internal-only listener
+(`127.0.0.1:8081`) through a dedicated low-privilege PHP-FPM pool
+(`www-data`, `open_basedir` locked to the Adminer directory), and reached
+exclusively via the panel's `/adminer` reverse proxy. Access control: the
+panel mints a short-lived HMAC ticket (60 s) for the logged-in admin; the
+proxy exchanges it for a signed session cookie (30 min, `Path=/adminer`,
+`HttpOnly`). **Tradeoff:** credential auto-fill into Adminer's login form is
+deferred — it would require shipping an Adminer login plugin; users paste the
+password from the show-once dialog instead.

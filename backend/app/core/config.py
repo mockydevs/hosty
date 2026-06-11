@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     default_php_version: str = "8.3"
     php_pool_dir_template: str = "/etc/php/{version}/fpm/pool.d"
     php_socket_dir: str = "/run/php"
+
+    # Phase 5: databases & Adminer
+    adminer_enabled: bool = True
+    adminer_root: str = "/var/lib/hosty/adminer"
+    adminer_internal_addr: str = "127.0.0.1:8081"
+    adminer_session_ttl_seconds: int = 30 * 60
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 
     @property

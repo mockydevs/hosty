@@ -79,21 +79,63 @@ def _site_route(site: SiteSpec) -> dict[str, Any]:
     }
 
 
-def build_config(sites: Sequence[SiteSpec]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class AdminerSpec:
+    """Internal-only Adminer server: reached solely via the panel's proxy."""
+
+    listen_addr: str  # e.g. 127.0.0.1:8081
+    root: str  # directory containing adminer.php
+    php_socket: str
+
+
+def _adminer_server(spec: AdminerSpec) -> dict[str, Any]:
+    return {
+        "listen": [spec.listen_addr],
+        "routes": [
+            {
+                "handle": [
+                    {
+                        "handler": "subroute",
+                        "routes": [
+                            {
+                                "handle": [
+                                    {"handler": "rewrite", "uri": "/adminer.php"},
+                                    {
+                                        "handler": "reverse_proxy",
+                                        "transport": {
+                                            "protocol": "fastcgi",
+                                            "root": spec.root,
+                                            "split_path": [".php"],
+                                        },
+                                        "upstreams": [{"dial": f"unix/{spec.php_socket}"}],
+                                    },
+                                ]
+                            }
+                        ],
+                    }
+                ],
+                "terminal": True,
+            }
+        ],
+    }
+
+
+def build_config(
+    sites: Sequence[SiteSpec], *, adminer: AdminerSpec | None = None
+) -> dict[str, Any]:
     """Full desired-state Caddy config. Deterministic: sites sorted by domain."""
     ordered = sorted(sites, key=lambda s: s.domain)
+    servers: dict[str, Any] = {
+        SERVER_NAME: {
+            "listen": [":80", ":443"],
+            "routes": [_site_route(s) for s in ordered],
+        }
+    }
+    if adminer is not None:
+        servers["hosty_adminer"] = _adminer_server(adminer)
     return {
         "admin": {"listen": "127.0.0.1:2019"},
-        "apps": {
-            "http": {
-                "servers": {
-                    SERVER_NAME: {
-                        "listen": [":80", ":443"],
-                        "routes": [_site_route(s) for s in ordered],
-                    }
-                }
-            }
-        },
+        "apps": {"http": {"servers": servers}},
     }
 
 

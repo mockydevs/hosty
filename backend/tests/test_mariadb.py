@@ -86,3 +86,19 @@ def test_mariadb_argv_is_single_execute_item():
     assert argv[:4] == ["mariadb", "--protocol=socket", "--user=root", "--batch"]
     assert argv[4] == "--execute"
     assert argv[5] == sql and len(argv) == 6
+
+
+def test_reset_password_sql_snapshot():
+    from app.services.mariadb import build_reset_password_sql
+
+    assert build_reset_password_sql("wp_a_1b2c3d", "b" * 16) == (
+        f"ALTER USER 'wp_a_1b2c3d'@'localhost' IDENTIFIED BY '{'b' * 16}'; FLUSH PRIVILEGES;"
+    )
+
+
+def test_show_databases_argv():
+    from app.services.mariadb import build_show_databases_argv
+
+    argv = build_show_databases_argv()
+    assert argv[0] == "mariadb" and argv[-1] == "SHOW DATABASES;"
+    assert "--skip-column-names" in argv

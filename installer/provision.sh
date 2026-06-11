@@ -60,6 +60,14 @@ if ! command -v wp >/dev/null; then
 fi
 install -d -m 0777 /var/cache/hosty/wp-cli   # shared WP-CLI download cache
 
+log "Adminer"
+install -d -m 0755 /var/lib/hosty/adminer
+if [[ ! -f /var/lib/hosty/adminer/adminer.php ]]; then
+  curl -fsSL -o /var/lib/hosty/adminer/adminer.php \
+    https://github.com/vrana/adminer/releases/latest/download/adminer.php
+fi
+chown -R www-data:www-data /var/lib/hosty/adminer
+
 log "Site directories"
 install -d -m 0755 /var/www
 

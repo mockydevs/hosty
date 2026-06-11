@@ -102,3 +102,44 @@ async def create_database(database: str, user: str, password: str) -> None:
 async def drop_database(database: str, user: str) -> None:
     await _execute(build_drop_sql(database, user), f"drop database {database}")
     log.info("mariadb_database_dropped", database=database, user=user)
+
+
+# --- Phase 5: user-managed databases, reset password, orphan detection -----------
+
+SYSTEM_SCHEMAS = frozenset({"information_schema", "performance_schema", "mysql", "sys"})
+
+
+def build_reset_password_sql(user: str, password: str) -> str:
+    """Pure. ALTER USER for an existing panel-managed user."""
+    user = validate_identifier(user)
+    password = _validate_password(password)
+    return f"ALTER USER '{user}'@'localhost' IDENTIFIED BY '{password}'; FLUSH PRIVILEGES;"
+
+
+async def reset_password(user: str, password: str) -> None:
+    await _execute(build_reset_password_sql(user, password), f"reset password for {user}")
+    log.info("mariadb_password_reset", user=user)
+
+
+def build_show_databases_argv() -> list[str]:
+    return [
+        "mariadb",
+        "--protocol=socket",
+        "--user=root",
+        "--batch",
+        "--skip-column-names",
+        "--execute",
+        "SHOW DATABASES;",
+    ]
+
+
+async def list_physical_databases() -> list[str]:
+    """All non-system schemas that exist on the server (for orphan detection)."""
+    result = await runner.run(build_show_databases_argv(), timeout=30)
+    if not result.ok:
+        raise MariaDBError(f"SHOW DATABASES failed: {result.stderr.strip()[:300]}")
+    return [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip() and line.strip() not in SYSTEM_SCHEMAS
+    ]

@@ -78,3 +78,20 @@ class Operation(Base):
         DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Database(Base):
+    """A MariaDB database owned by a site. Credentials are shown once at
+    creation/reset; only a SHA-256 hash is stored."""
+
+    __tablename__ = "databases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    db_user: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False, default="custom")
+    password_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

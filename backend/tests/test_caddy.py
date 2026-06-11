@@ -147,3 +147,56 @@ async def test_apply_unreachable_raises_caddy_error():
 
     with pytest.raises(CaddyError, match="unreachable"):
         await _client(handler).apply({"new": True})
+
+
+def test_build_config_with_adminer_snapshot():
+    from app.services.caddy import AdminerSpec
+
+    spec = AdminerSpec(
+        listen_addr="127.0.0.1:8081",
+        root="/var/lib/hosty/adminer",
+        php_socket="/run/php/hosty-adminer.sock",
+    )
+    cfg = build_config([], adminer=spec)
+    assert cfg["apps"]["http"]["servers"]["hosty_adminer"] == {
+        "listen": ["127.0.0.1:8081"],
+        "routes": [
+            {
+                "handle": [
+                    {
+                        "handler": "subroute",
+                        "routes": [
+                            {
+                                "handle": [
+                                    {"handler": "rewrite", "uri": "/adminer.php"},
+                                    {
+                                        "handler": "reverse_proxy",
+                                        "transport": {
+                                            "protocol": "fastcgi",
+                                            "root": "/var/lib/hosty/adminer",
+                                            "split_path": [".php"],
+                                        },
+                                        "upstreams": [{"dial": "unix//run/php/hosty-adminer.sock"}],
+                                    },
+                                ]
+                            }
+                        ],
+                    }
+                ],
+                "terminal": True,
+            }
+        ],
+    }
+    # The internal listener never appears without the spec.
+    assert "hosty_adminer" not in build_config([])["apps"]["http"]["servers"]
+
+
+def test_adminer_pool_render_snapshot():
+    from app.core.config import Settings
+    from app.services.adminer import render_adminer_pool
+
+    pool = render_adminer_pool(Settings(_env_file=None))
+    assert "[hosty-adminer]" in pool
+    assert "user = www-data" in pool
+    assert "listen = /run/php/hosty-adminer.sock" in pool
+    assert "open_basedir] = /var/lib/hosty/adminer:/tmp" in pool

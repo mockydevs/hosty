@@ -17,7 +17,8 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from app.db.models import Operation, Site
+from app.core.security import hash_token
+from app.db.models import Database, Operation, Site
 from app.services import mariadb
 from app.system import fs, runner
 from app.system.users import validate_site_username
@@ -194,6 +195,15 @@ async def run_install_wordpress(
             site.wordpress = True
             site.wp_db_name = db_name
             site.wp_db_user = db_user
+            db.add(
+                Database(
+                    site_id=site.id,
+                    name=db_name,
+                    db_user=db_user,
+                    purpose="wordpress",
+                    password_hash=hash_token(db_password),
+                )
+            )
             await db.commit()
 
         ok, error = await _run_pipeline(
