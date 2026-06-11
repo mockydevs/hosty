@@ -1,0 +1,20 @@
+# Hosty panel — production unit (Week 23 self-recovery: always restarts).
+[Unit]
+Description=Hosty hosting panel
+After=network-online.target mariadb.service caddy.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+EnvironmentFile=/var/lib/hosty/hosty.env
+WorkingDirectory=/opt/hosty/backend
+ExecStart=/usr/local/bin/uv run --project /opt/hosty/backend uvicorn app.main:app --host 127.0.0.1 --port 8800
+Environment=UV_PROJECT_ENVIRONMENT=/var/lib/hosty/venv
+Restart=always
+RestartSec=3
+# Hard cap restart storms: 5 tries / 30s, then back off via systemd default.
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

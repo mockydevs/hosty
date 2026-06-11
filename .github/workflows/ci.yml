@@ -22,9 +22,30 @@ jobs:
         run: uv run ruff check .
       - name: Format check
         run: uv run ruff format --check .
-      - name: Tests
-        run: uv run pytest -q
+      - name: Tests (coverage floor 85% on system/ + services/)
+        run: uv run pytest -q --cov=app/system --cov=app/services --cov-fail-under=85
       - name: Forbidden patterns guard
-        run: |
-          ! grep -rn "shell=True" app/ && echo "OK: no shell=True"
-          ! grep -rn "subprocess" app/ --include="*.py" -l | grep -v "system/runner.py" && echo "OK: subprocess only in runner"
+        run: bash ../scripts/forbidden_patterns.sh
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm exec biome check .
+      - name: Type-check
+        run: pnpm exec tsc --noEmit
+      - name: Tests
+        run: pnpm exec vitest run
+      - name: Build
+        run: pnpm exec vite build
+      - name: Bundle budget (initial < 300KB gzipped)
+        run: node ../scripts/check_bundle_budget.mjs dist

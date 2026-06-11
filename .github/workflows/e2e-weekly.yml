@@ -1,0 +1,32 @@
+# Weekly E2E run (Week 23). Needs a runner that can reach a provisioned Hosty
+# VM — i.e. a self-hosted runner next to the dev VM, with HOSTY_E2E_URL set
+# as a repository variable. Skips cleanly when not configured.
+name: E2E (weekly, against VM)
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    if: vars.HOSTY_E2E_URL != ''
+    runs-on: [self-hosted, hosty-vm]
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable && pnpm install
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test
+        env:
+          HOSTY_E2E_URL: ${{ vars.HOSTY_E2E_URL }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: e2e/test-results/
