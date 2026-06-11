@@ -102,4 +102,4 @@ log "Done. Versions:"
 caddy version
 mariadb --version
 wp --version --allow-root
-for v in "${PHP_VERSIONS[@]}"; do php-fpm${v} -v | head -1; done
+for v in "${PHP_VERSIONS[@]}"; do "php-fpm${v}" -v | head -1; done

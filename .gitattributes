@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings — they run inside the Ubuntu VM even
+# when the repo is cloned on Windows.
+*.sh text eol=lf
+*.yaml text eol=lf
+*.ps1 text

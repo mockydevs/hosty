@@ -1,0 +1,8 @@
+#cloud-config
+# Hosty dev VM first boot (Multipass). Intentionally minimal: all real
+# provisioning lives in installer/provision.sh so dev and production
+# converge on one script. Re-run it any time with: dev-vm provision
+package_update: true
+packages:
+  - git
+  - curl
