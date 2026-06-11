@@ -32,7 +32,7 @@ Target: a fresh Ubuntu 24.04 server with at least 2 GB RAM and ports 80/443
 available.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/onyangodonomondi/hosty/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
 ```
 
 The installer prints the panel URL when it finishes. On first visit, create the
@@ -43,7 +43,7 @@ before running the installer:
 
 ```bash
 export HOSTY_PANEL_DOMAIN=panel.example.com
-curl -fsSL https://raw.githubusercontent.com/onyangodonomondi/hosty/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
 ```
 
 Optional install-time settings:

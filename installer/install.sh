@@ -9,7 +9,7 @@ set -euo pipefail
 . /etc/os-release
 [[ ${VERSION_ID:-} == "24.04" ]] || echo "WARNING: tested on Ubuntu 24.04, found ${VERSION_ID:-unknown}"
 
-REPO_URL="${HOSTY_REPO_URL:-https://github.com/onyangodonomondi/hosty.git}"
+REPO_URL="${HOSTY_REPO_URL:-https://github.com/mockydevs/hosty.git}"
 REPO_REF="${HOSTY_REF:-main}"
 APP_DIR=/opt/hosty
 STATE_DIR=/var/lib/hosty
