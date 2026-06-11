@@ -74,6 +74,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 structlog.get_logger("hosty.startup").warning(
                     "initial_caddy_sync_failed", error=str(exc)
                 )
+
+        if settings.adminer_enabled:
+            try:
+                from app.services.adminer import ADMINER_POOL_NAME, render_adminer_pool
+                from app.system import systemd
+                from pathlib import Path
+
+                pool_dir = Path(settings.php_pool_dir_template.format(version=settings.default_php_version))
+                pool_path = pool_dir / f"{ADMINER_POOL_NAME}.conf"
+                pool_content = render_adminer_pool(settings)
+
+                if not pool_path.exists() or pool_path.read_text(encoding="utf-8") != pool_content:
+                    pool_dir.mkdir(parents=True, exist_ok=True)
+                    pool_path.write_text(pool_content, encoding="utf-8")
+                    await systemd.control("reload", f"php{settings.default_php_version}-fpm")
+            except Exception as exc:
+                structlog.get_logger("hosty.startup").warning("adminer_pool_setup_failed", error=str(exc))
         scheduler_task: asyncio.Task | None = None
         if settings.backup_scheduler_enabled and settings.env != "test":
             from app.services import scheduler
