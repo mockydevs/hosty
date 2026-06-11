@@ -68,6 +68,33 @@ if [[ ! -f /var/lib/hosty/adminer/adminer.php ]]; then
 fi
 chown -R www-data:www-data /var/lib/hosty/adminer
 
+log "Filebrowser"
+if ! command -v filebrowser >/dev/null; then
+  curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+fi
+install -d -m 0755 /var/lib/hosty
+if [[ ! -f /var/lib/hosty/filebrowser.db ]]; then
+  filebrowser -d /var/lib/hosty/filebrowser.db config init \
+    --auth.method=proxy --auth.header=X-Hosty-Fb-User \
+    --root=/var/www --address=127.0.0.1 --port=8082 --signup=false
+fi
+if [[ ! -f /etc/systemd/system/hosty-filebrowser.service ]]; then
+  cat > /etc/systemd/system/hosty-filebrowser.service <<'UNIT'
+[Unit]
+Description=Hosty Filebrowser (internal)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/filebrowser -d /var/lib/hosty/filebrowser.db
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+fi
+systemctl enable --now hosty-filebrowser
+
 log "Site directories"
 install -d -m 0755 /var/www
 

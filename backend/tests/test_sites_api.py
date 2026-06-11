@@ -113,7 +113,7 @@ async def test_create_site_happy_path(admin_client, fake_system):
 
     op = (await admin_client.get(f"/api/operations/{op_id}")).json()
     assert op["status"] == "succeeded"
-    assert [s["status"] for s in op["steps"]] == ["done"] * 5
+    assert [s["status"] for s in op["steps"]] == ["done"] * 6
 
     site = (await admin_client.get(f"/api/sites/{site_id}")).json()
     assert site["status"] == "active"

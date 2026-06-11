@@ -111,3 +111,20 @@ proxy exchanges it for a signed session cookie (30 min, `Path=/adminer`,
 `HttpOnly`). **Tradeoff:** credential auto-fill into Adminer's login form is
 deferred — it would require shipping an Adminer login plugin; users paste the
 password from the show-once dialog instead.
+
+### ADR-008: Filebrowser with proxy auth, scoped per site, behind the panel
+
+**Status:** accepted (Week 16)
+
+One Filebrowser instance on an internal-only listener (`127.0.0.1:8082`),
+`auth.method=proxy`: it trusts the `X-Hosty-Fb-User` header. Only the panel's
+`/files` reverse proxy can reach it, and the proxy (a) strips any
+client-supplied copy of that header and (b) injects the site user extracted
+from a SIGNED session token — so which files a session sees is decided by the
+panel's HMAC signature, not by anything the browser sends. Each site gets a
+Filebrowser user whose scope is locked to its own directory; Filebrowser
+enforces the directory boundary, the panel enforces identity.
+
+**Known limitation (verify on VM):** Filebrowser runs as root, so files it
+creates are root-owned until ownership normalization (event-hook `chown`) is
+configured — tracked as an open Phase 6 item.

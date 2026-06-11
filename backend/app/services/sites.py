@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.clock import utcnow
 from app.core.config import Settings
 from app.db.models import Database, Operation, Site
-from app.services import caddy, mariadb, php_fpm
+from app.services import caddy, filebrowser, mariadb, php_fpm
 from app.services.caddy import CaddyClient, SiteSpec
 from app.system import fs, users
 
@@ -118,11 +118,13 @@ CREATE_STEPS = [
     ("doc_root", "Create web root and skeleton"),
     ("php_pool", "Configure PHP-FPM pool"),
     ("caddy", "Publish vhost to Caddy"),
+    ("filebrowser", "Register file manager access"),
     ("finalize", "Activate site"),
 ]
 
 DELETE_STEPS = [
     ("caddy", "Remove vhost from Caddy"),
+    ("filebrowser", "Remove file manager access"),
     ("php_pool", "Remove PHP-FPM pool"),
     ("database", "Drop WordPress database"),
     ("doc_root", "Delete site files"),
@@ -259,6 +261,12 @@ async def run_create_site(
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
             await client.apply(caddy.build_config(specs, adminer=_adminer_spec(settings)))
 
+        async def do_filebrowser() -> None:
+            await filebrowser.ensure_site_user(site.site_user, site.domain, settings)
+
+        async def undo_filebrowser() -> None:
+            await filebrowser.remove_site_user(site.site_user, settings)
+
         async def do_finalize() -> None:
             site.status = "active"
             op.site_id = site.id
@@ -272,6 +280,7 @@ async def run_create_site(
                 _Step("doc_root", do_docroot, undo_docroot),
                 _Step("php_pool", do_pool, undo_pool),
                 _Step("caddy", do_caddy, undo_caddy),
+                _Step("filebrowser", do_filebrowser, undo_filebrowser),
                 _Step("finalize", do_finalize, None),
             ],
         )
@@ -308,6 +317,9 @@ async def run_delete_site(
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
             await client.apply(caddy.build_config(specs, adminer=_adminer_spec(settings)))
 
+        async def do_filebrowser() -> None:
+            await filebrowser.remove_site_user(site.site_user, settings)
+
         async def do_pool() -> None:
             await php_fpm.remove_pool(site.site_user, site.php_version, settings)
 
@@ -338,6 +350,7 @@ async def run_delete_site(
             op,
             [
                 _Step("caddy", do_caddy, None),
+                _Step("filebrowser", do_filebrowser, None),
                 _Step("php_pool", do_pool, None),
                 _Step("database", do_database, None),
                 _Step("doc_root", do_docroot, None),

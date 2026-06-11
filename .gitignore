@@ -21,9 +21,12 @@ node_modules/
 *.db
 *.db-wal
 *.db-shm
+*.db-journal
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+
+# Editor/tool temp artif

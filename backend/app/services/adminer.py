@@ -12,13 +12,12 @@ password from the show-once dialog. Tradeoff documented in ADR-007.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import time
-
 import structlog
 
 from app.core.config import Settings
+from app.core.tickets import issue_token, verify_token
+
+__all__ = ["issue_token", "render_adminer_pool", "verify_token"]
 
 log = structlog.get_logger("hosty.adminer")
 
@@ -27,30 +26,6 @@ SESSION_COOKIE = "hosty_adminer"
 
 ADMINER_POOL_NAME = "hosty-adminer"
 ADMINER_SOCKET = "/run/php/hosty-adminer.sock"
-
-
-def _sign(payload: str, secret: str) -> str:
-    return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-
-
-def issue_token(*, secret: str, ttl_seconds: int, scope: str = "session") -> str:
-    """`<scope>.<expiry>.<hmac>` — verifiable statelessly, expires on its own."""
-    expiry = str(int(time.time()) + ttl_seconds)
-    payload = f"{scope}.{expiry}"
-    return f"{payload}.{_sign(payload, secret)}"
-
-
-def verify_token(token: str, *, secret: str, scope: str = "session") -> bool:
-    parts = token.split(".")
-    if len(parts) != 3:
-        return False
-    token_scope, expiry, signature = parts
-    if token_scope != scope or not expiry.isdigit():
-        return False
-    payload = f"{token_scope}.{expiry}"
-    if not hmac.compare_digest(signature, _sign(payload, secret)):
-        return False
-    return int(expiry) >= time.time()
 
 
 def render_adminer_pool(settings: Settings) -> str:
