@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.api.routes import auth, health, system
@@ -16,6 +19,18 @@ from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddlew
 from app.core.ratelimit import SlidingWindowLimiter
 from app.db import models  # noqa: F401  (register tables on Base.metadata)
 from app.db.base import Base, create_engine_and_factory
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve the built frontend; unknown paths fall back to index.html (client routing)."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[no-untyped-def]
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -62,6 +77,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(system.router, prefix="/api/system", tags=["system"])
+
+    dist = Path(settings.frontend_dist)
+    if dist.is_dir():  # mounted last so /api always wins
+        app.mount("/", SPAStaticFiles(directory=dist, html=True), name="spa")
     return app
 
 

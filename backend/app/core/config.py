@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = []
     managed_units: list[str] = ["caddy", "mariadb", "php8.3-fpm", "pdns"]
+    frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 
     @property
     def is_prod(self) -> bool:

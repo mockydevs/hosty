@@ -7,9 +7,29 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_user
 from app.core.errors import NotFoundError
+from app.services import stats
 from app.system import systemd
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+class SystemStatsResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    cpu_percent: float
+    load_avg: list[float]
+    memory_total: int
+    memory_used: int
+    memory_percent: float
+    disk_total: int
+    disk_used: int
+    disk_percent: float
+    uptime_seconds: int
+
+
+@router.get("/stats", response_model=SystemStatsResponse)
+async def system_stats() -> stats.SystemStats:
+    return stats.collect()
 
 
 class ServiceStatusResponse(BaseModel):

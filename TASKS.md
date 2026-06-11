@@ -49,14 +49,14 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 0 — Foundation & Dev Environment (Weeks 1–2)
 
 ### Week 1: Repo, tooling, conventions
-- [ ] Create repo structure: monorepo `backend/`, `frontend/`, `installer/`, `docs/`
-- [ ] Initialize git, `.gitignore`, `.editorconfig`, MIT license, README skeleton
+- [x] Create repo structure: monorepo `backend/`, `frontend/`, `installer/`, `docs/`
+- [x] Initialize git, `.gitignore`, `.editorconfig`, MIT license, README skeleton
 - [ ] Backend: init with `uv`, FastAPI hello-world, Ruff + pyright strict configured
 - [ ] Frontend: Vite + React 19 + TS strict + Tailwind v4 + shadcn/ui initialized
-- [ ] Add pre-commit hooks (Ruff, Biome, type-check) via `pre-commit` or lefthook
-- [ ] GitHub Actions CI: lint + type-check + test jobs for both apps, must pass to merge
-- [ ] Write `docs/ARCHITECTURE.md`: decisions log (ADR-style), starting with Caddy-via-Admin-API vs file-based config — **decide now**
-- [ ] Write `docs/CONVENTIONS.md`: commit format, branch strategy, code style rules
+- [x] Add pre-commit hooks (Ruff, Biome, type-check) via `pre-commit` or lefthook
+- [x] GitHub Actions CI: lint + type-check + test jobs for both apps, must pass to merge
+- [x] Write `docs/ARCHITECTURE.md`: decisions log (ADR-style), starting with Caddy-via-Admin-API vs file-based config — **decide now**
+- [x] Write `docs/CONVENTIONS.md`: commit format, branch strategy, code style rules
 
 ### Week 2: Dev environment that mirrors production
 - [ ] Create reproducible dev VM: Multipass or Vagrant box running Ubuntu 24.04
@@ -71,29 +71,29 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 1 — Backend Core (Weeks 3–5)
 
 ### Week 3: Application skeleton
-- [ ] FastAPI project layout: `api/` (routers), `core/` (config, security), `db/` (models, session), `system/` (shell layer), `services/` (business logic)
-- [ ] Settings via Pydantic Settings (env vars, `.env` for dev)
-- [ ] SQLite with WAL mode + SQLAlchemy 2.0 async + Alembic baseline migration
-- [ ] Structured logging (structlog): JSON in prod, pretty in dev, request IDs
-- [ ] Global exception handlers → consistent JSON error envelope
-- [ ] Health endpoint `/api/health` reporting service statuses
+- [x] FastAPI project layout: `api/` (routers), `core/` (config, security), `db/` (models, session), `system/` (shell layer), `services/` (business logic)
+- [x] Settings via Pydantic Settings (env vars, `.env` for dev)
+- [x] SQLite with WAL mode + SQLAlchemy 2.0 async + Alembic baseline migration
+- [x] Structured logging (structlog): JSON in prod, pretty in dev, request IDs
+- [x] Global exception handlers → consistent JSON error envelope
+- [x] Health endpoint `/api/health` reporting service statuses
 
 ### Week 4: Auth & security baseline
-- [ ] User model (single admin user for v1, but schema supports roles)
-- [ ] Argon2id password hashing
-- [ ] JWT access tokens (15 min) + refresh tokens (httpOnly secure cookie, rotation)
-- [ ] Login, logout, refresh, change-password endpoints
-- [ ] Rate limiting on auth endpoints (slowapi or custom middleware)
-- [ ] First-boot flow: panel generates admin password / setup token
-- [ ] Security headers middleware (CSP, HSTS, X-Frame-Options)
-- [ ] Tests: full auth flow, token expiry, rate limit, wrong password
+- [x] User model (single admin user for v1, but schema supports roles)
+- [x] Argon2id password hashing
+- [x] JWT access tokens (15 min) + refresh tokens (httpOnly secure cookie, rotation)
+- [x] Login, logout, refresh, change-password endpoints
+- [x] Rate limiting on auth endpoints (slowapi or custom middleware)
+- [x] First-boot flow: panel generates admin password / setup token
+- [x] Security headers middleware (CSP, HSTS, X-Frame-Options)
+- [x] Tests: full auth flow, token expiry, rate limit, wrong password
 
 ### Week 5: The system layer (most important code in the project)
-- [ ] `system/runner.py`: single entrypoint for shell commands — arg-list only, timeout, captured output, structured logging, typed result object
-- [ ] `system/systemd.py`: start/stop/restart/status/enable for units
-- [ ] `system/users.py`: create/delete Linux site users (one user per site — isolation)
-- [ ] Permission model decision: panel runs as root vs sudo-whitelisted user — document in ADR
-- [ ] Unit tests for every command builder (assert exact argv, no shell injection possible)
+- [x] `system/runner.py`: single entrypoint for shell commands — arg-list only, timeout, captured output, structured logging, typed result object
+- [x] `system/systemd.py`: start/stop/restart/status/enable for units
+- [x] `system/users.py`: create/delete Linux site users (one user per site — isolation)
+- [x] Permission model decision: panel runs as root vs sudo-whitelisted user — document in ADR
+- [x] Unit tests for every command builder (assert exact argv, no shell injection possible)
 - [ ] Integration tests against the dev VM (pytest marker `@vm`)
 - [ ] **Milestone: authenticated API that can query systemd service status on the VM**
 
@@ -102,21 +102,21 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 2 — Frontend Core (Weeks 6–7)
 
 ### Week 6: Shell, auth, API client
-- [ ] App layout: responsive sidebar (collapses to bottom-nav/drawer on mobile), header, content area
-- [ ] Dark/light mode (system-aware, persisted)
-- [ ] OpenAPI → generated TS client (openapi-ts) wired into TanStack Query
-- [ ] Login page, auth context, token refresh interceptor, protected routes
-- [ ] Error/loading/empty-state patterns: one reusable component each — used everywhere
-- [ ] Toast notifications (sonner)
+- [x] App layout: responsive sidebar (collapses to bottom-nav/drawer on mobile), header, content area
+- [x] Dark/light mode (system-aware, persisted)
+- [x] OpenAPI → generated TS client (openapi-ts) wired into TanStack Query
+- [x] Login page, auth context, token refresh interceptor, protected routes (incl. first-boot setup form)
+- [x] Error/loading/empty-state patterns: one reusable component each — used everywhere
+- [x] Toast notifications (sonner)
 
 ### Week 7: Dashboard v0 + design system discipline
-- [ ] Dashboard page: service status cards (Caddy, MariaDB, PHP-FPM, PowerDNS), CPU/RAM/disk gauges
-- [ ] Backend endpoints for system stats (psutil)
-- [ ] Define the 6–8 shadcn components used everywhere (Table, Dialog, Form, Card, Badge, Tabs) — no one-off styles
-- [ ] Form pattern: react-hook-form + Zod resolver, server errors mapped to fields
-- [ ] Responsive pass: test at 360px, 768px, 1280px
-- [ ] Vitest setup + tests for auth flow and one form
-- [ ] **Milestone: log in on a phone and see live service status**
+- [x] Dashboard page: service status cards (Caddy, MariaDB, PHP-FPM, PowerDNS), CPU/RAM/disk gauges
+- [x] Backend endpoints for system stats (psutil)
+- [x] Define the 6–8 shadcn components used everywhere (Table, Dialog, Form, Card, Badge, Tabs) — no one-off styles
+- [x] Form pattern: react-hook-form + Zod resolver, server errors mapped to fields
+- [ ] Responsive pass: test at 360px, 768px, 1280px — built responsive (mobile drawer, breakpoint grids); needs manual verification in a browser
+- [x] Vitest setup + tests for auth flow and one form (8 tests passing)
+- [ ] **Milestone: log in on a phone and see live service status** — needs the dev VM / running backend to verify
 
 ---
 

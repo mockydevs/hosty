@@ -63,6 +63,10 @@ class UserResponse(BaseModel):
     role: str
 
 
+class SetupStatusResponse(BaseModel):
+    setup_required: bool
+
+
 def _settings(request: Request) -> Settings:
     return request.app.state.settings
 
@@ -101,9 +105,9 @@ async def _issue_tokens(
     return TokenResponse(access_token=access, expires_in=settings.access_token_ttl_seconds)
 
 
-@router.get("/setup")
-async def setup_status(db: AsyncSession = Depends(get_db)) -> dict:
-    return {"setup_required": await _user_count(db) == 0}
+@router.get("/setup", response_model=SetupStatusResponse)
+async def setup_status(db: AsyncSession = Depends(get_db)) -> SetupStatusResponse:
+    return SetupStatusResponse(setup_required=await _user_count(db) == 0)
 
 
 @router.post("/setup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

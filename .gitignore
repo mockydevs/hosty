@@ -27,3 +27,6 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
+
+# Editor/tool temp artifacts
+_tmp_*
