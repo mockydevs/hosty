@@ -125,6 +125,15 @@ panel's HMAC signature, not by anything the browser sends. Each site gets a
 Filebrowser user whose scope is locked to its own directory; Filebrowser
 enforces the directory boundary, the panel enforces identity.
 
+**Revised after first VM run (Week 16):** user management goes through
+Filebrowser's REST API (panel authenticates as a provision-time `admin` user
+via the same proxy header → JWT), NOT the CLI — the daemon holds an exclusive
+BoltDB lock, so `filebrowser users add` against the live database deadlocks.
+Also discovered: proxy auth AUTO-CREATES unknown users with the global
+default scope, which would have exposed the whole sites root. The default
+scope is therefore pinned to an empty quarantine directory
+(`/.hosty-quarantine`) at provision time.
+
 **Known limitation (verify on VM):** Filebrowser runs as root, so files it
 creates are root-owned until ownership normalization (event-hook `chown`) is
 configured — tracked as an open Phase 6 item.

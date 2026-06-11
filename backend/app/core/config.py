@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     filebrowser_enabled: bool = True
     filebrowser_internal_addr: str = "127.0.0.1:8082"
     filebrowser_db: str = "/var/lib/hosty/filebrowser.db"
+    filebrowser_admin_user: str = "admin"  # created at provision time, password locked
     files_session_ttl_seconds: int = 30 * 60
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 

@@ -107,11 +107,15 @@ if ! command -v filebrowser >/dev/null; then
   curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 fi
 install -d -m 0755 /var/lib/hosty
+# Default scope is a quarantine dir: proxy auth AUTO-CREATES unknown users
+# with the default scope, and the default must never expose other sites.
 if [[ ! -f /var/lib/hosty/filebrowser.db ]]; then
   filebrowser -d /var/lib/hosty/filebrowser.db config init \
     --auth.method=proxy --auth.header=X-Hosty-Fb-User \
-    --root=/var/www --address=127.0.0.1 --port=8082 --signup=false
+    --root=/var/www --scope=/.hosty-quarantine \
+    --address=127.0.0.1 --port=8082 --signup=false
 fi
+install -d -m 0755 /var/www/.hosty-quarantine
 if [[ ! -f /etc/systemd/system/hosty-filebrowser.service ]]; then
   cat > /etc/systemd/system/hosty-filebrowser.service <<'UNIT'
 [Unit]
@@ -127,6 +131,14 @@ WantedBy=multi-user.target
 UNIT
   systemctl daemon-reload
 fi
+# Admin user for the panel's user-management API (header auth; password is
+# random and locked — never used). CLI needs the BoltDB lock: stop the daemon.
+systemctl stop hosty-filebrowser 2>/dev/null || true
+filebrowser -d /var/lib/hosty/filebrowser.db config set --scope=/.hosty-quarantine
+ADMIN_ADD_OUT=$(filebrowser -d /var/lib/hosty/filebrowser.db users add admin \
+  "$(openssl rand -base64 24)" --perm.admin --lockPassword 2>&1) \
+  || echo "$ADMIN_ADD_OUT" | grep -qi "already exists" \
+  || { echo "$ADMIN_ADD_OUT" >&2; exit 1; }
 systemctl enable --now hosty-filebrowser
 
 log "Site directories"

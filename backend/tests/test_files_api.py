@@ -1,6 +1,8 @@
-"""Filebrowser: argv builders, scoped sessions, proxy identity enforcement."""
+"""Filebrowser: API user management, scoped sessions, proxy identity enforcement."""
 
 from __future__ import annotations
+
+import json
 
 import httpx
 import pytest
@@ -11,8 +13,7 @@ from app.services import filebrowser
 from app.services.filebrowser import (
     AUTH_HEADER,
     build_config_init_argv,
-    build_user_add_argv,
-    build_user_rm_argv,
+    build_site_user_payload,
 )
 from app.system.users import InvalidSiteUserError
 from tests.test_sites_api import FakeSystem
@@ -34,27 +35,80 @@ def test_config_init_argv(fb_settings):
     assert "--auth.method=proxy" in argv
     assert f"--auth.header={AUTH_HEADER}" in argv
     assert "--root=/var/www" in argv
+    # Proxy auth auto-creates unknown users with the DEFAULT scope; it must
+    # quarantine, never expose the sites root.
+    assert f"--scope={filebrowser.QUARANTINE_SCOPE}" in argv
     assert "--address=127.0.0.1" in argv and "--port=8082" in argv
 
 
-def test_user_add_argv_scopes_to_site_directory(fb_settings):
-    argv = build_user_add_argv(SITE_USER, "example.com", fb_settings)
-    assert argv[3:5] == ["users", "add"]
-    assert argv[5] == SITE_USER
-    assert "--scope=/example.com" in argv
-    assert "--lockPassword" in argv
+def test_site_user_payload_scopes_to_site_directory():
+    payload = build_site_user_payload(SITE_USER, "example.com")
+    assert payload["what"] == "user" and payload["which"] == []
+    data = payload["data"]
+    assert data["username"] == SITE_USER
+    assert data["scope"] == "/example.com"
+    assert data["lockPassword"] is True
+    assert len(data["password"]) >= 24
+    assert data["perm"]["admin"] is False and data["perm"]["execute"] is False
+    assert data["perm"]["modify"] is True and data["perm"]["delete"] is True
 
 
-def test_user_add_rejects_bad_users_and_scopes(fb_settings):
+def test_site_user_payload_rejects_bad_users_and_scopes():
     with pytest.raises(InvalidSiteUserError):
-        build_user_add_argv("root", "example.com", fb_settings)
+        build_site_user_payload("root", "example.com")
     for bad_domain in ["", ".", "..", "a/b", "x\x00y"]:
         with pytest.raises(filebrowser.FilebrowserError):
-            build_user_add_argv(SITE_USER, bad_domain, fb_settings)
+            build_site_user_payload(SITE_USER, bad_domain)
 
 
-def test_user_rm_argv(fb_settings):
-    assert build_user_rm_argv(SITE_USER, fb_settings)[3:] == ["users", "rm", SITE_USER]
+class FakeFilebrowserUpstream:
+    """Mock of the Filebrowser REST API: /api/login, /api/users CRUD."""
+
+    def __init__(self):
+        self.users: list[dict] = [{"id": 1, "username": "admin", "scope": "/.hosty-quarantine"}]
+        self._next_id = 2
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/login":
+            if request.headers.get(AUTH_HEADER) != "admin":
+                return httpx.Response(403)
+            return httpx.Response(200, text="jwt-admin-token")
+        if request.headers.get("X-Auth") != "jwt-admin-token":
+            return httpx.Response(401)
+        if request.url.path == "/api/users" and request.method == "GET":
+            return httpx.Response(200, json=self.users)
+        if request.url.path == "/api/users" and request.method == "POST":
+            data = json.loads(request.content)["data"]
+            self.users.append(
+                {"id": self._next_id, "username": data["username"], "scope": data["scope"]}
+            )
+            self._next_id += 1
+            return httpx.Response(201)
+        if request.url.path.startswith("/api/users/") and request.method == "DELETE":
+            uid = int(request.url.path.rsplit("/", 1)[1])
+            self.users = [u for u in self.users if u["id"] != uid]
+            return httpx.Response(200)
+        return httpx.Response(404)
+
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
+
+
+async def test_ensure_and_remove_site_user_roundtrip(fb_settings):
+    upstream = FakeFilebrowserUpstream()
+    async with upstream.client() as client:
+        assert await filebrowser.ensure_site_user(
+            SITE_USER, "example.com", fb_settings, client=client
+        )
+        assert any(u["username"] == SITE_USER for u in upstream.users)
+        # Idempotent: second call is a no-op, not a duplicate.
+        assert await filebrowser.ensure_site_user(
+            SITE_USER, "example.com", fb_settings, client=client
+        )
+        assert sum(u["username"] == SITE_USER for u in upstream.users) == 1
+        assert await filebrowser.remove_site_user(SITE_USER, fb_settings, client=client)
+        assert not any(u["username"] == SITE_USER for u in upstream.users)
+        assert not await filebrowser.remove_site_user(SITE_USER, fb_settings, client=client)
 
 
 def test_token_scope_extraction_is_signature_bound():
@@ -113,19 +167,17 @@ async def test_filebrowser_failure_rolls_back_site(admin_client, fake_system, fa
     assert fake_system.linux_users == set()
 
 
-async def test_missing_filebrowser_binary_does_not_block_sites(
-    admin_client, fake_system, monkeypatch
-):
-    """Graceful degradation: no filebrowser installed → site still provisions."""
+async def test_unreachable_filebrowser_does_not_block_sites(admin_client, fake_system, monkeypatch):
+    """Graceful degradation: filebrowser not installed/running → site still provisions."""
 
-    async def raises_not_found(argv, **kw):
-        from app.system.runner import CommandNotFoundError
+    def refuses(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
 
-        raise CommandNotFoundError("filebrowser")
-
-    from app.system import runner as runner_module
-
-    monkeypatch.setattr(runner_module, "run", raises_not_found)
+    monkeypatch.setattr(
+        filebrowser,
+        "_new_client",
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(refuses)),
+    )
     resp = await admin_client.post("/api/sites", json={"domain": "nofb.example"})
     op = (await admin_client.get(f"/api/operations/{resp.json()['operation_id']}")).json()
     assert op["status"] == "succeeded"
