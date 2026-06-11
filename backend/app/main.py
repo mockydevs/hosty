@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
-from app.api.routes import auth, databases, files, health, sites, system
+from app.api.routes import auth, backups, databases, dns, files, health, sites, system
 from app.core import logging as app_logging
 from app.core.config import Settings, get_settings
 from app.core.errors import register_error_handlers
@@ -46,7 +48,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await conn.run_sync(Base.metadata.create_all)
         app.state.engine = engine
         app.state.sessionmaker = factory
+        scheduler_task: asyncio.Task | None = None
+        if settings.backup_scheduler_enabled and settings.env != "test":
+            from app.services import scheduler
+
+            scheduler_task = asyncio.create_task(scheduler.loop(app))
         yield
+        if scheduler_task is not None:
+            scheduler_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await scheduler_task
         await engine.dispose()
 
     app = FastAPI(
@@ -83,6 +94,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(databases.proxy_router)
     app.include_router(files.router, prefix="/api/sites", tags=["files"])
     app.include_router(files.proxy_router)
+    app.include_router(dns.router, prefix="/api/dns", tags=["dns"])
+    app.include_router(backups.router, prefix="/api/backups", tags=["backups"])
+    app.include_router(backups.site_router, prefix="/api/sites", tags=["backups"])
 
     dist = Path(settings.frontend_dist)
     if dist.is_dir():  # mounted last so /api always wins

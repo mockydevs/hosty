@@ -62,33 +62,48 @@ async def run(
     timeout: float = 30.0,
     cwd: str | None = None,
     env: Mapping[str, str] | None = None,
+    stdout_path: str | None = None,
+    stdin_path: str | None = None,
 ) -> CommandResult:
+    """Execute argv. `stdout_path`/`stdin_path` redirect to/from files so that
+    large streams (database dumps/restores) never pass through memory or a
+    shell pipe. With `stdout_path` set, `result.stdout` is empty."""
     cmd = validate_argv(argv)
     start = time.perf_counter()
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-            env={**os.environ, **env} if env is not None else None,
-        )
-    except FileNotFoundError as exc:
-        raise CommandNotFoundError(f"Executable not found: {cmd[0]}") from exc
 
+    stdout_f = open(stdout_path, "wb") if stdout_path else None  # noqa: SIM115
+    stdin_f = open(stdin_path, "rb") if stdin_path else None  # noqa: SIM115
     try:
-        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except (asyncio.TimeoutError, TimeoutError) as exc:
-        proc.kill()
-        await proc.wait()
-        raise CommandTimeoutError(f"Command timed out after {timeout}s: {cmd[0]}") from exc
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=stdin_f,
+                stdout=stdout_f if stdout_f is not None else asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env={**os.environ, **env} if env is not None else None,
+            )
+        except FileNotFoundError as exc:
+            raise CommandNotFoundError(f"Executable not found: {cmd[0]}") from exc
+
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except (asyncio.TimeoutError, TimeoutError) as exc:
+            proc.kill()
+            await proc.wait()
+            raise CommandTimeoutError(f"Command timed out after {timeout}s: {cmd[0]}") from exc
+    finally:
+        if stdout_f is not None:
+            stdout_f.close()
+        if stdin_f is not None:
+            stdin_f.close()
 
     duration_ms = round((time.perf_counter() - start) * 1000, 1)
     result = CommandResult(
         argv=cmd,
         returncode=proc.returncode if proc.returncode is not None else -1,
-        stdout=stdout_b.decode(errors="replace"),
-        stderr=stderr_b.decode(errors="replace"),
+        stdout=stdout_b.decode(errors="replace") if stdout_b is not None else "",
+        stderr=stderr_b.decode(errors="replace") if stderr_b is not None else "",
         duration_ms=duration_ms,
     )
     log.info(

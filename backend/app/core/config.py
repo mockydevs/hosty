@@ -49,6 +49,26 @@ class Settings(BaseSettings):
     files_session_ttl_seconds: int = 30 * 60
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 
+    # Phase 7: DNS (PowerDNS)
+    dns_enabled: bool = True
+    pdns_api_url: str = "http://127.0.0.1:8083/api/v1"  # provision.sh enables this
+    pdns_api_key: str = "hosty-dev-key"
+    pdns_server_id: str = "localhost"
+    dns_default_ttl: int = 3600
+    dns_nameservers: list[str] = []  # empty -> ns1.<zone>./ns2.<zone>. (self-hosted)
+    public_ip: str = ""  # enables "point to this server" records and templates
+    cloudflare_api_token: str = ""  # enables one-click push of zones to Cloudflare
+
+    # Phase 8: backups
+    backups_root: str = "/var/lib/hosty/backups"
+    backup_scheduler_enabled: bool = True
+    s3_endpoint: str = ""  # e.g. http://127.0.0.1:9000 (MinIO) — empty disables S3
+    s3_bucket: str = ""
+    s3_region: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_prefix: str = "hosty"
+
     @property
     def is_prod(self) -> bool:
         return self.env == "prod"

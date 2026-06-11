@@ -51,6 +51,14 @@ class Site(Base):
     wordpress: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     wp_db_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wp_db_user: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    backup_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    backup_frequency: Mapped[str] = mapped_column(String(8), nullable=False, default="daily")
+    backup_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    backup_retention: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
+    backup_last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    backup_include_files: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    backup_include_databases: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    backup_s3_mirror: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, onupdate=utcnow
@@ -95,3 +103,18 @@ class Database(Base):
     purpose: Mapped[str] = mapped_column(String(16), nullable=False, default="custom")
     password_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
+class PanelSetting(Base):
+    """Key/value store for panel-wide configuration set through the UI.
+
+    Secrets inside `value` are encrypted with app.core.secrets before storage.
+    """
+
+    __tablename__ = "panel_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
