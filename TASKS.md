@@ -123,24 +123,28 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 # Phase 3 — Domains & Vhosts (Weeks 8–10)
 
 ### Week 8: Caddy integration layer
-- [ ] `services/caddy.py`: manage config via Caddy Admin API (JSON config) — full desired-state sync, not patches
-- [ ] Vhost model: domain, site user, doc root, PHP version, status
-- [ ] Config generation pure + unit tested: model in → exact Caddy JSON out (snapshot tests)
-- [ ] Rollback: validate config before apply; on failure, previous config restored automatically
+- [x] `services/caddy.py`: manage config via Caddy Admin API (JSON config) — full desired-state sync, not patches
+- [x] Vhost model: domain, site user, doc root, PHP version, status (`Site` + migration 0002)
+- [x] Config generation pure + unit tested: model in → exact Caddy JSON out (snapshot tests)
+- [x] Rollback: validate config before apply; on failure, previous config restored automatically (`CaddyClient.apply`, tested)
 
 ### Week 9: Site provisioning pipeline
-- [ ] Create-site flow as a transactional pipeline with compensating rollback: Linux user → doc root + skeleton → PHP-FPM pool → Caddy vhost → DB record (any step fails ⇒ undo previous steps)
-- [ ] Delete-site flow (with "type the domain to confirm" semantics)
-- [ ] SSL: surface Caddy cert status per domain; handle DNS-not-pointing failure case with clear error
-- [ ] Background task handling for slow operations (FastAPI BackgroundTasks or arq) + operation status endpoint
+- [x] Create-site flow as a transactional pipeline with compensating rollback: Linux user → doc root + skeleton → PHP-FPM pool → Caddy vhost → DB record (any step fails ⇒ undo previous steps)
+- [x] Delete-site flow (with "type the domain to confirm" semantics; steps idempotent so a failed delete is retryable)
+- [x] SSL: surface Caddy cert status per domain; handle DNS-not-pointing failure case with clear error (`services/ssl.py` probe)
+- [x] Background task handling for slow operations (FastAPI BackgroundTasks) + operation status endpoint (`/api/operations/{id}` with per-step progress)
 
 ### Week 10: Sites UI
-- [ ] Sites list: searchable table, status badges (SSL, PHP version, running)
-- [ ] Create-site wizard (domain validation incl. punycode, PHP version pick)
-- [ ] Site detail page: tabs for Overview / Files / Databases / Backups (tabs stubbed for later phases)
-- [ ] Live operation progress (poll or SSE) during provisioning
-- [ ] E2E happy path test: create site via UI → curl the domain on the VM → 200
-- [ ] **Milestone: create a domain in the UI, get a live HTTPS site on the VM**
+- [x] Sites list: searchable table, status badges (SSL, PHP version, running)
+- [x] Create-site wizard (domain validation incl. punycode, PHP version pick)
+- [x] Site detail page: tabs for Overview / Files / Databases / Backups (tabs stubbed for later phases)
+- [x] Live operation progress (poll) during provisioning, with per-step rollback states
+- [ ] E2E happy path test: create site via UI → curl the domain on the VM → 200 — needs the dev VM (Week 2 item)
+- [ ] **Milestone: create a domain in the UI, get a live HTTPS site on the VM** — needs the dev VM
+
+> Phase 3 note: minimal per-site PHP-FPM pool management (`services/php_fpm.py`,
+> snapshot-tested pool template) landed early because the Week 9 pipeline needs it;
+> Week 11 extends it (version switching, per-site settings UI).
 
 ---
 
@@ -269,22 +273,4 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [ ] README: screenshots, features, install one-liner, requirements
 - [ ] `docs/`: admin guide, backup/restore runbook, architecture overview, API reference (auto from OpenAPI)
 - [ ] CHANGELOG.md, tag `v1.0.0`, GitHub release
-- [ ] Post-1.0 backlog file: multi-user/roles, 2FA, monitoring graphs, staging clones, Redis cache toggle, server firewall (ufw) management
-- [ ] **Milestone: a stranger can install and host a WordPress site using only the README**
-
----
-
-## Recurring (every week)
-
-- [ ] All CI checks green before merge — never bypass
-- [ ] Update ADRs when any decision changes
-- [ ] 30 min: dependency updates review
-- [ ] Keep `TASKS.md` honest — check items off, add discovered tasks immediately
-
-## Definition of Done (every task)
-
-1. Typed, linted, formatted — CI green
-2. Tests for new logic (unit minimum; integration for system-touching code)
-3. Errors handled and surfaced clearly in UI
-4. Works on mobile viewport if it has UI
-5. No TODO without a corresponding tracked task
+- [ ] Post-1.0 backlog file: multi-user/roles, 2FA, monitoring graphs, staging clones, Redis cache to

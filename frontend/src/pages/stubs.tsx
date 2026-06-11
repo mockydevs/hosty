@@ -10,16 +10,6 @@ function Stub({ title, phase, blurb }: { title: string; phase: string; blurb: st
   );
 }
 
-export function SitesPage() {
-  return (
-    <Stub
-      title="Sites"
-      phase="Phase 3"
-      blurb="Create domains with automatic HTTPS, per-site PHP versions, and isolated Linux users."
-    />
-  );
-}
-
 export function DatabasesPage() {
   return (
     <Stub
