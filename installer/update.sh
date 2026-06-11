@@ -67,6 +67,8 @@ build_frontend
 
 # ── Restart service ──────────────────────────────────────────────────────────
 log "Restarting hosty service"
+install -m 0644 "$APP_DIR/installer/systemd/hosty.service" /etc/systemd/system/hosty.service
+systemctl daemon-reload
 systemctl restart hosty
 sleep 2
 systemctl --no-pager --lines=5 status hosty || true
