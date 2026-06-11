@@ -24,6 +24,14 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = []
     managed_units: list[str] = ["caddy", "mariadb", "php8.3-fpm", "pdns"]
+
+    # Phase 3: domains & vhosts
+    caddy_admin_url: str = "http://127.0.0.1:2019"
+    sites_root: str = "/var/www"
+    php_versions: list[str] = ["8.2", "8.3", "8.4"]
+    default_php_version: str = "8.3"
+    php_pool_dir_template: str = "/etc/php/{version}/fpm/pool.d"
+    php_socket_dir: str = "/run/php"
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 
     @property

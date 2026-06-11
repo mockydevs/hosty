@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
-from app.api.routes import auth, health, system
+from app.api.routes import auth, health, sites, system
 from app.core import logging as app_logging
 from app.core.config import Settings, get_settings
 from app.core.errors import register_error_handlers
@@ -77,6 +77,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(system.router, prefix="/api/system", tags=["system"])
+    app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
+    app.include_router(sites.operations_router, prefix="/api/operations", tags=["operations"])
 
     dist = Path(settings.frontend_dist)
     if dist.is_dir():  # mounted last so /api always wins
