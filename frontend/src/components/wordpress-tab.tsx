@@ -229,10 +229,10 @@ export function WordPressTab({ site }: { site: Site }) {
         <OperationProgress
           operationId={operationId}
           onFinished={async (op) => {
-            setOperationId(null);
             if (op.status === "succeeded") toast.success("WordPress installed");
             await queryClient.invalidateQueries({ queryKey: ["sites", site.id, "wordpress"] });
             await queryClient.invalidateQueries({ queryKey: ["sites"] });
+            setOperationId(null);
           }}
         />
       </div>
