@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # Phase 3: domains & vhosts
     caddy_admin_url: str = "http://127.0.0.1:2019"
     sites_root: str = "/var/www"
+    # Dev VMs only: issue site certificates from Caddy's internal CA (no ACME)
+    caddy_tls_internal: bool = False
     php_versions: list[str] = ["8.2", "8.3", "8.4"]
     default_php_version: str = "8.3"
     php_pool_dir_template: str = "/etc/php/{version}/fpm/pool.d"

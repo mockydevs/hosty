@@ -33,8 +33,14 @@ HOSTY_SECRET_KEY=$(openssl rand -hex 32)
 HOSTY_DATABASE_URL=sqlite+aiosqlite:////var/lib/hosty/hosty.db
 HOSTY_COOKIE_SECURE=false
 HOSTY_CREATE_TABLES_ON_STARTUP=false
+HOSTY_CADDY_TLS_INTERNAL=true
 ENV
   chmod 600 "$ENV_FILE"
+fi
+
+# Append settings introduced after an existing dev.env was generated.
+if ! grep -q '^HOSTY_CADDY_TLS_INTERNAL=' "$ENV_FILE"; then
+  echo 'HOSTY_CADDY_TLS_INTERNAL=true' >> "$ENV_FILE"
 fi
 
 log "Database schema (alembic upgrade head)"

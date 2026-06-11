@@ -121,9 +121,17 @@ def _adminer_server(spec: AdminerSpec) -> dict[str, Any]:
 
 
 def build_config(
-    sites: Sequence[SiteSpec], *, adminer: AdminerSpec | None = None
+    sites: Sequence[SiteSpec],
+    *,
+    adminer: AdminerSpec | None = None,
+    tls_internal: bool = False,
 ) -> dict[str, Any]:
-    """Full desired-state Caddy config. Deterministic: sites sorted by domain."""
+    """Full desired-state Caddy config. Deterministic: sites sorted by domain.
+
+    `tls_internal` issues certificates from Caddy's internal CA instead of
+    ACME — for dev VMs, where domains aren't publicly resolvable and Let's
+    Encrypt would retry forever. Never enable it for production sites.
+    """
     ordered = sorted(sites, key=lambda s: s.domain)
     servers: dict[str, Any] = {
         SERVER_NAME: {
@@ -133,10 +141,22 @@ def build_config(
     }
     if adminer is not None:
         servers["hosty_adminer"] = _adminer_server(adminer)
-    return {
+    config: dict[str, Any] = {
         "admin": {"listen": "127.0.0.1:2019"},
         "apps": {"http": {"servers": servers}},
     }
+    if tls_internal and ordered:
+        config["apps"]["tls"] = {
+            "automation": {
+                "policies": [
+                    {
+                        "subjects": [s.domain for s in ordered],
+                        "issuers": [{"module": "internal"}],
+                    }
+                ]
+            }
+        }
+    return config
 
 
 class CaddyClient:

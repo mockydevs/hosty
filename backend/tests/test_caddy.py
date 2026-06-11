@@ -91,6 +91,18 @@ def test_build_config_snapshot():
     assert build_config([SITE]) == expected
 
 
+def test_build_config_tls_internal_lists_all_domains():
+    a = SiteSpec(domain="a.test", doc_root="/var/www/a.test/public", php_socket="/run/a.sock")
+    z = SiteSpec(domain="z.test", doc_root="/var/www/z.test/public", php_socket="/run/z.sock")
+    cfg = build_config([z, a], tls_internal=True)
+    assert cfg["apps"]["tls"]["automation"]["policies"] == [
+        {"subjects": ["a.test", "z.test"], "issuers": [{"module": "internal"}]}
+    ]
+    # Default stays ACME (no tls app at all) and empty configs add no policy.
+    assert "tls" not in build_config([z, a])["apps"]
+    assert "tls" not in build_config([], tls_internal=True)["apps"]
+
+
 def test_build_config_empty():
     cfg = build_config([])
     assert cfg["apps"]["http"]["servers"]["hosty"]["routes"] == []

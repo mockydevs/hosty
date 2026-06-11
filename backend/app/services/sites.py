@@ -253,13 +253,19 @@ async def run_create_site(
         async def do_caddy() -> None:
             await client.apply(
                 caddy.build_config(
-                    await _served_specs(db, settings), adminer=_adminer_spec(settings)
+                    await _served_specs(db, settings),
+                    adminer=_adminer_spec(settings),
+                    tls_internal=settings.caddy_tls_internal,
                 )
             )
 
         async def undo_caddy() -> None:
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
-            await client.apply(caddy.build_config(specs, adminer=_adminer_spec(settings)))
+            await client.apply(
+                caddy.build_config(
+                    specs, adminer=_adminer_spec(settings), tls_internal=settings.caddy_tls_internal
+                )
+            )
 
         async def do_filebrowser() -> None:
             await filebrowser.ensure_site_user(site.site_user, site.domain, settings)
@@ -315,7 +321,11 @@ async def run_delete_site(
 
         async def do_caddy() -> None:
             specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
-            await client.apply(caddy.build_config(specs, adminer=_adminer_spec(settings)))
+            await client.apply(
+                caddy.build_config(
+                    specs, adminer=_adminer_spec(settings), tls_internal=settings.caddy_tls_internal
+                )
+            )
 
         async def do_filebrowser() -> None:
             await filebrowser.remove_site_user(site.site_user, settings)
@@ -392,7 +402,11 @@ async def change_php_version(
     site.php_version = new_version
     try:
         await client.apply(
-            caddy.build_config(await _served_specs(db, settings), adminer=_adminer_spec(settings))
+            caddy.build_config(
+                await _served_specs(db, settings),
+                adminer=_adminer_spec(settings),
+                tls_internal=settings.caddy_tls_internal,
+            )
         )
     except Exception:
         # Caddy still points at the old socket; drop the new pool and bail.
