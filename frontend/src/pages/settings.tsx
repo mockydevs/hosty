@@ -110,26 +110,28 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle className="text-base">Change password</CardTitle>
-          <CardDescription>
-            Changing your password signs you out everywhere, including this session.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChangePasswordForm
-            onChanged={async () => {
-              await logout();
-              navigate("/login");
-            }}
-          />
-        </CardContent>
-      </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Change password</CardTitle>
+            <CardDescription>
+              Changing your password signs you out everywhere, including this session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChangePasswordForm
+              onChanged={async () => {
+                await logout();
+                navigate("/login");
+              }}
+            />
+          </CardContent>
+        </Card>
 
-      <PanelDomainCard />
+        <PanelDomainCard />
 
-      <CloudflareSettingsCard />
+        <CloudflareSettingsCard />
+      </div>
 
       <AuditLogCard />
     </div>

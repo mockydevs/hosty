@@ -57,7 +57,7 @@ export function CloudflareSettingsCard() {
   });
 
   return (
-    <Card className="max-w-md">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Cloud className="h-4 w-4 text-muted-foreground" aria-hidden /> Cloudflare

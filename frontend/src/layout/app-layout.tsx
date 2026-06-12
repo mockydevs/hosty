@@ -141,7 +141,10 @@ export function AppLayout() {
       )}
 
       <main className="flex-1 overflow-y-auto px-4 pb-8 pt-20 md:px-8 md:pt-8">
-        <Outlet />
+        {/* Cap content width on very wide screens so pages don't stretch edge to edge. */}
+        <div className="mx-auto w-full max-w-7xl">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
