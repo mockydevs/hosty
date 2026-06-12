@@ -1,6 +1,7 @@
 import { AuditLogCard } from "@/components/audit-log-card";
 import { CloudflareSettingsCard } from "@/components/cloudflare-settings-card";
 import { FormField } from "@/components/form-field";
+import { PanelDomainCard } from "@/components/panel-domain-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -125,6 +126,8 @@ export function SettingsPage() {
           />
         </CardContent>
       </Card>
+
+      <PanelDomainCard />
 
       <CloudflareSettingsCard />
 

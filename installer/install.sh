@@ -65,7 +65,10 @@ if [[ ! -f $ENV_FILE ]]; then
 HOSTY_ENV=prod
 HOSTY_SECRET_KEY=$(openssl rand -hex 32)
 HOSTY_DATABASE_URL=sqlite+aiosqlite:///$STATE_DIR/hosty.db
-HOSTY_COOKIE_SECURE=true
+# Secure cookies only work over HTTPS. Without a panel domain the panel is
+# reached over plain http://IP:8800, where the browser would drop the session
+# cookie (instant logouts). Set this to true once HOSTY_PANEL_DOMAIN is live.
+HOSTY_COOKIE_SECURE=$([[ -n $PANEL_DOMAIN ]] && echo true || echo false)
 HOSTY_CREATE_TABLES_ON_STARTUP=false
 HOSTY_FRONTEND_DIST=$APP_DIR/frontend/dist
 HOSTY_PDNS_API_KEY=$(cat /etc/hosty/pdns-api-key 2>/dev/null || echo "")

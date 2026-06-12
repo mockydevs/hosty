@@ -772,6 +772,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/panel-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Panel Domain */
+        get: operations["get_panel_domain_api_system_panel_domain_get"];
+        /**
+         * Set Panel Domain
+         * @description Serve the panel on a domain over HTTPS.
+         *
+         *     Publishes the vhost to Caddy (which obtains the certificate), persists
+         *     HOSTY_PANEL_DOMAIN + HOSTY_COOKIE_SECURE to the env file, and enables
+         *     secure cookies immediately. The current plain-HTTP session keeps working
+         *     until its access token expires; log in again on the HTTPS URL.
+         */
+        put: operations["set_panel_domain_api_system_panel_domain_put"];
+        post?: never;
+        /**
+         * Clear Panel Domain
+         * @description Back to IP-only access: remove the vhost and allow cookies over HTTP.
+         */
+        delete: operations["clear_panel_domain_api_system_panel_domain_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/services": {
         parameters: {
             query?: never;
@@ -1145,6 +1175,15 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** PanelDomainResponse */
+        PanelDomainResponse: {
+            /** Cookie Secure */
+            cookie_secure: boolean;
+            /** Domain */
+            domain: string | null;
+            /** Url */
+            url: string | null;
+        };
         /** PhpSettingsRequest */
         PhpSettingsRequest: {
             /** Memory Limit */
@@ -1227,6 +1266,16 @@ export interface components {
             sub_state: string;
             /** Unit */
             unit: string;
+        };
+        /** SetPanelDomainRequest */
+        SetPanelDomainRequest: {
+            /** Domain */
+            domain: string;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
         };
         /** SetupRequest */
         SetupRequest: {
@@ -3121,6 +3170,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_panel_domain_api_system_panel_domain_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDomainResponse"];
+                };
+            };
+        };
+    };
+    set_panel_domain_api_system_panel_domain_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPanelDomainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDomainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_panel_domain_api_system_panel_domain_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDomainResponse"];
                 };
             };
         };

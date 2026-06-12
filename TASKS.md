@@ -215,6 +215,7 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] Cloudflare token managed in the UI: Settings card verifies the token (`/user/tokens/verify`) and stores it encrypted in `panel_settings` (`services/cloudflare_config.py`); env var remains a bootstrap fallback
 - [x] Cloudflare account management: list zones + add/edit/delete DNS records (A/AAAA/CNAME/TXT/MX/NS, proxied toggle) under `/api/dns/cloudflare/*` with `/dns/cloudflare` UI
 - [ ] Verify Cloudflare zone/record management against a real Cloudflare account
+- [x] Panel domain & HTTPS from the UI: Settings card → `PUT /api/system/panel-domain` validates DNS points here (overridable), publishes the panel vhost to Caddy (auto-cert), flips `HOSTY_COOKIE_SECURE=true`, and persists both to the env file (`services/panel_config.py`); removal reverts everything
 - [x] Cloudflare proxy support: per-site "Behind Cloudflare" toggle (`PATCH /api/sites/{id}/cloudflare-proxy`, migration 0008) — Caddy issues an internal origin certificate for proxied domains instead of attempting ACME HTTP-01; SSL probe reports `origin_internal`; hint shown when proxying a record in the Cloudflare UI (requires Cloudflare SSL mode "Full")
 - [x] Tests: record validation matrix + zone lifecycle (mocked PowerDNS); VM run pending
 - [ ] **Milestone: `dig @server domain` returns records managed in UI**

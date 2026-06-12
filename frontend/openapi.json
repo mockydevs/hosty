@@ -863,6 +863,43 @@
         "title": "OperationStep",
         "type": "object"
       },
+      "PanelDomainResponse": {
+        "properties": {
+          "cookie_secure": {
+            "title": "Cookie Secure",
+            "type": "boolean"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "domain",
+          "cookie_secure",
+          "url"
+        ],
+        "title": "PanelDomainResponse",
+        "type": "object"
+      },
       "PhpSettingsRequest": {
         "properties": {
           "memory_limit": {
@@ -1086,6 +1123,26 @@
           "enabled"
         ],
         "title": "ServiceStatusResponse",
+        "type": "object"
+      },
+      "SetPanelDomainRequest": {
+        "properties": {
+          "domain": {
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Domain",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "title": "SetPanelDomainRequest",
         "type": "object"
       },
       "SetupRequest": {
@@ -4170,6 +4227,102 @@
         "summary": "Wordpress Action",
         "tags": [
           "sites"
+        ]
+      }
+    },
+    "/api/system/panel-domain": {
+      "delete": {
+        "description": "Back to IP-only access: remove the vhost and allow cookies over HTTP.",
+        "operationId": "clear_panel_domain_api_system_panel_domain_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Panel Domain",
+        "tags": [
+          "system"
+        ]
+      },
+      "get": {
+        "operationId": "get_panel_domain_api_system_panel_domain_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Panel Domain",
+        "tags": [
+          "system"
+        ]
+      },
+      "put": {
+        "description": "Serve the panel on a domain over HTTPS.\n\nPublishes the vhost to Caddy (which obtains the certificate), persists\nHOSTY_PANEL_DOMAIN + HOSTY_COOKIE_SECURE to the env file, and enables\nsecure cookies immediately. The current plain-HTTP session keeps working\nuntil its access token expires; log in again on the HTTPS URL.",
+        "operationId": "set_panel_domain_api_system_panel_domain_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPanelDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Panel Domain",
+        "tags": [
+          "system"
         ]
       }
     },

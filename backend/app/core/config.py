@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     panel_domain: str | None = None  # production: Caddy fronts the panel on this host
     panel_upstream: str = "127.0.0.1:8800"
     panel_allowed_ips: list[str] = []
+    # Where UI-driven config changes (panel domain, cookie flag) are persisted.
+    env_file_path: str = "/var/lib/hosty/hosty.env"
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
 
     # Phase 7: DNS (PowerDNS)
