@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 
 from app.db.models import Notification
@@ -162,6 +163,8 @@ async def test_smtp_config_roundtrip_and_test_email(admin_client, monkeypatch):
     assert body["from_email"] == "panel@example.com"
     assert body["has_password"] is True
     assert body["notification_recipients"] == ["admin@example.com"]
+    # Omitted in the request → defaults to IPv4-only.
+    assert body["ip_family"] == "ipv4"
     # Save verifies the stored credentials and reports the result.
     assert body["verified"] is True
     assert body["verify_error"] is None
@@ -205,6 +208,84 @@ async def test_smtp_save_reports_unverified_credentials(admin_client, monkeypatc
     assert body["verified"] is False
     assert "Authentication failed" in body["verify_error"]
     assert (await admin_client.get("/api/notifications/smtp")).json()["configured"] is True
+
+
+async def test_smtp_ip_family_roundtrip_and_validation(admin_client, monkeypatch):
+    async def fake_verify(config):
+        return None
+
+    monkeypatch.setattr(mail_service, "verify", fake_verify)
+
+    base = {
+        "host": "smtp.example.com",
+        "port": 587,
+        "from_email": "panel@example.com",
+        "security": "starttls",
+    }
+    resp = await admin_client.put("/api/notifications/smtp", json={**base, "ip_family": "any"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["ip_family"] == "any"
+    # Persisted, not just echoed.
+    assert (await admin_client.get("/api/notifications/smtp")).json()["ip_family"] == "any"
+    # IPv6-only is not a thing: IPv4 can never be turned off.
+    resp = await admin_client.put("/api/notifications/smtp", json={**base, "ip_family": "ipv6"})
+    assert resp.status_code == 422
+
+
+def test_connect_tries_ipv4_first_and_reports_all_failures(monkeypatch):
+    import socket as socket_mod
+
+    attempts = []
+
+    addrinfo = [
+        # getaddrinfo commonly returns IPv6 first; _connect must reorder.
+        (socket_mod.AF_INET6, socket_mod.SOCK_STREAM, 6, "", ("2001:db8::1", 587, 0, 0)),
+        (socket_mod.AF_INET, socket_mod.SOCK_STREAM, 6, "", ("192.0.2.10", 587)),
+    ]
+    monkeypatch.setattr(mail_service.socket, "getaddrinfo", lambda *a, **k: list(addrinfo))
+
+    class FailingSocket:
+        def __init__(self, af, socktype, proto):
+            self.af = af
+
+        def settimeout(self, value):
+            pass
+
+        def connect(self, sa):
+            attempts.append(sa[0])
+            raise OSError(101, "Network is unreachable")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(mail_service.socket, "socket", FailingSocket)
+
+    try:
+        mail_service._connect("smtp.example.com", 587, 10, "any")
+    except OSError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected OSError")
+
+    # IPv4 attempted first, and both failures are visible to the admin.
+    assert attempts == ["192.0.2.10", "2001:db8::1"]
+    assert "192.0.2.10 (IPv4)" in message
+    assert "2001:db8::1 (IPv6)" in message
+
+
+def test_connect_ipv4_mode_requests_ipv4_only(monkeypatch):
+    import socket as socket_mod
+
+    families = []
+
+    def fake_getaddrinfo(host, port, family, type):
+        families.append(family)
+        return []
+
+    monkeypatch.setattr(mail_service.socket, "getaddrinfo", fake_getaddrinfo)
+    with pytest.raises(OSError):
+        mail_service._connect("smtp.example.com", 587, 10, "ipv4")
+    assert families == [socket_mod.AF_INET]
 
 
 def test_describe_smtp_error_maps_common_failures():

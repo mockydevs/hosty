@@ -24,6 +24,7 @@ export function SMTPSettingsCard() {
   const [host, setHost] = useState("");
   const [port, setPort] = useState("587");
   const [security, setSecurity] = useState<"starttls" | "ssl" | "none">("starttls");
+  const [ipFamily, setIpFamily] = useState<"ipv4" | "any">("ipv4");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [fromEmail, setFromEmail] = useState("");
@@ -46,6 +47,7 @@ export function SMTPSettingsCard() {
     setHost(config.data.host);
     setPort(String(config.data.port));
     setSecurity(config.data.security);
+    setIpFamily(config.data.ip_family);
     setUsername(config.data.username);
     setFromEmail(config.data.from_email);
     setFromName(config.data.from_name);
@@ -60,6 +62,7 @@ export function SMTPSettingsCard() {
           host: host.trim(),
           port: Number(port),
           security,
+          ip_family: ipFamily,
           username: username.trim(),
           password: password === "" ? null : password,
           from_email: fromEmail.trim(),
@@ -112,6 +115,7 @@ export function SMTPSettingsCard() {
       setHost("");
       setPort("587");
       setSecurity("starttls");
+      setIpFamily("ipv4");
       setUsername("");
       setPassword("");
       setFromEmail("");
@@ -206,7 +210,7 @@ export function SMTPSettingsCard() {
             </FormField>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+          <div className="grid gap-3 sm:grid-cols-[180px_180px_minmax(0,1fr)]">
             <FormField label="Security" htmlFor="smtp-security">
               <select
                 id="smtp-security"
@@ -217,6 +221,17 @@ export function SMTPSettingsCard() {
                 <option value="starttls" className="bg-background text-foreground">STARTTLS</option>
                 <option value="ssl" className="bg-background text-foreground">SSL/TLS</option>
                 <option value="none" className="bg-background text-foreground">None</option>
+              </select>
+            </FormField>
+            <FormField label="Network" htmlFor="smtp-ip-family">
+              <select
+                id="smtp-ip-family"
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                value={ipFamily}
+                onChange={(e) => setIpFamily(e.target.value as typeof ipFamily)}
+              >
+                <option value="ipv4" className="bg-background text-foreground">IPv4 only</option>
+                <option value="any" className="bg-background text-foreground">IPv4 + IPv6</option>
               </select>
             </FormField>
             <FormField label="Alert recipients" htmlFor="smtp-recipients">

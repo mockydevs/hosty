@@ -133,6 +133,8 @@ class SMTPConfigResponse(BaseModel):
     username: str = ""
     notification_recipients: list[str] = Field(default_factory=list)
     has_password: bool = False
+    # "ipv4" (default): IPv4 only. "any": also try IPv6, IPv4 always first.
+    ip_family: Literal["ipv4", "any"] = "ipv4"
     # Populated only by the PUT (save) response after credentials are checked.
     # None means "not checked" (e.g. on GET); True/False is the verify result.
     verified: bool | None = None
@@ -148,6 +150,7 @@ class UpdateSMTPConfigRequest(BaseModel):
     username: str = Field(default="", max_length=255)
     password: str | None = Field(default=None, max_length=512)
     notification_recipients: list[str] = Field(default_factory=list, max_length=20)
+    ip_family: Literal["ipv4", "any"] = "ipv4"
 
     @field_validator("from_email")
     @classmethod
@@ -188,6 +191,7 @@ def _smtp_response(config: mail.SMTPConfig | None) -> SMTPConfigResponse:
         username=config.username,
         notification_recipients=list(config.notification_recipients),
         has_password=bool(config.password),
+        ip_family=config.ip_family,
     )
 
 
@@ -211,6 +215,7 @@ async def set_smtp(
         username=body.username,
         password=body.password,
         notification_recipients=body.notification_recipients,
+        ip_family=body.ip_family,
     )
     response = _smtp_response(config)
     # Settings are persisted above regardless of reachability. We then attempt a

@@ -2158,6 +2158,12 @@ export interface components {
              * @default false
              */
             has_password: boolean;
+            /**
+             * Ip Family
+             * @default ipv4
+             * @enum {string}
+             */
+            ip_family: "ipv4" | "any";
             /** Verified */
             verified?: boolean | null;
             /** Verify Error */
@@ -2412,6 +2418,12 @@ export interface components {
             password?: string | null;
             /** Notification Recipients */
             notification_recipients?: string[];
+            /**
+             * Ip Family
+             * @default ipv4
+             * @enum {string}
+             */
+            ip_family: "ipv4" | "any";
         };
         /** UpdateScheduleRequest */
         UpdateScheduleRequest: {

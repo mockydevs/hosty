@@ -6293,6 +6293,37 @@
             "type": "boolean",
             "title": "Has Password",
             "default": false
+          },
+          "ip_family": {
+            "type": "string",
+            "enum": [
+              "ipv4",
+              "any"
+            ],
+            "title": "Ip Family",
+            "default": "ipv4"
+          },
+          "verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified"
+          },
+          "verify_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Error"
           }
         },
         "type": "object",
@@ -6938,6 +6969,15 @@
             "type": "array",
             "maxItems": 20,
             "title": "Notification Recipients"
+          },
+          "ip_family": {
+            "type": "string",
+            "enum": [
+              "ipv4",
+              "any"
+            ],
+            "title": "Ip Family",
+            "default": "ipv4"
           }
         },
         "type": "object",
