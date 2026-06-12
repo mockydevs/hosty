@@ -11,6 +11,7 @@ import { ApiError, useAuth } from "@/lib/auth";
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Server } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router";
@@ -40,7 +41,65 @@ const setupSchema = z
 type LoginValues = z.infer<typeof loginSchema>;
 type SetupValues = z.infer<typeof setupSchema>;
 
-function LoginForm() {
+const totpSchema = z.object({
+  code: z
+    .string()
+    .min(6, "6-digit code")
+    .max(8, "At most 8 digits")
+    .regex(/^[0-9 ]+$/, "Digits only"),
+});
+
+type TotpValues = z.infer<typeof totpSchema>;
+
+/** Second login step (Phase 11d): the password was right, now the TOTP code. */
+function TotpForm({ challengeToken, onBack }: { challengeToken: string; onBack: () => void }) {
+  const { loginTotp } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from ?? "/";
+
+  const form = useForm<TotpValues>({
+    resolver: zodResolver(totpSchema),
+    defaultValues: { code: "" },
+  });
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    try {
+      await loginTotp(challengeToken, values.code.replaceAll(" ", ""));
+      navigate(from, { replace: true });
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Verification failed";
+      form.setError("code", { type: "server", message });
+    }
+  });
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      <FormField
+        label="Authentication code"
+        htmlFor="totp-code"
+        error={form.formState.errors.code?.message}
+      >
+        <Input
+          id="totp-code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          placeholder="123 456"
+          autoFocus
+          {...form.register("code")}
+        />
+      </FormField>
+      <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
+        Verify
+      </Button>
+      <Button type="button" variant="ghost" className="w-full" onClick={onBack}>
+        Back to password
+      </Button>
+    </form>
+  );
+}
+
+function LoginForm({ onTotpChallenge }: { onTotpChallenge: (token: string) => void }) {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,7 +112,11 @@ function LoginForm() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      await login(values.username, values.password);
+      const result = await login(values.username, values.password);
+      if (result.totpRequired) {
+        onTotpChallenge(result.challengeToken);
+        return;
+      }
       navigate(from, { replace: true });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Login failed";
@@ -161,6 +224,7 @@ function SetupForm({ onDone }: { onDone: () => void }) {
 
 export function LoginPage() {
   const { status } = useAuth();
+  const [totpChallenge, setTotpChallenge] = useState<string | null>(null);
   const setup = useQuery({
     queryKey: ["auth", "setup"],
     queryFn: async () => {
@@ -188,11 +252,19 @@ export function LoginPage() {
           <CardDescription>
             {setupRequired
               ? "Welcome! Create the admin account to get started."
-              : "Sign in to your hosting panel"}
+              : totpChallenge
+                ? "Enter the code from your authenticator app"
+                : "Sign in to your hosting panel"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {setupRequired ? <SetupForm onDone={() => setup.refetch()} /> : <LoginForm />}
+          {setupRequired ? (
+            <SetupForm onDone={() => setup.refetch()} />
+          ) : totpChallenge ? (
+            <TotpForm challengeToken={totpChallenge} onBack={() => setTotpChallenge(null)} />
+          ) : (
+            <LoginForm onTotpChallenge={setTotpChallenge} />
+          )}
         </CardContent>
       </Card>
     </div>

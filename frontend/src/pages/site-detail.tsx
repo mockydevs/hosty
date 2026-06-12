@@ -3,6 +3,7 @@ import { OperationProgress } from "@/components/operation-progress";
 import { PhpCard } from "@/components/php-card";
 import { SiteBackupsTab } from "@/components/site-backups-tab";
 import { SiteDatabasesTab } from "@/components/site-databases-tab";
+import { SiteToolsTab } from "@/components/site-tools-tab";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -345,6 +346,9 @@ export function SiteDetailPage() {
           <TabsTrigger value="backups" className="flex-1">
             Backups
           </TabsTrigger>
+          <TabsTrigger value="tools" className="flex-1">
+            Tools
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
@@ -391,6 +395,9 @@ export function SiteDetailPage() {
         </TabsContent>
         <TabsContent value="backups" className="mt-4">
           <SiteBackupsTab site={s} />
+        </TabsContent>
+        <TabsContent value="tools" className="mt-4">
+          <SiteToolsTab site={s} />
         </TabsContent>
       </Tabs>
 

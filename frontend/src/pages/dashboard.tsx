@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NotificationsCard } from "@/components/notifications-card";
 import { api, apiErrorMessage } from "@/lib/api/client";
+import { useAuth } from "@/lib/auth";
 import type { components } from "@/lib/api/schema";
 import { formatBytes, formatUptime } from "@/lib/format";
 /**
@@ -226,6 +228,8 @@ function GaugeSkeletons() {
 }
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const stats = useQuery({
     queryKey: ["system", "stats"],
     queryFn: async () => {
@@ -258,6 +262,7 @@ export function DashboardPage() {
         )}
       </div>
 
+      {isAdmin && <NotificationsCard />}
       <BackupFailures />
 
       <section aria-label="Resource usage" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

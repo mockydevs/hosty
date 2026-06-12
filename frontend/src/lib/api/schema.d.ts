@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Health */
+        get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/audit": {
         parameters: {
             query?: never;
@@ -21,17 +38,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/change-password": {
+    "/api/auth/setup": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Setup Status */
+        get: operations["setup_status_api_auth_setup_get"];
         put?: never;
-        /** Change Password */
-        post: operations["change_password_api_auth_change_password_post"];
+        /**
+         * Setup
+         * @description Create the admin account. Open only while no users exist (first boot).
+         */
+        post: operations["setup_api_auth_setup_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -55,7 +76,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/logout": {
+    "/api/auth/login/totp": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,25 +85,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
-        post: operations["logout_api_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Me */
-        get: operations["me_api_auth_me_get"];
-        put?: never;
-        post?: never;
+        /**
+         * Login Totp
+         * @description Second login step when 2FA is enabled: challenge token + TOTP code → tokens.
+         */
+        post: operations["login_totp_api_auth_login_totp_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -106,21 +113,1171 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/setup": {
+    "/api/auth/logout": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Setup Status */
-        get: operations["setup_status_api_auth_setup_get"];
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_api_auth_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_api_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         /**
-         * Setup
-         * @description Create the admin account. Open only while no users exist (first boot).
+         * Totp Setup
+         * @description Generate (or regenerate) a TOTP secret. 2FA only takes effect after the
+         *     first valid code is submitted to /2fa/enable.
          */
-        post: operations["setup_api_auth_setup_post"];
+        post: operations["totp_setup_api_auth_2fa_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Totp Enable */
+        post: operations["totp_enable_api_auth_2fa_enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Totp Disable
+         * @description Password-gated: a stolen session alone must not be able to remove 2FA.
+         */
+        post: operations["totp_disable_api_auth_2fa_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sessions
+         * @description The user's active (unexpired, unrevoked) refresh-token sessions.
+         */
+        get: operations["list_sessions_api_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Session */
+        delete: operations["revoke_session_api_auth_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Other Sessions
+         * @description Revoke every session except the one backing this browser's cookie.
+         */
+        post: operations["revoke_other_sessions_api_auth_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_api_users_get"];
+        put?: never;
+        /** Create User */
+        post: operations["create_user_api_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete User
+         * @description Delete a client account.
+         *
+         *     mode=reassign: their sites (and everything attached) move to the acting
+         *     admin. mode=delete_sites: a delete pipeline is started for every site
+         *     (async, same as deleting a site by hand); ownership moves to the acting
+         *     admin while the teardown runs so records never dangle.
+         */
+        delete: operations["delete_user_api_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update User */
+        patch: operations["update_user_api_users__user_id__patch"];
+        trace?: never;
+    };
+    "/api/users/{user_id}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset User Password
+         * @description Issue a new temporary password (shown once); all sessions are revoked.
+         */
+        post: operations["reset_user_password_api_users__user_id__reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/impersonate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Impersonate User
+         * @description Issue a short-lived access token acting as the client (support tool).
+         *
+         *     Loudly audited: this POST lands in the audit log, every action taken with
+         *     the token is attributed as "admin (as client)", and the client UI shows a
+         *     persistent banner. No refresh token is issued — the session simply expires.
+         */
+        post: operations["impersonate_user_api_users__user_id__impersonate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/failed-logins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Failed Logins
+         * @description Recent failed login attempts (401) and rate-limited bursts (429), straight
+         *     from the audit log the middleware already writes.
+         */
+        get: operations["failed_logins_api_users_failed_logins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** System Stats */
+        get: operations["system_stats_api_system_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Services */
+        get: operations["list_services_api_system_services_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/services/{unit}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Service Status */
+        get: operations["service_status_api_system_services__unit__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/services/{unit}/actions/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Service Action */
+        post: operations["service_action_api_system_services__unit__actions__action__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/panel-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Panel Domain */
+        get: operations["get_panel_domain_api_system_panel_domain_get"];
+        /**
+         * Set Panel Domain
+         * @description Serve the panel on a domain over HTTPS.
+         *
+         *     Publishes the vhost to Caddy (which obtains the certificate), persists
+         *     HOSTY_PANEL_DOMAIN + HOSTY_COOKIE_SECURE to the env file, and enables
+         *     secure cookies immediately. The current plain-HTTP session keeps working
+         *     until its access token expires; log in again on the HTTPS URL.
+         */
+        put: operations["set_panel_domain_api_system_panel_domain_put"];
+        post?: never;
+        /**
+         * Clear Panel Domain
+         * @description Back to IP-only access: remove the vhost and allow cookies over HTTP.
+         */
+        delete: operations["clear_panel_domain_api_system_panel_domain_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sites */
+        get: operations["list_sites_api_sites_get"];
+        put?: never;
+        /** Create Site */
+        post: operations["create_site_api_sites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Site */
+        get: operations["get_site_api_sites__site_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Site */
+        delete: operations["delete_site_api_sites__site_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/ssl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Site Ssl Status */
+        get: operations["site_ssl_status_api_sites__site_id__ssl_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/ssl/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew Site Ssl
+         * @description Re-apply the Caddy config so it (re)attempts certificate issuance.
+         *
+         *     Caddy renews valid certificates on its own; this endpoint covers the
+         *     retry cases (initial issuance failed, DNS fixed after creation) and
+         *     returns a fresh probe of the resulting certificate status.
+         */
+        post: operations["renew_site_ssl_api_sites__site_id__ssl_renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/cloudflare-proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Cloudflare Proxy
+         * @description Toggle 'behind the Cloudflare proxy' for a site.
+         *
+         *     When enabled, Caddy issues an internal origin certificate for the domain
+         *     instead of attempting ACME HTTP-01 (which the proxy would break); Cloudflare
+         *     terminates public TLS at the edge (SSL mode "Full").
+         */
+        patch: operations["set_cloudflare_proxy_api_sites__site_id__cloudflare_proxy_patch"];
+        trace?: never;
+    };
+    "/api/sites/{site_id}/php": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Php Version */
+        post: operations["change_php_version_api_sites__site_id__php_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/php-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Php Settings */
+        patch: operations["update_php_settings_api_sites__site_id__php_settings_patch"];
+        trace?: never;
+    };
+    "/api/sites/{site_id}/wordpress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wordpress Status */
+        get: operations["wordpress_status_api_sites__site_id__wordpress_get"];
+        put?: never;
+        /** Install Wordpress */
+        post: operations["install_wordpress_api_sites__site_id__wordpress_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/wordpress/actions/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Wordpress Action */
+        post: operations["wordpress_action_api_sites__site_id__wordpress_actions__action__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/logs/php": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Php Error Log
+         * @description Tail the site's PHP error log (pool config: /home/<user>/php-error.log).
+         *     Owner-scoped: clients see only their own sites' logs.
+         */
+        get: operations["php_error_log_api_sites__site_id__logs_php_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/import/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Import File
+         * @description Raw-body upload (no multipart): ?kind=files&filename=site.tar.gz or ?kind=sql.
+         *     The body is streamed to disk, never held in memory.
+         */
+        post: operations["upload_import_file_api_sites__site_id__import_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Import
+         * @description Import uploaded files/SQL into the site. Overwrites in place — take a
+         *     backup first (the UI insists).
+         */
+        post: operations["start_import_api_sites__site_id__import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/staging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Staging
+         * @description Clone this site (files + DB) to staging.<domain>.
+         */
+        post: operations["create_staging_api_sites__site_id__staging_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/staging/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Staging
+         * @description Push a staging clone back to production (files with --delete + DB replay).
+         *     Destructive: requires typing the PRODUCTION domain to confirm.
+         */
+        post: operations["push_staging_api_sites__site_id__staging_push_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Operations
+         * @description Recent operations, newest first. Used by the dashboard to surface
+         *     backup failures (kind=backup_site&status=failed&since_hours=168).
+         */
+        get: operations["list_operations_api_operations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Operation */
+        get: operations["get_operation_api_operations__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/databases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Databases */
+        get: operations["list_databases_api_databases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/databases/sites/{site_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Database */
+        post: operations["create_database_api_databases_sites__site_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/databases/{database_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Database */
+        delete: operations["delete_database_api_databases__database_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/databases/orphans/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Orphan Database
+         * @description Drop a physical database that has no panel record (shown as 'orphan').
+         *
+         *     Guards: never a system schema, never a panel-managed database (those go
+         *     through their own delete, which also removes the DB user), must actually
+         *     exist, and the name must be typed back to confirm.
+         */
+        delete: operations["delete_orphan_database_api_databases_orphans__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/databases/{database_id}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Password */
+        post: operations["reset_password_api_databases__database_id__reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/databases/adminer-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adminer Session
+         * @description Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.
+         *
+         *     Admin-only: Adminer's login form takes any server credentials, so the
+         *     proxy must not be reachable by client tenants (Phase 11a).
+         */
+        post: operations["adminer_session_api_databases_adminer_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/files-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Files Session */
+        post: operations["files_session_api_sites__site_id__files_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dns Meta */
+        get: operations["dns_meta_api_dns_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Zones */
+        get: operations["list_zones_api_dns_zones_get"];
+        put?: never;
+        /** Create Zone */
+        post: operations["create_zone_api_dns_zones_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Zone */
+        get: operations["get_zone_api_dns_zones__zone_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Zone */
+        delete: operations["delete_zone_api_dns_zones__zone_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Record */
+        put: operations["upsert_record_api_dns_zones__zone_id__records_put"];
+        post?: never;
+        /** Delete Record */
+        delete: operations["delete_record_api_dns_zones__zone_id__records_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}/templates/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Template */
+        post: operations["apply_template_api_dns_zones__zone_id__templates__template__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/zones/{zone_id}/push/cloudflare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push To Cloudflare
+         * @description One click: export every record of this zone to Cloudflare.
+         *
+         *     The push uses the ZONE OWNER's token. Admin override (Phase 11b):
+         *     `use_own_token=true` lets the admin push any zone with their own token —
+         *     e.g. onboarding a client whose domain sits in the admin's CF account.
+         */
+        post: operations["push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cloudflare Config
+         * @description Whether the current user has a token and where it came from. Never the token.
+         */
+        get: operations["get_cloudflare_config_api_dns_cloudflare_config_get"];
+        /**
+         * Update Cloudflare Config
+         * @description Verify the token against Cloudflare, then store it for THIS user.
+         */
+        put: operations["update_cloudflare_config_api_dns_cloudflare_config_put"];
+        post?: never;
+        /** Delete Cloudflare Config */
+        delete: operations["delete_cloudflare_config_api_dns_cloudflare_config_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloudflare Zones */
+        get: operations["list_cloudflare_zones_api_dns_cloudflare_zones_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/zones/{cf_zone_id}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloudflare Records */
+        get: operations["list_cloudflare_records_api_dns_cloudflare_zones__cf_zone_id__records_get"];
+        put?: never;
+        /** Create Cloudflare Record */
+        post: operations["create_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dns/cloudflare/zones/{cf_zone_id}/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Cloudflare Record */
+        put: operations["update_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__put"];
+        post?: never;
+        /** Delete Cloudflare Record */
+        delete: operations["delete_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plans */
+        get: operations["list_plans_api_plans_get"];
+        put?: never;
+        /** Create Plan */
+        post: operations["create_plan_api_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Plan */
+        put: operations["update_plan_api_plans__plan_id__put"];
+        post?: never;
+        /** Delete Plan */
+        delete: operations["delete_plan_api_plans__plan_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notifications */
+        get: operations["list_notifications_api_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["mark_read_api_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{notification_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss
+         * @description Dismiss = resolve by hand. The dedupe key frees up, so the condition
+         *     re-notifies if it is still present at the next sweep.
+         */
+        delete: operations["dismiss_api_notifications__notification_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Webhook */
+        get: operations["get_webhook_api_notifications_webhook_get"];
+        /** Set Webhook */
+        put: operations["set_webhook_api_notifications_webhook_put"];
+        post?: never;
+        /** Delete Webhook */
+        delete: operations["delete_webhook_api_notifications_webhook_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Usage */
+        get: operations["my_usage_api_usage_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All Usage */
+        get: operations["all_usage_api_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Usage
+         * @description Exportable monthly summary as CSV (billing groundwork).
+         */
+        get: operations["export_usage_api_usage_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -207,416 +1364,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/databases": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Databases */
-        get: operations["list_databases_api_databases_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/databases/adminer-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Adminer Session
-         * @description Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.
-         *
-         *     Admin-only: Adminer's login form takes any server credentials, so the
-         *     proxy must not be reachable by client tenants (Phase 11a).
-         */
-        post: operations["adminer_session_api_databases_adminer_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/databases/orphans/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Orphan Database
-         * @description Drop a physical database that has no panel record (shown as 'orphan').
-         *
-         *     Guards: never a system schema, never a panel-managed database (those go
-         *     through their own delete, which also removes the DB user), must actually
-         *     exist, and the name must be typed back to confirm.
-         */
-        delete: operations["delete_orphan_database_api_databases_orphans__name__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/databases/sites/{site_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Database */
-        post: operations["create_database_api_databases_sites__site_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/databases/{database_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Database */
-        delete: operations["delete_database_api_databases__database_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/databases/{database_id}/reset-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reset Password */
-        post: operations["reset_password_api_databases__database_id__reset_password_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/cloudflare/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Cloudflare Config
-         * @description Whether a token is configured and where it came from. Never returns the token.
-         */
-        get: operations["get_cloudflare_config_api_dns_cloudflare_config_get"];
-        /**
-         * Update Cloudflare Config
-         * @description Verify the token against Cloudflare, then store it (encrypted at rest).
-         */
-        put: operations["update_cloudflare_config_api_dns_cloudflare_config_put"];
-        post?: never;
-        /** Delete Cloudflare Config */
-        delete: operations["delete_cloudflare_config_api_dns_cloudflare_config_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/cloudflare/zones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Cloudflare Zones */
-        get: operations["list_cloudflare_zones_api_dns_cloudflare_zones_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/cloudflare/zones/{cf_zone_id}/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Cloudflare Records */
-        get: operations["list_cloudflare_records_api_dns_cloudflare_zones__cf_zone_id__records_get"];
-        put?: never;
-        /** Create Cloudflare Record */
-        post: operations["create_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/cloudflare/zones/{cf_zone_id}/records/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Cloudflare Record */
-        put: operations["update_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__put"];
-        post?: never;
-        /** Delete Cloudflare Record */
-        delete: operations["delete_cloudflare_record_api_dns_cloudflare_zones__cf_zone_id__records__record_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/meta": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Dns Meta */
-        get: operations["dns_meta_api_dns_meta_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/zones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Zones */
-        get: operations["list_zones_api_dns_zones_get"];
-        put?: never;
-        /** Create Zone */
-        post: operations["create_zone_api_dns_zones_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/zones/{zone_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Zone */
-        get: operations["get_zone_api_dns_zones__zone_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Zone */
-        delete: operations["delete_zone_api_dns_zones__zone_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/zones/{zone_id}/push/cloudflare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Push To Cloudflare
-         * @description One click: export every record of this zone to the Cloudflare account.
-         */
-        post: operations["push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/zones/{zone_id}/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Record */
-        put: operations["upsert_record_api_dns_zones__zone_id__records_put"];
-        post?: never;
-        /** Delete Record */
-        delete: operations["delete_record_api_dns_zones__zone_id__records_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/dns/zones/{zone_id}/templates/{template}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Apply Template */
-        post: operations["apply_template_api_dns_zones__zone_id__templates__template__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Health */
-        get: operations["health_api_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/operations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Operations
-         * @description Recent operations, newest first. Used by the dashboard to surface
-         *     backup failures (kind=backup_site&status=failed&since_hours=168).
-         */
-        get: operations["list_operations_api_operations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/operations/{operation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Operation */
-        get: operations["get_operation_api_operations__operation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Sites */
-        get: operations["list_sites_api_sites_get"];
-        put?: never;
-        /** Create Site */
-        post: operations["create_site_api_sites_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Site */
-        get: operations["get_site_api_sites__site_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Site */
-        delete: operations["delete_site_api_sites__site_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/backup-schedule": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Schedule */
-        get: operations["get_schedule_api_sites__site_id__backup_schedule_get"];
-        /** Update Schedule */
-        put: operations["update_schedule_api_sites__site_id__backup_schedule_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/sites/{site_id}/backups": {
         parameters: {
             query?: never;
@@ -629,6 +1376,23 @@ export interface paths {
         put?: never;
         /** Start Backup */
         post: operations["start_backup_api_sites__site_id__backups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/{site_id}/backups/{backup_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Restore */
+        post: operations["start_restore_api_sites__site_id__backups__backup_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -652,330 +1416,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/sites/{site_id}/backups/{backup_id}/restore": {
+    "/api/sites/{site_id}/backup-schedule": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Start Restore */
-        post: operations["start_restore_api_sites__site_id__backups__backup_id__restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/cloudflare-proxy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
+        /** Get Schedule */
+        get: operations["get_schedule_api_sites__site_id__backup_schedule_get"];
+        /** Update Schedule */
+        put: operations["update_schedule_api_sites__site_id__backup_schedule_put"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Set Cloudflare Proxy
-         * @description Toggle 'behind the Cloudflare proxy' for a site.
-         *
-         *     When enabled, Caddy issues an internal origin certificate for the domain
-         *     instead of attempting ACME HTTP-01 (which the proxy would break); Cloudflare
-         *     terminates public TLS at the edge (SSL mode "Full").
-         */
-        patch: operations["set_cloudflare_proxy_api_sites__site_id__cloudflare_proxy_patch"];
-        trace?: never;
-    };
-    "/api/sites/{site_id}/files-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Files Session */
-        post: operations["files_session_api_sites__site_id__files_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/php": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Change Php Version */
-        post: operations["change_php_version_api_sites__site_id__php_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/php-settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Php Settings */
-        patch: operations["update_php_settings_api_sites__site_id__php_settings_patch"];
-        trace?: never;
-    };
-    "/api/sites/{site_id}/ssl": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Site Ssl Status */
-        get: operations["site_ssl_status_api_sites__site_id__ssl_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/ssl/renew": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Renew Site Ssl
-         * @description Re-apply the Caddy config so it (re)attempts certificate issuance.
-         *
-         *     Caddy renews valid certificates on its own; this endpoint covers the
-         *     retry cases (initial issuance failed, DNS fixed after creation) and
-         *     returns a fresh probe of the resulting certificate status.
-         */
-        post: operations["renew_site_ssl_api_sites__site_id__ssl_renew_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/wordpress": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Wordpress Status */
-        get: operations["wordpress_status_api_sites__site_id__wordpress_get"];
-        put?: never;
-        /** Install Wordpress */
-        post: operations["install_wordpress_api_sites__site_id__wordpress_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sites/{site_id}/wordpress/actions/{action}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Wordpress Action */
-        post: operations["wordpress_action_api_sites__site_id__wordpress_actions__action__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/panel-domain": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Panel Domain */
-        get: operations["get_panel_domain_api_system_panel_domain_get"];
-        /**
-         * Set Panel Domain
-         * @description Serve the panel on a domain over HTTPS.
-         *
-         *     Publishes the vhost to Caddy (which obtains the certificate), persists
-         *     HOSTY_PANEL_DOMAIN + HOSTY_COOKIE_SECURE to the env file, and enables
-         *     secure cookies immediately. The current plain-HTTP session keeps working
-         *     until its access token expires; log in again on the HTTPS URL.
-         */
-        put: operations["set_panel_domain_api_system_panel_domain_put"];
-        post?: never;
-        /**
-         * Clear Panel Domain
-         * @description Back to IP-only access: remove the vhost and allow cookies over HTTP.
-         */
-        delete: operations["clear_panel_domain_api_system_panel_domain_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/services": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Services */
-        get: operations["list_services_api_system_services_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/services/{unit}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Service Status */
-        get: operations["service_status_api_system_services__unit__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/services/{unit}/actions/{action}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Service Action */
-        post: operations["service_action_api_system_services__unit__actions__action__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** System Stats */
-        get: operations["system_stats_api_system_stats_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Users */
-        get: operations["list_users_api_users_get"];
-        put?: never;
-        /** Create User */
-        post: operations["create_user_api_users_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/users/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete User
-         * @description Delete a client account.
-         *
-         *     mode=reassign: their sites (and everything attached) move to the acting
-         *     admin. mode=delete_sites: a delete pipeline is started for every site
-         *     (async, same as deleting a site by hand); ownership moves to the acting
-         *     admin while the teardown runs so records never dangle.
-         */
-        delete: operations["delete_user_api_users__user_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update User */
-        patch: operations["update_user_api_users__user_id__patch"];
-        trace?: never;
-    };
-    "/api/users/{user_id}/reset-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reset User Password
-         * @description Issue a new temporary password (shown once); all sessions are revoked.
-         */
-        post: operations["reset_user_password_api_users__user_id__reset_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -993,6 +1445,18 @@ export interface components {
         };
         /** AuditEntryResponse */
         AuditEntryResponse: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number | null;
+            /** Username */
+            username: string | null;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Status Code */
+            status_code: number;
             /** Client Ip */
             client_ip: string | null;
             /**
@@ -1000,44 +1464,32 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Id */
-            id: number;
-            /** Method */
-            method: string;
-            /** Path */
-            path: string;
-            /** Status Code */
-            status_code: number;
-            /** User Id */
-            user_id: number | null;
-            /** Username */
-            username: string | null;
         };
         /** AuditPageResponse */
         AuditPageResponse: {
-            /** Entries */
-            entries: components["schemas"]["AuditEntryResponse"][];
             /** Total */
             total: number;
+            /** Entries */
+            entries: components["schemas"]["AuditEntryResponse"][];
         };
         /** BackupResponse */
         BackupResponse: {
+            /** Domain */
+            domain: string;
             /** Backup Id */
             backup_id: string;
             /** Created At */
             created_at: string;
+            /** Size Bytes */
+            size_bytes: number;
             /** Databases */
             databases: string[];
-            /** Domain */
-            domain: string;
+            /** Wordpress */
+            wordpress: boolean;
             /** Php Version */
             php_version: string;
             /** S3 */
             s3: boolean;
-            /** Size Bytes */
-            size_bytes: number;
-            /** Wordpress */
-            wordpress: boolean;
         };
         /** BackupsMetaResponse */
         BackupsMetaResponse: {
@@ -1048,16 +1500,16 @@ export interface components {
         };
         /** CertStatusResponse */
         CertStatusResponse: {
-            /** Detail */
-            detail: string | null;
             /** Domain */
             domain: string;
+            /** Status */
+            status: string;
             /** Issuer */
             issuer: string | null;
             /** Not After */
             not_after: string | null;
-            /** Status */
-            status: string;
+            /** Detail */
+            detail: string | null;
         };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
@@ -1070,6 +1522,23 @@ export interface components {
         ChangePhpVersionRequest: {
             /** Php Version */
             php_version: string;
+        };
+        /** ClientUsageResponse */
+        ClientUsageResponse: {
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            /** Site Count */
+            site_count: number;
+            /** Disk Bytes */
+            disk_bytes: number;
+            /** Db Bytes */
+            db_bytes: number;
+            /** Bandwidth Bytes */
+            bandwidth_bytes: number;
+            /** Max Disk Mb */
+            max_disk_mb: number | null;
         };
         /** CloudflareConfigResponse */
         CloudflareConfigResponse: {
@@ -1085,33 +1554,33 @@ export interface components {
         };
         /** CloudflarePushResponse */
         CloudflarePushResponse: {
-            /** Created */
-            created: number;
-            /** Errors */
-            errors: string[];
-            /** Skipped */
-            skipped: number;
-            /** Updated */
-            updated: number;
             /** Zone */
             zone: string;
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Skipped */
+            skipped: number;
+            /** Errors */
+            errors: string[];
         };
         /** CloudflareRecordResponse */
         CloudflareRecordResponse: {
-            /** Content */
-            content: string;
             /** Id */
             id: string;
-            /** Name */
-            name: string;
-            /** Priority */
-            priority?: number | null;
-            /** Proxied */
-            proxied?: boolean | null;
-            /** Ttl */
-            ttl: number;
             /** Type */
             type: string;
+            /** Name */
+            name: string;
+            /** Content */
+            content: string;
+            /** Ttl */
+            ttl: number;
+            /** Proxied */
+            proxied?: boolean | null;
+            /** Priority */
+            priority?: number | null;
         };
         /** CloudflareZoneResponse */
         CloudflareZoneResponse: {
@@ -1119,12 +1588,12 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Name Servers */
-            name_servers: string[];
-            /** Paused */
-            paused: boolean;
             /** Status */
             status: string;
+            /** Paused */
+            paused: boolean;
+            /** Name Servers */
+            name_servers: string[];
         };
         /** CreateDatabaseRequest */
         CreateDatabaseRequest: {
@@ -1133,26 +1602,28 @@ export interface components {
         };
         /** CreateSiteRequest */
         CreateSiteRequest: {
+            /** Domain */
+            domain: string;
+            /** Php Version */
+            php_version?: string | null;
             /**
              * Create Dns Zone
              * @default false
              */
             create_dns_zone: boolean;
-            /** Domain */
-            domain: string;
-            /** Php Version */
-            php_version?: string | null;
         };
         /** CreateUserRequest */
         CreateUserRequest: {
-            /** Max Databases */
-            max_databases?: number | null;
-            /** Max Sites */
-            max_sites?: number | null;
-            /** Password */
-            password?: string | null;
             /** Username */
             username: string;
+            /** Password */
+            password?: string | null;
+            /** Max Sites */
+            max_sites?: number | null;
+            /** Max Databases */
+            max_databases?: number | null;
+            /** Plan Id */
+            plan_id?: number | null;
         };
         /** CreateZoneRequest */
         CreateZoneRequest: {
@@ -1166,9 +1637,9 @@ export interface components {
         };
         /** CreatedUserResponse */
         CreatedUserResponse: {
+            user: components["schemas"]["UserAdminResponse"];
             /** Temp Password */
             temp_password: string;
-            user: components["schemas"]["UserAdminResponse"];
         };
         /** CredentialsResponse */
         CredentialsResponse: {
@@ -1179,33 +1650,33 @@ export interface components {
         /** DatabaseListEntry */
         DatabaseListEntry: {
             database?: components["schemas"]["DatabaseResponse"] | null;
+            /** Site Domain */
+            site_domain?: string | null;
+            /** Orphan Name */
+            orphan_name?: string | null;
             /**
              * Missing
              * @default false
              */
             missing: boolean;
-            /** Orphan Name */
-            orphan_name?: string | null;
-            /** Site Domain */
-            site_domain?: string | null;
         };
         /** DatabaseResponse */
         DatabaseResponse: {
+            /** Id */
+            id: number;
+            /** Site Id */
+            site_id: number;
+            /** Name */
+            name: string;
+            /** Db User */
+            db_user: string;
+            /** Purpose */
+            purpose: string;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Db User */
-            db_user: string;
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Purpose */
-            purpose: string;
-            /** Site Id */
-            site_id: number;
         };
         /** DeleteBackupRequest */
         DeleteBackupRequest: {
@@ -1234,14 +1705,14 @@ export interface components {
         };
         /** DeleteUserRequest */
         DeleteUserRequest: {
-            /** Confirm Username */
-            confirm_username: string;
             /**
              * Mode
              * @default reassign
              * @enum {string}
              */
             mode: "reassign" | "delete_sites";
+            /** Confirm Username */
+            confirm_username: string;
         };
         /** DeleteZoneRequest */
         DeleteZoneRequest: {
@@ -1250,14 +1721,30 @@ export interface components {
         };
         /** DnsMetaResponse */
         DnsMetaResponse: {
-            /** Cloudflare Enabled */
-            cloudflare_enabled: boolean;
-            /** Default Ttl */
-            default_ttl: number;
             /** Enabled */
             enabled: boolean;
             /** Server Ip */
             server_ip: string;
+            /** Default Ttl */
+            default_ttl: number;
+            /** Cloudflare Enabled */
+            cloudflare_enabled: boolean;
+        };
+        /** FailedLoginResponse */
+        FailedLoginResponse: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string | null;
+            /** Status Code */
+            status_code: number;
+            /** Client Ip */
+            client_ip: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** FilesSessionResponse */
         FilesSessionResponse: {
@@ -1269,42 +1756,122 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** LoginRequest */
-        LoginRequest: {
-            /** Password */
-            password: string;
+        /** ImpersonateResponse */
+        ImpersonateResponse: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            /** Expires In */
+            expires_in: number;
             /** Username */
             username: string;
         };
-        /** OperationAccepted */
-        OperationAccepted: {
-            /** Operation Id */
-            operation_id: number;
-            site: components["schemas"]["SiteResponse"];
+        /** ImportUploadResponse */
+        ImportUploadResponse: {
+            /** Upload Id */
+            upload_id: string;
+            /** Size Bytes */
+            size_bytes: number;
         };
-        /** OperationResponse */
-        OperationResponse: {
+        /** LoginRequest */
+        LoginRequest: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+        };
+        /**
+         * LoginResponse
+         * @description Either tokens (no 2FA) or a short-lived challenge requiring a TOTP code.
+         */
+        LoginResponse: {
+            /**
+             * Totp Required
+             * @default false
+             */
+            totp_required: boolean;
+            /** Challenge Token */
+            challenge_token?: string | null;
+            /** Access Token */
+            access_token?: string | null;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            /** Expires In */
+            expires_in?: number | null;
+        };
+        /** MyUsageResponse */
+        MyUsageResponse: {
+            /** Sites */
+            sites: components["schemas"]["SiteUsageResponse"][];
+            /** Disk Bytes */
+            disk_bytes: number;
+            /** Db Bytes */
+            db_bytes: number;
+            /** Bandwidth Bytes */
+            bandwidth_bytes: number;
+            /** Max Disk Mb */
+            max_disk_mb: number | null;
+            /** Max Sites */
+            max_sites: number | null;
+            /** Max Databases */
+            max_databases: number | null;
+        };
+        /** NotificationResponse */
+        NotificationResponse: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Severity */
+            severity: string;
+            /** Message */
+            message: string;
+            /** Read */
+            read: boolean;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Domain */
-            domain: string;
-            /** Error */
-            error: string | null;
-            /** Finished At */
-            finished_at: string | null;
+            /** Resolved At */
+            resolved_at: string | null;
+        };
+        /** OperationAccepted */
+        OperationAccepted: {
+            site: components["schemas"]["SiteResponse"];
+            /** Operation Id */
+            operation_id: number;
+        };
+        /** OperationResponse */
+        OperationResponse: {
             /** Id */
             id: number;
             /** Kind */
             kind: string;
             /** Site Id */
             site_id: number | null;
+            /** Domain */
+            domain: string;
             /** Status */
             status: string;
             /** Steps */
             steps: components["schemas"]["OperationStep"][];
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
         };
         /** OperationStartedResponse */
         OperationStartedResponse: {
@@ -1313,10 +1880,10 @@ export interface components {
         };
         /** OperationStep */
         OperationStep: {
-            /** Label */
-            label: string;
             /** Name */
             name: string;
+            /** Label */
+            label: string;
             /** Status */
             status: string;
         };
@@ -1325,34 +1892,43 @@ export interface components {
          * @description Listing entry (Week 21 dashboard notifications): no step detail.
          */
         OperationSummaryResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Domain */
-            domain: string;
-            /** Error */
-            error: string | null;
-            /** Finished At */
-            finished_at: string | null;
             /** Id */
             id: number;
             /** Kind */
             kind: string;
             /** Site Id */
             site_id: number | null;
+            /** Domain */
+            domain: string;
             /** Status */
             status: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
         };
         /** PanelDomainResponse */
         PanelDomainResponse: {
-            /** Cookie Secure */
-            cookie_secure: boolean;
             /** Domain */
             domain: string | null;
+            /** Cookie Secure */
+            cookie_secure: boolean;
             /** Url */
             url: string | null;
+        };
+        /** PhpLogResponse */
+        PhpLogResponse: {
+            /** Path */
+            path: string;
+            /** Exists */
+            exists: boolean;
+            /** Lines */
+            lines: string[];
         };
         /** PhpSettingsRequest */
         PhpSettingsRequest: {
@@ -1361,46 +1937,78 @@ export interface components {
             /** Upload Max Filesize */
             upload_max_filesize: string;
         };
+        /** PlanResponse */
+        PlanResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Max Sites */
+            max_sites: number | null;
+            /** Max Databases */
+            max_databases: number | null;
+            /** Max Disk Mb */
+            max_disk_mb: number | null;
+            /** Cpu Quota Percent */
+            cpu_quota_percent: number | null;
+            /** Memory Max Mb */
+            memory_max_mb: number | null;
+            /**
+             * User Count
+             * @default 0
+             */
+            user_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** PushStagingRequest */
+        PushStagingRequest: {
+            /** Confirm Domain */
+            confirm_domain: string;
+        };
         /** RRSetResponse */
         RRSetResponse: {
             /** Name */
             name: string;
-            /** Records */
-            records: string[];
-            /** Ttl */
-            ttl: number;
             /** Type */
             type: string;
+            /** Ttl */
+            ttl: number;
+            /** Records */
+            records: string[];
         };
         /** RestoreRequest */
         RestoreRequest: {
-            /** Confirm Domain */
-            confirm_domain: string;
             /**
              * Scope
              * @default full
              * @enum {string}
              */
             scope: "full" | "files" | "db";
+            /** Confirm Domain */
+            confirm_domain: string;
         };
         /** S3ConfigResponse */
         S3ConfigResponse: {
-            /** Access Key */
-            access_key: string;
-            /** Bucket */
-            bucket: string;
             /** Configured */
             configured: boolean;
-            /** Endpoint */
-            endpoint: string;
-            /** Has Secret */
-            has_secret: boolean;
-            /** Prefix */
-            prefix: string;
-            /** Region */
-            region: string;
             /** Source */
             source: ("db" | "env") | null;
+            /** Endpoint */
+            endpoint: string;
+            /** Bucket */
+            bucket: string;
+            /** Region */
+            region: string;
+            /** Prefix */
+            prefix: string;
+            /** Access Key */
+            access_key: string;
+            /** Has Secret */
+            has_secret: boolean;
         };
         /** ScheduleResponse */
         ScheduleResponse: {
@@ -1413,29 +2021,46 @@ export interface components {
             frequency: "daily" | "weekly";
             /** Hour */
             hour: number;
-            /** Include Databases */
-            include_databases: boolean;
-            /** Include Files */
-            include_files: boolean;
-            /** Last Run At */
-            last_run_at: string | null;
             /** Retention */
             retention: number;
+            /** Include Files */
+            include_files: boolean;
+            /** Include Databases */
+            include_databases: boolean;
             /** S3 Mirror */
             s3_mirror: boolean;
+            /** Last Run At */
+            last_run_at: string | null;
         };
         /** ServiceStatusResponse */
         ServiceStatusResponse: {
-            /** Active State */
-            active_state: string;
-            /** Available */
-            available: boolean;
-            /** Enabled */
-            enabled: string;
-            /** Sub State */
-            sub_state: string;
             /** Unit */
             unit: string;
+            /** Available */
+            available: boolean;
+            /** Active State */
+            active_state: string;
+            /** Sub State */
+            sub_state: string;
+            /** Enabled */
+            enabled: string;
+        };
+        /** SessionResponse */
+        SessionResponse: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Current */
+            current: boolean;
         };
         /** SetPanelDomainRequest */
         SetPanelDomainRequest: {
@@ -1449,10 +2074,10 @@ export interface components {
         };
         /** SetupRequest */
         SetupRequest: {
-            /** Password */
-            password: string;
             /** Username */
             username: string;
+            /** Password */
+            password: string;
         };
         /** SetupStatusResponse */
         SetupStatusResponse: {
@@ -1461,52 +2086,78 @@ export interface components {
         };
         /** SiteResponse */
         SiteResponse: {
+            /** Id */
+            id: number;
+            /** Domain */
+            domain: string;
+            /** Site User */
+            site_user: string;
+            /** Doc Root */
+            doc_root: string;
+            /** Php Version */
+            php_version: string;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message: string | null;
+            /** Php Memory Limit */
+            php_memory_limit: string;
+            /** Php Upload Max Filesize */
+            php_upload_max_filesize: string;
+            /** Wordpress */
+            wordpress: boolean;
             /** Behind Cloudflare */
             behind_cloudflare: boolean;
+            /** Staging Of */
+            staging_of?: number | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Doc Root */
-            doc_root: string;
+        };
+        /** SiteUsageResponse */
+        SiteUsageResponse: {
+            /** Site Id */
+            site_id: number;
             /** Domain */
             domain: string;
-            /** Error Message */
-            error_message: string | null;
-            /** Id */
-            id: number;
-            /** Php Memory Limit */
-            php_memory_limit: string;
-            /** Php Upload Max Filesize */
-            php_upload_max_filesize: string;
-            /** Php Version */
-            php_version: string;
-            /** Site User */
-            site_user: string;
-            /** Status */
-            status: string;
-            /** Wordpress */
-            wordpress: boolean;
+            /** Disk Bytes */
+            disk_bytes: number;
+            /** Db Bytes */
+            db_bytes: number;
+            /** Bandwidth Bytes */
+            bandwidth_bytes: number;
+        };
+        /** StartImportRequest */
+        StartImportRequest: {
+            /** Files Upload Id */
+            files_upload_id?: string | null;
+            /** Sql Upload Id */
+            sql_upload_id?: string | null;
+            /** Target Db */
+            target_db?: string | null;
+            /** Old Domain */
+            old_domain?: string | null;
         };
         /** SystemStatsResponse */
         SystemStatsResponse: {
             /** Cpu Percent */
             cpu_percent: number;
-            /** Disk Percent */
-            disk_percent: number;
-            /** Disk Total */
-            disk_total: number;
-            /** Disk Used */
-            disk_used: number;
             /** Load Avg */
             load_avg: number[];
-            /** Memory Percent */
-            memory_percent: number;
             /** Memory Total */
             memory_total: number;
             /** Memory Used */
             memory_used: number;
+            /** Memory Percent */
+            memory_percent: number;
+            /** Disk Total */
+            disk_total: number;
+            /** Disk Used */
+            disk_used: number;
+            /** Disk Percent */
+            disk_percent: number;
             /** Uptime Seconds */
             uptime_seconds: number;
         };
@@ -1514,13 +2165,37 @@ export interface components {
         TokenResponse: {
             /** Access Token */
             access_token: string;
-            /** Expires In */
-            expires_in: number;
             /**
              * Token Type
              * @default bearer
              */
             token_type: string;
+            /** Expires In */
+            expires_in: number;
+        };
+        /** TotpDisableRequest */
+        TotpDisableRequest: {
+            /** Password */
+            password: string;
+        };
+        /** TotpEnableRequest */
+        TotpEnableRequest: {
+            /** Code */
+            code: string;
+        };
+        /** TotpSetupResponse */
+        TotpSetupResponse: {
+            /** Secret */
+            secret: string;
+            /** Otpauth Uri */
+            otpauth_uri: string;
+        };
+        /** TotpVerifyRequest */
+        TotpVerifyRequest: {
+            /** Challenge Token */
+            challenge_token: string;
+            /** Code */
+            code: string;
         };
         /** UpdateCloudflareConfigRequest */
         UpdateCloudflareConfigRequest: {
@@ -1529,24 +2204,24 @@ export interface components {
         };
         /** UpdateS3ConfigRequest */
         UpdateS3ConfigRequest: {
-            /** Access Key */
-            access_key: string;
-            /** Bucket */
-            bucket: string;
             /** Endpoint */
             endpoint: string;
-            /**
-             * Prefix
-             * @default hosty
-             */
-            prefix: string;
+            /** Bucket */
+            bucket: string;
+            /** Access Key */
+            access_key: string;
+            /** Secret Key */
+            secret_key?: string | null;
             /**
              * Region
              * @default
              */
             region: string;
-            /** Secret Key */
-            secret_key?: string | null;
+            /**
+             * Prefix
+             * @default hosty
+             */
+            prefix: string;
         };
         /** UpdateScheduleRequest */
         UpdateScheduleRequest: {
@@ -1564,20 +2239,20 @@ export interface components {
              */
             hour: number;
             /**
-             * Include Databases
-             * @default true
+             * Retention
+             * @default 7
              */
-            include_databases: boolean;
+            retention: number;
             /**
              * Include Files
              * @default true
              */
             include_files: boolean;
             /**
-             * Retention
-             * @default 7
+             * Include Databases
+             * @default true
              */
-            retention: number;
+            include_databases: boolean;
             /**
              * S3 Mirror
              * @default true
@@ -1586,43 +2261,99 @@ export interface components {
         };
         /** UpdateUserRequest */
         UpdateUserRequest: {
+            /** Suspended */
+            suspended?: boolean | null;
+            /** Max Sites */
+            max_sites?: number | null;
+            /** Max Databases */
+            max_databases?: number | null;
+            /** Max Disk Mb */
+            max_disk_mb?: number | null;
+            /** Cpu Quota Percent */
+            cpu_quota_percent?: number | null;
+            /** Memory Max Mb */
+            memory_max_mb?: number | null;
+            /** Plan Id */
+            plan_id?: number | null;
+            /**
+             * Clear Max Sites
+             * @default false
+             */
+            clear_max_sites: boolean;
             /**
              * Clear Max Databases
              * @default false
              */
             clear_max_databases: boolean;
             /**
-             * Clear Max Sites
+             * Clear Max Disk Mb
              * @default false
              */
-            clear_max_sites: boolean;
-            /** Max Databases */
-            max_databases?: number | null;
-            /** Max Sites */
-            max_sites?: number | null;
-            /** Suspended */
-            suspended?: boolean | null;
+            clear_max_disk_mb: boolean;
+            /**
+             * Clear Cpu Quota Percent
+             * @default false
+             */
+            clear_cpu_quota_percent: boolean;
+            /**
+             * Clear Memory Max Mb
+             * @default false
+             */
+            clear_memory_max_mb: boolean;
+            /**
+             * Clear Plan
+             * @default false
+             */
+            clear_plan: boolean;
+            /**
+             * Reset Totp
+             * @default false
+             */
+            reset_totp: boolean;
+        };
+        /** UpdateWebhookRequest */
+        UpdateWebhookRequest: {
+            /**
+             * Url
+             * Format: uri
+             */
+            url: string;
         };
         /** UpsertCloudflareRecordRequest */
         UpsertCloudflareRecordRequest: {
-            /** Content */
-            content: string;
+            /** Type */
+            type: string;
             /** Name */
             name: string;
-            /** Priority */
-            priority?: number | null;
-            /**
-             * Proxied
-             * @default false
-             */
-            proxied: boolean;
+            /** Content */
+            content: string;
             /**
              * Ttl
              * @default 1
              */
             ttl: number;
-            /** Type */
-            type: string;
+            /**
+             * Proxied
+             * @default false
+             */
+            proxied: boolean;
+            /** Priority */
+            priority?: number | null;
+        };
+        /** UpsertPlanRequest */
+        UpsertPlanRequest: {
+            /** Name */
+            name: string;
+            /** Max Sites */
+            max_sites?: number | null;
+            /** Max Databases */
+            max_databases?: number | null;
+            /** Max Disk Mb */
+            max_disk_mb?: number | null;
+            /** Cpu Quota Percent */
+            cpu_quota_percent?: number | null;
+            /** Memory Max Mb */
+            memory_max_mb?: number | null;
         };
         /** UpsertRecordRequest */
         UpsertRecordRequest: {
@@ -1631,62 +2362,91 @@ export interface components {
              * @default @
              */
             name: string;
-            /** Records */
-            records: string[];
-            /** Ttl */
-            ttl?: number | null;
             /** Type */
             type: string;
+            /** Ttl */
+            ttl?: number | null;
+            /** Records */
+            records: string[];
         };
         /** UserAdminResponse */
         UserAdminResponse: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+            /** Suspended */
+            suspended: boolean;
+            /** Must Change Password */
+            must_change_password: boolean;
+            /**
+             * Totp Enabled
+             * @default false
+             */
+            totp_enabled: boolean;
+            /** Max Sites */
+            max_sites: number | null;
+            /** Max Databases */
+            max_databases: number | null;
+            /** Max Disk Mb */
+            max_disk_mb?: number | null;
+            /** Cpu Quota Percent */
+            cpu_quota_percent?: number | null;
+            /** Memory Max Mb */
+            memory_max_mb?: number | null;
+            /** Plan Id */
+            plan_id?: number | null;
+            /** Plan Name */
+            plan_name?: string | null;
+            /** Site Count */
+            site_count: number;
+            /** Database Count */
+            database_count: number;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Database Count */
-            database_count: number;
-            /** Id */
-            id: number;
-            /** Max Databases */
-            max_databases: number | null;
-            /** Max Sites */
-            max_sites: number | null;
-            /** Must Change Password */
-            must_change_password: boolean;
-            /** Role */
-            role: string;
-            /** Site Count */
-            site_count: number;
-            /** Suspended */
-            suspended: boolean;
-            /** Username */
-            username: string;
         };
         /** UserResponse */
         UserResponse: {
             /** Id */
             id: number;
-            /** Must Change Password */
-            must_change_password: boolean;
-            /** Role */
-            role: string;
             /** Username */
             username: string;
+            /** Role */
+            role: string;
+            /** Must Change Password */
+            must_change_password: boolean;
+            /**
+             * Totp Enabled
+             * @default false
+             */
+            totp_enabled: boolean;
+            /** Impersonated By */
+            impersonated_by?: string | null;
         };
         /** ValidationError */
         ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
+        };
+        /** WebhookConfigResponse */
+        WebhookConfigResponse: {
+            /** Configured */
+            configured: boolean;
+            /** Url */
+            url?: string | null;
         };
         /** WpActionResponse */
         WpActionResponse: {
@@ -1702,19 +2462,19 @@ export interface components {
         };
         /** WpInstallRequest */
         WpInstallRequest: {
-            /** Admin Email */
-            admin_email: string;
-            /** Admin Password */
-            admin_password: string;
+            /** Title */
+            title: string;
             /** Admin User */
             admin_user: string;
+            /** Admin Password */
+            admin_password: string;
+            /** Admin Email */
+            admin_email: string;
             /**
              * Locale
              * @default en_US
              */
             locale: string;
-            /** Title */
-            title: string;
             /**
              * Version
              * @default latest
@@ -1725,14 +2485,14 @@ export interface components {
         WpStatusResponse: {
             /** Installed */
             installed: boolean;
+            /** Version */
+            version: string | null;
+            /** Update Available */
+            update_available: string | null;
             /** Plugin Count */
             plugin_count: number | null;
             /** Theme Count */
             theme_count: number | null;
-            /** Update Available */
-            update_available: string | null;
-            /** Version */
-            version: string | null;
         };
         /** ZoneDetailResponse */
         ZoneDetailResponse: {
@@ -1740,21 +2500,25 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Rrsets */
-            rrsets: components["schemas"]["RRSetResponse"][];
             /** Serial */
             serial: number;
+            /** Rrsets */
+            rrsets: components["schemas"]["RRSetResponse"][];
         };
         /** ZoneSummaryResponse */
         ZoneSummaryResponse: {
             /** Id */
             id: string;
-            /** Kind */
-            kind: string;
             /** Name */
             name: string;
+            /** Kind */
+            kind: string;
             /** Serial */
             serial: number;
+            /** Owner Id */
+            owner_id?: number | null;
+            /** Owner Username */
+            owner_username?: string | null;
         };
     };
     responses: never;
@@ -1765,6 +2529,28 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    health_api_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list_audit_entries_api_audit_get: {
         parameters: {
             query?: {
@@ -1793,128 +2579,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    change_password_api_auth_change_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangePasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    login_api_auth_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    logout_api_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    me_api_auth_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserResponse"];
-                };
-            };
-        };
-    };
-    refresh_api_auth_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
         };
@@ -1972,67 +2636,7 @@ export interface operations {
             };
         };
     };
-    list_all_backups_api_backups_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BackupResponse"][];
-                };
-            };
-        };
-    };
-    backups_meta_api_backups_meta_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BackupsMetaResponse"];
-                };
-            };
-        };
-    };
-    get_s3_config_api_backups_s3_config_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["S3ConfigResponse"];
-                };
-            };
-        };
-    };
-    update_s3_config_api_backups_s3_config_put: {
+    login_api_auth_login_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2041,7 +2645,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateS3ConfigRequest"];
+                "application/json": components["schemas"]["LoginRequest"];
             };
         };
         responses: {
@@ -2051,7 +2655,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["S3ConfigResponse"];
+                    "application/json": components["schemas"]["LoginResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2065,7 +2669,60 @@ export interface operations {
             };
         };
     };
-    delete_s3_config_api_backups_s3_config_delete: {
+    login_totp_api_auth_login_totp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_api_auth_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+        };
+    };
+    logout_api_auth_logout_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2083,7 +2740,38 @@ export interface operations {
             };
         };
     };
-    test_s3_config_api_backups_s3_config_test_post: {
+    change_password_api_auth_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_api_auth_me_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2098,7 +2786,1167 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BackupsMetaResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+        };
+    };
+    totp_setup_api_auth_2fa_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpSetupResponse"];
+                };
+            };
+        };
+    };
+    totp_enable_api_auth_2fa_enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpEnableRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    totp_disable_api_auth_2fa_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpDisableRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_api_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"][];
+                };
+            };
+        };
+    };
+    revoke_session_api_auth_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_other_sessions_api_auth_sessions_revoke_others_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_users_api_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminResponse"][];
+                };
+            };
+        };
+    };
+    create_user_api_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_api_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_api_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_user_password_api_users__user_id__reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    impersonate_user_api_users__user_id__impersonate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpersonateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    failed_logins_api_users_failed_logins_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FailedLoginResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    system_stats_api_system_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemStatsResponse"];
+                };
+            };
+        };
+    };
+    list_services_api_system_services_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceStatusResponse"][];
+                };
+            };
+        };
+    };
+    service_status_api_system_services__unit__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    service_action_api_system_services__unit__actions__action__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit: string;
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_panel_domain_api_system_panel_domain_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDomainResponse"];
+                };
+            };
+        };
+    };
+    set_panel_domain_api_system_panel_domain_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPanelDomainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDomainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_panel_domain_api_system_panel_domain_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDomainResponse"];
+                };
+            };
+        };
+    };
+    list_sites_api_sites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"][];
+                };
+            };
+        };
+    };
+    create_site_api_sites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSiteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_site_api_sites__site_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_site_api_sites__site_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteSiteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    site_ssl_status_api_sites__site_id__ssl_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_site_ssl_api_sites__site_id__ssl_renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_cloudflare_proxy_api_sites__site_id__cloudflare_proxy_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudflareProxyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_php_version_api_sites__site_id__php_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePhpVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_php_settings_api_sites__site_id__php_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhpSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wordpress_status_api_sites__site_id__wordpress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WpStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_wordpress_api_sites__site_id__wordpress_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WpInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WpInstallAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wordpress_action_api_sites__site_id__wordpress_actions__action__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WpActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    php_error_log_api_sites__site_id__logs_php_get: {
+        parameters: {
+            query?: {
+                lines?: number;
+            };
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhpLogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_import_file_api_sites__site_id__import_upload_post: {
+        parameters: {
+            query: {
+                kind: string;
+                filename?: string;
+            };
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_import_api_sites__site_id__import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_staging_api_sites__site_id__staging_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_staging_api_sites__site_id__staging_push_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushStagingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_operations_api_operations_get: {
+        parameters: {
+            query?: {
+                kind?: string[];
+                status?: string | null;
+                since_hours?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationSummaryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_operation_api_operations__operation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2119,59 +3967,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatabaseListEntry"][];
-                };
-            };
-        };
-    };
-    adminer_session_api_databases_adminer_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminerSessionResponse"];
-                };
-            };
-        };
-    };
-    delete_orphan_database_api_databases_orphans__name__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteDatabaseRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2244,6 +4039,39 @@ export interface operations {
             };
         };
     };
+    delete_orphan_database_api_databases_orphans__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteDatabaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reset_password_api_databases__database_id__reset_password_post: {
         parameters: {
             query?: never;
@@ -2262,6 +4090,323 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CredentialsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminer_session_api_databases_adminer_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminerSessionResponse"];
+                };
+            };
+        };
+    };
+    files_session_api_sites__site_id__files_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilesSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dns_meta_api_dns_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DnsMetaResponse"];
+                };
+            };
+        };
+    };
+    list_zones_api_dns_zones_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneSummaryResponse"][];
+                };
+            };
+        };
+    };
+    create_zone_api_dns_zones_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateZoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_zone_api_dns_zones__zone_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_zone_api_dns_zones__zone_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteZoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_record_api_dns_zones__zone_id__records_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_record_api_dns_zones__zone_id__records_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_template_api_dns_zones__zone_id__templates__template__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post: {
+        parameters: {
+            query?: {
+                use_own_token?: boolean;
+            };
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflarePushResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2494,7 +4639,7 @@ export interface operations {
             };
         };
     };
-    dns_meta_api_dns_meta_get: {
+    list_plans_api_plans_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2509,32 +4654,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DnsMetaResponse"];
+                    "application/json": components["schemas"]["PlanResponse"][];
                 };
             };
         };
     };
-    list_zones_api_dns_zones_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ZoneSummaryResponse"][];
-                };
-            };
-        };
-    };
-    create_zone_api_dns_zones_post: {
+    create_plan_api_plans_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2543,7 +4668,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateZoneRequest"];
+                "application/json": components["schemas"]["UpsertPlanRequest"];
             };
         };
         responses: {
@@ -2553,7 +4678,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ZoneDetailResponse"];
+                    "application/json": components["schemas"]["PlanResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2567,16 +4692,20 @@ export interface operations {
             };
         };
     };
-    get_zone_api_dns_zones__zone_id__get: {
+    update_plan_api_plans__plan_id__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                zone_id: string;
+                plan_id: number;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertPlanRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2584,7 +4713,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ZoneDetailResponse"];
+                    "application/json": components["schemas"]["PlanResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2598,143 +4727,12 @@ export interface operations {
             };
         };
     };
-    delete_zone_api_dns_zones__zone_id__delete: {
+    delete_plan_api_plans__plan_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                zone_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteZoneRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                zone_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudflarePushResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_record_api_dns_zones__zone_id__records_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                zone_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpsertRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_record_api_dns_zones__zone_id__records_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                zone_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    apply_template_api_dns_zones__zone_id__templates__template__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                zone_id: string;
-                template: string;
+                plan_id: number;
             };
             cookie?: never;
         };
@@ -2758,34 +4756,10 @@ export interface operations {
             };
         };
     };
-    health_api_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    list_operations_api_operations_get: {
+    list_notifications_api_notifications_get: {
         parameters: {
             query?: {
-                kind?: string[];
-                status?: string | null;
-                since_hours?: number | null;
+                include_resolved?: boolean;
                 limit?: number;
             };
             header?: never;
@@ -2800,7 +4774,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OperationSummaryResponse"][];
+                    "application/json": components["schemas"]["NotificationResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -2814,25 +4788,23 @@ export interface operations {
             };
         };
     };
-    get_operation_api_operations__operation_id__get: {
+    mark_read_api_notifications__notification_id__read_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                operation_id: number;
+                notification_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["OperationResponse"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2845,7 +4817,36 @@ export interface operations {
             };
         };
     };
-    list_sites_api_sites_get: {
+    dismiss_api_notifications__notification_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_webhook_api_notifications_webhook_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2860,12 +4861,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SiteResponse"][];
+                    "application/json": components["schemas"]["WebhookConfigResponse"];
                 };
             };
         };
     };
-    create_site_api_sites_post: {
+    set_webhook_api_notifications_webhook_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -2874,17 +4875,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateSiteRequest"];
+                "application/json": components["schemas"]["UpdateWebhookRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            202: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OperationAccepted"];
+                    "application/json": components["schemas"]["WebhookConfigResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2898,13 +4899,31 @@ export interface operations {
             };
         };
     };
-    get_site_api_sites__site_id__get: {
+    delete_webhook_api_notifications_webhook_delete: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                site_id: number;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
+        };
+    };
+    my_usage_api_usage_me_get: {
+        parameters: {
+            query?: {
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -2915,7 +4934,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SiteResponse"];
+                    "application/json": components["schemas"]["MyUsageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2929,48 +4948,13 @@ export interface operations {
             };
         };
     };
-    delete_site_api_sites__site_id__delete: {
+    all_usage_api_usage_get: {
         parameters: {
-            query?: never;
+            query?: {
+                month?: string | null;
+            };
             header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteSiteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OperationAccepted"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_schedule_api_sites__site_id__backup_schedule_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -2981,7 +4965,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ScheduleResponse"];
+                    "application/json": components["schemas"]["ClientUsageResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -2995,20 +4979,16 @@ export interface operations {
             };
         };
     };
-    update_schedule_api_sites__site_id__backup_schedule_put: {
+    export_usage_api_usage_export_get: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
+            query?: {
+                month?: string | null;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateScheduleRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3016,7 +4996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ScheduleResponse"];
+                    "text/plain": string;
                 };
             };
             /** @description Validation Error */
@@ -3026,6 +5006,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_backups_api_backups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupResponse"][];
+                };
+            };
+        };
+    };
+    backups_meta_api_backups_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupsMetaResponse"];
+                };
+            };
+        };
+    };
+    get_s3_config_api_backups_s3_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["S3ConfigResponse"];
+                };
+            };
+        };
+    };
+    update_s3_config_api_backups_s3_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateS3ConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["S3ConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_s3_config_api_backups_s3_config_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_s3_config_api_backups_s3_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupsMetaResponse"];
                 };
             };
         };
@@ -3092,40 +5203,6 @@ export interface operations {
             };
         };
     };
-    delete_backup_api_sites__site_id__backups__backup_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-                backup_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteBackupRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     start_restore_api_sites__site_id__backups__backup_id__restore_post: {
         parameters: {
             query?: never;
@@ -3162,7 +5239,72 @@ export interface operations {
             };
         };
     };
-    set_cloudflare_proxy_api_sites__site_id__cloudflare_proxy_patch: {
+    delete_backup_api_sites__site_id__backups__backup_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteBackupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_api_sites__site_id__backup_schedule_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_schedule_api_sites__site_id__backup_schedule_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -3173,7 +5315,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CloudflareProxyRequest"];
+                "application/json": components["schemas"]["UpdateScheduleRequest"];
             };
         };
         responses: {
@@ -3183,600 +5325,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SiteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    files_session_api_sites__site_id__files_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FilesSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    change_php_version_api_sites__site_id__php_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangePhpVersionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SiteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_php_settings_api_sites__site_id__php_settings_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PhpSettingsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SiteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    site_ssl_status_api_sites__site_id__ssl_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CertStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    renew_site_ssl_api_sites__site_id__ssl_renew_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CertStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    wordpress_status_api_sites__site_id__wordpress_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WpStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    install_wordpress_api_sites__site_id__wordpress_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WpInstallRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WpInstallAccepted"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    wordpress_action_api_sites__site_id__wordpress_actions__action__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                site_id: number;
-                action: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WpActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_panel_domain_api_system_panel_domain_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PanelDomainResponse"];
-                };
-            };
-        };
-    };
-    set_panel_domain_api_system_panel_domain_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetPanelDomainRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PanelDomainResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clear_panel_domain_api_system_panel_domain_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PanelDomainResponse"];
-                };
-            };
-        };
-    };
-    list_services_api_system_services_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceStatusResponse"][];
-                };
-            };
-        };
-    };
-    service_status_api_system_services__unit__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                unit: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    service_action_api_system_services__unit__actions__action__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                unit: string;
-                action: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    system_stats_api_system_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemStatsResponse"];
-                };
-            };
-        };
-    };
-    list_users_api_users_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserAdminResponse"][];
-                };
-            };
-        };
-    };
-    create_user_api_users_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateUserRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatedUserResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_user_api_users__user_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteUserRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_user_api_users__user_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateUserRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserAdminResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reset_user_password_api_users__user_id__reset_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatedUserResponse"];
+                    "application/json": components["schemas"]["ScheduleResponse"];
                 };
             };
             /** @description Validation Error */

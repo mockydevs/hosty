@@ -18,16 +18,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PlansSection } from "@/components/plans-section";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { useAuth } from "@/lib/auth";
+import { useNavigate } from "react-router";
 /**
  * Users (Phase 11a, admin-only): create client accounts with a temporary
  * password (shown once), suspend/unsuspend, set quotas, reset passwords and
  * delete accounts (reassign their sites or tear them down).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, KeyRound, Plus, Trash2, UserRound } from "lucide-react";
+import { Copy, KeyRound, Plus, Trash2, UserRound, VenetianMask } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -180,6 +182,19 @@ function CreateUserDialog({
   );
 }
 
+/** UpdateUserRequest types every clear_/reset flag as required (they carry
+ *  defaults in the generated client), so partial updates must spell out this
+ *  "change nothing extra" baseline. */
+const UPDATE_FLAG_DEFAULTS = {
+  clear_max_sites: false,
+  clear_max_databases: false,
+  clear_max_disk_mb: false,
+  clear_cpu_quota_percent: false,
+  clear_memory_max_mb: false,
+  clear_plan: false,
+  reset_totp: false,
+} as const;
+
 function EditQuotasDialog({
   user,
   onClose,
@@ -190,25 +205,64 @@ function EditQuotasDialog({
   const queryClient = useQueryClient();
   const [maxSites, setMaxSites] = useState(user?.max_sites?.toString() ?? "");
   const [maxDatabases, setMaxDatabases] = useState(user?.max_databases?.toString() ?? "");
+  const [maxDisk, setMaxDisk] = useState(user?.max_disk_mb?.toString() ?? "");
+  const [cpuQuota, setCpuQuota] = useState(user?.cpu_quota_percent?.toString() ?? "");
+  const [memoryMax, setMemoryMax] = useState(user?.memory_max_mb?.toString() ?? "");
+  const [planId, setPlanId] = useState(user?.plan_id?.toString() ?? "");
+
+  const plans = useQuery({
+    queryKey: ["plans"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/plans");
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load plans"));
+      return data;
+    },
+  });
 
   const save = useMutation({
     mutationFn: async () => {
       if (!user) return;
+      const num = (v: string) => (v === "" ? null : Number(v));
       const { error, response } = await api.PATCH("/api/users/{user_id}", {
         params: { path: { user_id: user.id } },
         body: {
-          max_sites: maxSites === "" ? null : Number(maxSites),
-          max_databases: maxDatabases === "" ? null : Number(maxDatabases),
+          max_sites: num(maxSites),
+          max_databases: num(maxDatabases),
+          max_disk_mb: num(maxDisk),
+          cpu_quota_percent: num(cpuQuota),
+          memory_max_mb: num(memoryMax),
+          plan_id: planId === "" ? null : Number(planId),
           clear_max_sites: maxSites === "",
           clear_max_databases: maxDatabases === "",
+          clear_max_disk_mb: maxDisk === "",
+          clear_cpu_quota_percent: cpuQuota === "",
+          clear_memory_max_mb: memoryMax === "",
+          clear_plan: planId === "",
+          reset_totp: false,
         },
       });
       if (error) throw new Error(apiErrorMessage(error, `Update failed (${response.status})`));
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast.success("Quotas updated");
+      toast.success("Limits updated");
       onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const resetTotp = useMutation({
+    mutationFn: async () => {
+      if (!user) return;
+      const { error, response } = await api.PATCH("/api/users/{user_id}", {
+        params: { path: { user_id: user.id } },
+        body: { ...UPDATE_FLAG_DEFAULTS, reset_totp: true },
+      });
+      if (error) throw new Error(apiErrorMessage(error, `Reset failed (${response.status})`));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast.success(`2FA reset for ${user?.username} — they can log in with password only`);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -216,8 +270,26 @@ function EditQuotasDialog({
   return (
     <Dialog open={user !== null} onClose={onClose}>
       <DialogContent>
-        <DialogTitle>Quotas for {user?.username}</DialogTitle>
-        <DialogDescription>Leave a field blank for unlimited.</DialogDescription>
+        <DialogTitle>Limits for {user?.username}</DialogTitle>
+        <DialogDescription>
+          A plan supplies defaults; explicit values below override it. Leave blank for
+          unlimited / plan default.
+        </DialogDescription>
+        <FormField label="Plan" htmlFor="edit-plan">
+          <select
+            id="edit-plan"
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            value={planId}
+            onChange={(e) => setPlanId(e.target.value)}
+          >
+            <option value="">No plan</option>
+            {(plans.data ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </FormField>
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Max sites" htmlFor="edit-max-sites">
             <Input
@@ -239,13 +311,60 @@ function EditQuotasDialog({
               onChange={(e) => setMaxDatabases(e.target.value)}
             />
           </FormField>
+          <FormField label="Disk (MB)" htmlFor="edit-max-disk">
+            <Input
+              id="edit-max-disk"
+              type="number"
+              min={1}
+              placeholder="Unlimited"
+              value={maxDisk}
+              onChange={(e) => setMaxDisk(e.target.value)}
+            />
+          </FormField>
+          <FormField label="CPU quota (%)" htmlFor="edit-cpu-quota">
+            <Input
+              id="edit-cpu-quota"
+              type="number"
+              min={1}
+              max={1600}
+              placeholder="Unlimited"
+              value={cpuQuota}
+              onChange={(e) => setCpuQuota(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Memory (MB)" htmlFor="edit-memory-max">
+            <Input
+              id="edit-memory-max"
+              type="number"
+              min={16}
+              placeholder="Unlimited"
+              value={memoryMax}
+              onChange={(e) => setMemoryMax(e.target.value)}
+            />
+          </FormField>
         </div>
+        {user?.totp_enabled && (
+          <div className="rounded-md border border-border p-3 text-sm">
+            <p className="font-medium">Two-factor authentication is on</p>
+            <p className="mb-2 text-muted-foreground">
+              Locked out of their authenticator? Resetting also signs them out everywhere.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              loading={resetTotp.isPending}
+              onClick={() => resetTotp.mutate()}
+            >
+              Reset 2FA
+            </Button>
+          </div>
+        )}
         <DialogActions>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button loading={save.isPending} onClick={() => save.mutate()}>
-            Save quotas
+            Save limits
           </Button>
         </DialogActions>
       </DialogContent>
@@ -369,12 +488,32 @@ function UserRowActions({
   onTempPassword: (created: CreatedUser) => void;
 }) {
   const queryClient = useQueryClient();
+  const { impersonate } = useAuth();
+  const navigate = useNavigate();
+
+  const loginAs = useMutation({
+    mutationFn: async () => {
+      const { data, error, response } = await api.POST("/api/users/{user_id}/impersonate", {
+        params: { path: { user_id: user.id } },
+      });
+      if (error || !data) {
+        throw new Error(apiErrorMessage(error, `Impersonation failed (${response.status})`));
+      }
+      return data;
+    },
+    onSuccess: async (data) => {
+      await impersonate(data.access_token);
+      toast.success(`Now acting as ${data.username} — loudly audited`);
+      navigate("/");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const suspend = useMutation({
     mutationFn: async () => {
       const { error, response } = await api.PATCH("/api/users/{user_id}", {
         params: { path: { user_id: user.id } },
-        body: { suspended: !user.suspended },
+        body: { ...UPDATE_FLAG_DEFAULTS, suspended: !user.suspended },
       });
       if (error) throw new Error(apiErrorMessage(error, `Update failed (${response.status})`));
     },
@@ -413,7 +552,17 @@ function UserRowActions({
         {user.suspended ? "Unsuspend" : "Suspend"}
       </Button>
       <Button variant="outline" size="sm" onClick={onEditQuotas}>
-        Quotas
+        Limits
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Log in as ${user.username}`}
+        title="Log in as this client (support)"
+        loading={loginAs.isPending}
+        onClick={() => loginAs.mutate()}
+      >
+        <VenetianMask className="h-4 w-4" />
       </Button>
       <Button
         variant="ghost"
@@ -524,12 +673,18 @@ export function UsersPage() {
                       <Badge variant="success">Active</Badge>
                     )}
                     {u.must_change_password && <Badge variant="outline">Temp password</Badge>}
+                    {u.totp_enabled && <Badge variant="outline">2FA</Badge>}
                   </span>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">{u.site_count}</TableCell>
                 <TableCell className="hidden sm:table-cell">{u.database_count}</TableCell>
                 <TableCell className="hidden md:table-cell">
                   {quotaLabel(u.max_sites)} / {quotaLabel(u.max_databases)}
+                  {u.plan_name && (
+                    <Badge variant="outline" className="ml-2">
+                      {u.plan_name}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <UserRowActions
@@ -554,6 +709,8 @@ export function UsersPage() {
           </TableBody>
         </Table>
       )}
+
+      <PlansSection />
 
       <CreateUserDialog
         open={createOpen}

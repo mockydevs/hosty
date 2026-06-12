@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   Archive,
   Database,
+  Gauge,
   Globe,
   LayoutDashboard,
   LogOut,
@@ -18,17 +19,48 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
+import { toast } from "sonner";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/sites", label: "Sites", icon: Globe },
   { to: "/databases", label: "Databases", icon: Database },
-  { to: "/dns", label: "DNS", icon: Network, adminOnly: true },
+  // Phase 11b: DNS zones are tenant-scoped — clients manage their own.
+  { to: "/dns", label: "DNS", icon: Network },
   { to: "/backups", label: "Backups", icon: Archive },
+  { to: "/usage", label: "Usage", icon: Gauge },
   { to: "/audit", label: "Audit log", icon: ScrollText },
   { to: "/users", label: "Users", icon: UsersRound, adminOnly: true },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
+/** Phase 11d: loud, persistent banner while an admin acts as a client. */
+function ImpersonationBanner() {
+  const { user, stopImpersonating } = useAuth();
+  if (!user?.impersonated_by) return null;
+  return (
+    <div
+      role="alert"
+      className="flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-black"
+    >
+      <span>
+        Impersonating <strong>{user.username}</strong> as {user.impersonated_by} — every action is
+        audited.
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        className="border-black/30 bg-transparent text-black hover:bg-black/10"
+        onClick={async () => {
+          await stopImpersonating();
+          toast.success("Back to your own session");
+        }}
+      >
+        Stop impersonating
+      </Button>
+    </div>
+  );
+}
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
@@ -147,12 +179,17 @@ export function AppLayout() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto px-4 pb-8 pt-20 md:px-8 md:pt-8">
-        {/* Cap content width on very wide screens so pages don't stretch edge to edge. */}
-        <div className="mx-auto w-full max-w-7xl">
-          <Outlet />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="pt-14 md:pt-0">
+          <ImpersonationBanner />
         </div>
-      </main>
+        <main className="flex-1 overflow-y-auto px-4 pb-8 pt-6 md:px-8 md:pt-8">
+          {/* Cap content width on very wide screens so pages don't stretch edge to edge. */}
+          <div className="mx-auto w-full max-w-7xl">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

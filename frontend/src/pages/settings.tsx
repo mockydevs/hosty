@@ -1,4 +1,6 @@
 import { CloudflareSettingsCard } from "@/components/cloudflare-settings-card";
+import { NotificationWebhookCard } from "@/components/notification-webhook-card";
+import { SessionsCard, TwoFactorCard } from "@/components/security-cards";
 import { FormField } from "@/components/form-field";
 import { PanelDomainCard } from "@/components/panel-domain-card";
 import { Button } from "@/components/ui/button";
@@ -7,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
 import { ApiError, useAuth } from "@/lib/auth";
 /**
- * Settings: account (change password) for everyone; server-level configuration
- * (panel domain/HTTPS, Cloudflare) is admin-only (Phase 11a).
+ * Settings: account (change password, 2FA, sessions) for everyone; Cloudflare
+ * tokens are per user (Phase 11b); panel domain/HTTPS and the notification
+ * webhook are admin-only.
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -128,10 +131,18 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
+        <div className="space-y-6">
+          <TwoFactorCard />
+          <SessionsCard />
+        </div>
+
+        {/* Phase 11b: every user manages their own Cloudflare token. */}
+        <CloudflareSettingsCard />
+
         {isAdmin && (
           <div className="space-y-6">
             <PanelDomainCard />
-            <CloudflareSettingsCard />
+            <NotificationWebhookCard />
           </div>
         )}
       </div>

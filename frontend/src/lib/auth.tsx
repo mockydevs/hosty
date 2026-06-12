@@ -1,4 +1,4 @@
-import { api, setAccessToken, setRefreshHandler } from "@/lib/api/client";
+import { api, getAccessToken, setAccessToken, setRefreshHandler } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 /**
  * Auth context: bootstraps the session from the refresh cookie, exposes
@@ -20,13 +20,22 @@ export type User = components["schemas"]["UserResponse"];
 
 type AuthStatus = "loading" | "authenticated" | "anonymous";
 
+/** Result of step one of login: either done, or a 2FA challenge to answer. */
+export type LoginResult = { totpRequired: false } | { totpRequired: true; challengeToken: string };
+
 interface AuthContextValue {
   status: AuthStatus;
   user: User | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginResult>;
+  /** Step two when login returned a 2FA challenge. */
+  loginTotp: (challengeToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Re-fetch /me (e.g. after setup). */
   reload: () => Promise<void>;
+  /** Phase 11d: swap to an admin-issued impersonation token (admin only). */
+  impersonate: (accessToken: string) => Promise<void>;
+  /** Leave the impersonated session and restore the admin's own session. */
+  stopImpersonating: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -81,9 +90,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh, loadUser]);
 
   const login = useCallback(
-    async (username: string, password: string) => {
+    async (username: string, password: string): Promise<LoginResult> => {
       const { data, error, response } = await api.POST("/api/auth/login", {
         body: { username, password },
+      });
+      if (error || !data) {
+        throw new ApiError(error, response.status);
+      }
+      // Phase 11d: with 2FA enabled, the password alone yields a challenge.
+      if (data.totp_required) {
+        return { totpRequired: true, challengeToken: data.challenge_token ?? "" };
+      }
+      setAccessToken(data.access_token ?? null);
+      await loadUser();
+      return { totpRequired: false };
+    },
+    [loadUser],
+  );
+
+  const loginTotp = useCallback(
+    async (challengeToken: string, code: string) => {
+      const { data, error, response } = await api.POST("/api/auth/login/totp", {
+        body: { challenge_token: challengeToken, code },
       });
       if (error || !data) {
         throw new ApiError(error, response.status);
@@ -101,9 +129,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("anonymous");
   }, []);
 
+  // Phase 11d impersonation: remember the admin's own token so the session
+  // can be restored without another login.
+  const adminToken = useRef<string | null>(null);
+
+  const impersonate = useCallback(
+    async (accessToken: string) => {
+      adminToken.current = getAccessToken();
+      setAccessToken(accessToken);
+      await loadUser();
+    },
+    [loadUser],
+  );
+
+  const stopImpersonating = useCallback(async () => {
+    setAccessToken(adminToken.current);
+    adminToken.current = null;
+    // The admin's access token may have expired meanwhile; refresh covers it.
+    if (!getAccessToken()) await refresh();
+    await loadUser();
+  }, [loadUser, refresh]);
+
   const value = useMemo(
-    () => ({ status, user, login, logout, reload: loadUser }),
-    [status, user, login, logout, loadUser],
+    () => ({
+      status,
+      user,
+      login,
+      loginTotp,
+      logout,
+      reload: loadUser,
+      impersonate,
+      stopImpersonating,
+    }),
+    [status, user, login, loginTotp, logout, loadUser, impersonate, stopImpersonating],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

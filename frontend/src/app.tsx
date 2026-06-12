@@ -41,6 +41,7 @@ const SettingsPage = lazy(() =>
 );
 const AuditPage = lazy(() => import("@/pages/audit").then((m) => ({ default: m.AuditPage })));
 const UsersPage = lazy(() => import("@/pages/users").then((m) => ({ default: m.UsersPage })));
+const UsagePage = lazy(() => import("@/pages/usage").then((m) => ({ default: m.UsagePage })));
 const ChangePasswordForm = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.ChangePasswordForm })),
 );
@@ -157,6 +158,7 @@ export function App() {
                   }
                 />
                 <Route path="/backups" element={<BackupsPage />} />
+                <Route path="/usage" element={<UsagePage />} />
                 <Route path="/audit" element={<AuditPage />} />
                 <Route
                   path="/users"
