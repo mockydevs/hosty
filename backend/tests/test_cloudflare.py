@@ -209,3 +209,60 @@ async def test_list_records_paginates():
     records = await _client(handler).list_records("z1")
     assert [r["id"] for r in records] == ["r1", "r2"]
     assert pages == [1, 2]
+
+
+# --- pull: Cloudflare records -> panel rrsets ---------------------------------------
+
+
+def test_pulled_rrsets_maps_types_and_skips_apex_ns():
+    records = [
+        {"type": "A", "name": "mail.example.com", "content": "84.46.251.171", "ttl": 1},
+        {"type": "AAAA", "name": "mail.example.com", "content": "2a02:c207::1", "ttl": 1},
+        {
+            "type": "CNAME",
+            "name": "autoconfig.example.com",
+            "content": "mail.example.com",
+            "ttl": 300,
+        },
+        {
+            "type": "MX",
+            "name": "example.com",
+            "content": "smtp.google.com",
+            "priority": 1,
+            "ttl": 1,
+        },
+        {"type": "TXT", "name": "example.com", "content": "v=spf1 ~all", "ttl": 3600},
+        {
+            "type": "SRV",
+            "name": "_imaps._tcp.example.com",
+            "content": "10 993 mail.example.com",
+            "ttl": 1,
+            "data": {"priority": 10, "weight": 0, "port": 993, "target": "mail.example.com"},
+        },
+        {"type": "NS", "name": "example.com", "content": "audrey.ns.cloudflare.com", "ttl": 1},
+        {"type": "HTTPS", "name": "example.com", "content": "1 . alpn=h2", "ttl": 1},
+    ]
+    out, errors = cf.pulled_rrsets("example.com.", records, 3600)
+    by_key = {(name, rtype): (ttl, contents) for name, rtype, ttl, contents in out}
+    assert by_key[("mail.example.com.", "A")] == (3600, ["84.46.251.171"])  # ttl=1 -> default
+    assert by_key[("autoconfig.example.com.", "CNAME")] == (300, ["mail.example.com."])
+    assert by_key[("example.com.", "MX")][1] == ["1 smtp.google.com."]
+    assert by_key[("example.com.", "TXT")][1] == ["v=spf1 ~all"]
+    assert by_key[("_imaps._tcp.example.com.", "SRV")][1] == ["10 0 993 mail.example.com."]
+    # Apex NS (Cloudflare's own nameservers) is never imported.
+    assert ("example.com.", "NS") not in by_key
+    assert errors == ["HTTPS example.com: unsupported type"]
+
+
+def test_pulled_rrsets_groups_multi_value_sets():
+    records = [
+        {"type": "A", "name": "example.com", "content": "192.0.2.1", "ttl": 1},
+        {"type": "A", "name": "example.com", "content": "192.0.2.2", "ttl": 1},
+        {"type": "MX", "name": "example.com", "content": "mx1.example.com", "priority": 10},
+        {"type": "MX", "name": "example.com", "content": "mx2.example.com", "priority": 20},
+    ]
+    out, errors = cf.pulled_rrsets("example.com.", records, 3600)
+    by_key = {(name, rtype): contents for name, rtype, _, contents in out}
+    assert by_key[("example.com.", "A")] == ["192.0.2.1", "192.0.2.2"]
+    assert by_key[("example.com.", "MX")] == ["10 mx1.example.com.", "20 mx2.example.com."]
+    assert errors == []

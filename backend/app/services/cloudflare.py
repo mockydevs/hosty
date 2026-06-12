@@ -141,6 +141,80 @@ def _same(desired: dict[str, Any], existing: dict[str, Any]) -> bool:
     return existing.get("content") == desired.get("content")
 
 
+# --- pure mapping: Cloudflare records -> panel rrsets (pull) -----------------------
+
+
+def pulled_rrsets(
+    zone: str, cf_records: list[dict[str, Any]], default_ttl: int
+) -> tuple[list[tuple[str, str, int, list[str]]], list[str]]:
+    """The inverse of desired_records: Cloudflare records -> (name, type, ttl,
+    contents) tuples ready for dns.make_rrset. Pure and unit-tested.
+
+    SOA is never pulled (PowerDNS owns it) and apex NS is skipped (those are
+    Cloudflare's own nameservers). Cloudflare ttl=1 means "auto" -> default_ttl.
+    Unmappable records are reported as errors, not fatal.
+    """
+    zone_b = _strip_dot(zone)
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    errors: list[str] = []
+    for r in cf_records:
+        rtype = str(r.get("type", "")).upper()
+        name = _strip_dot(str(r.get("name", "")))
+        if rtype not in PUSH_TYPES:
+            errors.append(f"{rtype or '?'} {name}: unsupported type")
+            continue
+        if rtype == "NS" and name == zone_b:
+            continue
+        try:
+            content = _pull_content(rtype, r)
+        except (KeyError, ValueError) as exc:
+            errors.append(f"{rtype} {name}: {exc}")
+            continue
+        ttl = int(r.get("ttl") or 1)
+        if ttl <= 1:
+            ttl = default_ttl
+        # Emit FQDNs (trailing dot): bare names would be read as RELATIVE by
+        # normalize_record_name and get the zone appended twice.
+        slot = grouped.setdefault((f"{name}.", rtype), {"ttl": ttl, "contents": []})
+        if content not in slot["contents"]:
+            slot["contents"].append(content)
+    out = [
+        (name, rtype, slot["ttl"], slot["contents"])
+        for (name, rtype), slot in sorted(grouped.items())
+    ]
+    return out, errors
+
+
+def _pull_content(rtype: str, r: dict[str, Any]) -> str:
+    content = str(r.get("content") or "").strip()
+    if rtype in ("A", "AAAA"):
+        return content
+    if rtype in ("CNAME", "NS"):
+        return f"{_strip_dot(content)}."
+    if rtype == "TXT":
+        return content  # validate_content quotes/escapes it
+    if rtype == "MX":
+        prio = r.get("priority")
+        if prio is None:
+            raise ValueError("missing priority")
+        return f"{int(prio)} {_strip_dot(content)}."
+    if rtype == "SRV":
+        d = r.get("data") or {}
+        try:
+            return (
+                f"{int(d['priority'])} {int(d['weight'])} {int(d['port'])} "
+                f"{_strip_dot(str(d['target']))}."
+            )
+        except KeyError as exc:
+            raise ValueError(f"missing SRV field {exc}") from exc
+    if rtype == "CAA":
+        d = r.get("data") or {}
+        if d:
+            return f'{int(d.get("flags", 0))} {d.get("tag", "issue")} "{d.get("value", "")}"'
+        return content
+    raise ValueError(f"unsupported type {rtype}")
+
+
 # --- Cloudflare API client ---------------------------------------------------------
 
 

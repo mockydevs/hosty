@@ -2871,6 +2871,64 @@
         }
       }
     },
+    "/api/dns/zones/{zone_id}/pull/cloudflare": {
+      "post": {
+        "tags": [
+          "dns"
+        ],
+        "summary": "Pull From Cloudflare",
+        "description": "One click: import the domain's Cloudflare records into this panel zone.\n\nCreate/update only \u2014 records that exist only in the panel are never\ndeleted. SOA and apex NS are left alone. Token resolution matches push.",
+        "operationId": "pull_from_cloudflare_api_dns_zones__zone_id__pull_cloudflare_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "zone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Zone Id"
+            }
+          },
+          {
+            "name": "use_own_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Use Own Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudflarePushResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dns/cloudflare/config": {
       "get": {
         "tags": [

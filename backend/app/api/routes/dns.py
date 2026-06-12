@@ -352,32 +352,7 @@ async def push_to_cloudflare(
     """
     zone = await _require_zone_access(db, user, zone_id)
     detail = _zone_detail(await _client(request).get_zone(zone_id))
-
-    injected = getattr(request.app.state, "cloudflare_client", None)
-    if injected is not None:
-        cf = injected
-    else:
-        settings = _settings(request)
-        token_user = user
-        if is_admin(user) and not use_own_token:
-            # Prefer the zone owner's token when one exists.
-            owner_row = (
-                await db.execute(select(DnsZoneOwner).where(DnsZoneOwner.zone == zone))
-            ).scalar_one_or_none()
-            if owner_row is not None and owner_row.owner_id is not None:
-                owner = await db.get(User, owner_row.owner_id)
-                if owner is not None:
-                    token_user = owner
-        config = await cloudflare_config.load_for_user(db, settings, token_user)
-        if config is None and is_admin(user) and token_user.id != user.id:
-            # Owner has no token — the admin's own token is the documented override.
-            config = await cloudflare_config.load_for_user(db, settings, user)
-        if config is None:
-            raise ConflictError(
-                "No Cloudflare API token available for this zone's owner — add one in Settings"
-            )
-        cf = cloudflare.CloudflareClient(config.api_token)
-
+    cf = await _zone_cf_client(request, db, user, zone, use_own_token)
     result = await cloudflare.push_zone(
         cf, dns.canonical(detail.name), [r.model_dump() for r in detail.rrsets]
     )
@@ -387,6 +362,86 @@ async def push_to_cloudflare(
         updated=result.updated,
         skipped=result.skipped,
         errors=result.errors,
+    )
+
+
+async def _zone_cf_client(
+    request: Request, db: AsyncSession, user: User, zone: str, use_own_token: bool
+) -> Any:
+    """Cloudflare client for a zone: the ZONE OWNER's token by default; the
+    admin's own token as the documented Phase 11b override / fallback."""
+    injected = getattr(request.app.state, "cloudflare_client", None)
+    if injected is not None:
+        return injected
+    settings = _settings(request)
+    token_user = user
+    if is_admin(user) and not use_own_token:
+        # Prefer the zone owner's token when one exists.
+        owner_row = (
+            await db.execute(select(DnsZoneOwner).where(DnsZoneOwner.zone == zone))
+        ).scalar_one_or_none()
+        if owner_row is not None and owner_row.owner_id is not None:
+            owner = await db.get(User, owner_row.owner_id)
+            if owner is not None:
+                token_user = owner
+    config = await cloudflare_config.load_for_user(db, settings, token_user)
+    if config is None and is_admin(user) and token_user.id != user.id:
+        config = await cloudflare_config.load_for_user(db, settings, user)
+    if config is None:
+        raise ConflictError(
+            "No Cloudflare API token available for this zone's owner — add one in Settings"
+        )
+    return cloudflare.CloudflareClient(config.api_token)
+
+
+@router.post("/zones/{zone_id}/pull/cloudflare", response_model=CloudflarePushResponse)
+async def pull_from_cloudflare(
+    request: Request,
+    zone_id: str,
+    use_own_token: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CloudflarePushResponse:
+    """One click: import the domain's Cloudflare records into this panel zone.
+
+    Create/update only — records that exist only in the panel are never
+    deleted. SOA and apex NS are left alone. Token resolution matches push.
+    """
+    zone = await _require_zone_access(db, user, zone_id)
+    settings = _settings(request)
+    pdns = _client(request)
+    detail = _zone_detail(await pdns.get_zone(zone_id))
+    cf = await _zone_cf_client(request, db, user, zone, use_own_token)
+
+    bare = zone.rstrip(".")
+    cf_zone = await cf.find_zone(bare)
+    if cf_zone is None:
+        raise cloudflare.ZoneNotInCloudflareError(f"Zone {bare} is not in your Cloudflare account")
+    cf_records = await cf.list_records(str(cf_zone["id"]))
+    tuples, errors = cloudflare.pulled_rrsets(zone, cf_records, settings.dns_default_ttl)
+
+    existing = {(r.name, r.type): r for r in detail.rrsets}
+    patches: list[dict[str, Any]] = []
+    created = updated = skipped = 0
+    for name, rtype, ttl, contents in tuples:
+        try:
+            rrset = dns.make_rrset(zone, name, rtype, ttl, contents)
+        except dns.DNSValidationError as exc:
+            errors.append(f"{rtype} {name}: {exc}")
+            continue
+        current = existing.get((rrset.name, rrset.rtype))
+        if current is not None and set(current.records) == set(rrset.records):
+            skipped += 1
+            continue
+        patches.append(dns.replace_patch(rrset))
+        if current is None:
+            created += 1
+        else:
+            updated += 1
+    if patches:
+        await pdns.patch_rrsets(zone_id, patches)
+    return CloudflarePushResponse(
+        zone=detail.name, created=created, updated=updated, skipped=skipped, errors=errors
     )
 
 

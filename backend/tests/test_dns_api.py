@@ -360,3 +360,75 @@ async def test_create_zone_for_other_tenants_site_is_404(admin_client, client, p
     )
     assert resp.status_code == 404
     assert pdns.zones == {}
+
+
+# --- pull from Cloudflare ------------------------------------------------------------
+
+
+async def test_cloudflare_pull_full_flow(settings):
+    s = settings.model_copy(update={"cloudflare_api_token": "cf-token"})
+    application = create_app(s)
+    async with application.router.lifespan_context(application):
+        application.state.pdns_client = FakePDNS()
+        fake_cf = FakeCF(
+            zone={"id": "cf-zone-1"},
+            existing=[
+                {"type": "A", "name": "mail.example.com", "content": "84.46.251.171", "ttl": 1},
+                {
+                    "type": "MX",
+                    "name": "example.com",
+                    "content": "smtp.google.com",
+                    "priority": 1,
+                    "ttl": 1,
+                },
+                {"type": "TXT", "name": "example.com", "content": "v=spf1 ~all", "ttl": 3600},
+                {"type": "NS", "name": "example.com", "content": "audrey.ns.cloudflare.com"},
+            ],
+        )
+        application.state.cloudflare_client = fake_cf
+        transport = ASGITransport(app=application)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+            token = await setup_and_login(c)
+            c.headers["Authorization"] = f"Bearer {token}"
+            await c.post("/api/dns/zones", json={"name": "example.com"})
+
+            resp = await c.post("/api/dns/zones/example.com./pull/cloudflare")
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            # A + MX + TXT imported; apex NS (Cloudflare's own) never touched.
+            assert body == {
+                "zone": "example.com.",
+                "created": 3,
+                "updated": 0,
+                "skipped": 0,
+                "errors": [],
+            }
+            rr = _rr((await c.get("/api/dns/zones/example.com.")).json())
+            assert rr[("mail.example.com.", "A")]["records"] == ["84.46.251.171"]
+            assert rr[("example.com.", "MX")]["records"] == ["1 smtp.google.com."]
+            assert rr[("example.com.", "TXT")]["records"] == ['"v=spf1 ~all"']
+            # The panel zone keeps its own (self-hosted-style) NS set.
+            assert rr[("example.com.", "NS")]["records"] == [
+                "ns1.example.com.",
+                "ns2.example.com.",
+            ]
+
+            # Idempotent: a second pull changes nothing.
+            body = (await c.post("/api/dns/zones/example.com./pull/cloudflare")).json()
+            assert body["created"] == 0 and body["updated"] == 0 and body["skipped"] == 3
+
+
+async def test_cloudflare_pull_zone_missing_in_account(settings):
+    s = settings.model_copy(update={"cloudflare_api_token": "cf-token"})
+    application = create_app(s)
+    async with application.router.lifespan_context(application):
+        application.state.pdns_client = FakePDNS()
+        application.state.cloudflare_client = FakeCF(zone=None)
+        transport = ASGITransport(app=application)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+            token = await setup_and_login(c)
+            c.headers["Authorization"] = f"Bearer {token}"
+            await c.post("/api/dns/zones", json={"name": "example.com"})
+            resp = await c.post("/api/dns/zones/example.com./pull/cloudflare")
+            assert resp.status_code == 409
+            assert resp.json()["error"]["code"] == "cloudflare_zone_missing"

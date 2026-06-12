@@ -25,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Cloud,
+  CloudDownload,
   CloudUpload,
   Globe2,
   Mail,
@@ -315,6 +316,36 @@ function CloudflarePushButton({ zoneId }: { zoneId: string }) {
   );
 }
 
+/** Import the domain's current Cloudflare records into this panel zone —
+ * create/update only, panel-only records are never deleted. */
+function CloudflarePullButton({ zoneId }: { zoneId: string }) {
+  const queryClient = useQueryClient();
+  const pull = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/dns/zones/{zone_id}/pull/cloudflare", {
+        params: { path: { zone_id: zoneId } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Cloudflare import failed"));
+      return data;
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["dns", "zone", zoneId] });
+      toast.success(
+        `Imported from Cloudflare: ${result.created} created, ${result.updated} updated, ${result.skipped} unchanged`,
+      );
+      if (result.errors.length > 0) {
+        toast.warning(`${result.errors.length} record(s) not imported — ${result.errors[0]}`);
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  return (
+    <Button size="sm" variant="outline" loading={pull.isPending} onClick={() => pull.mutate()}>
+      <CloudDownload className="h-4 w-4" aria-hidden /> Pull from Cloudflare
+    </Button>
+  );
+}
+
 export function DnsZonePage() {
   const { zoneId = "" } = useParams();
   const meta = useDnsMeta();
@@ -359,6 +390,7 @@ export function DnsZonePage() {
           <Badge variant="outline">serial {zone.data.serial}</Badge>
         </div>
         <div className="flex flex-wrap gap-2">
+          {meta.data?.cloudflare_enabled && <CloudflarePullButton zoneId={zoneId} />}
           {meta.data?.cloudflare_enabled && <CloudflarePushButton zoneId={zoneId} />}
           <Button size="sm" onClick={() => setRecordDialog({ open: true, existing: null })}>
             <Plus className="h-4 w-4" aria-hidden /> Add record

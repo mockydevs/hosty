@@ -1042,6 +1042,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dns/zones/{zone_id}/pull/cloudflare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull From Cloudflare
+         * @description One click: import the domain's Cloudflare records into this panel zone.
+         *
+         *     Create/update only — records that exist only in the panel are never
+         *     deleted. SOA and apex NS are left alone. Token resolution matches push.
+         */
+        post: operations["pull_from_cloudflare_api_dns_zones__zone_id__pull_cloudflare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dns/cloudflare/config": {
         parameters: {
             query?: never;
@@ -4390,6 +4413,39 @@ export interface operations {
         };
     };
     push_to_cloudflare_api_dns_zones__zone_id__push_cloudflare_post: {
+        parameters: {
+            query?: {
+                use_own_token?: boolean;
+            };
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudflarePushResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_from_cloudflare_api_dns_zones__zone_id__pull_cloudflare_post: {
         parameters: {
             query?: {
                 use_own_token?: boolean;
