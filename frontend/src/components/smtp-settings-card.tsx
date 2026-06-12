@@ -201,9 +201,9 @@ export function SMTPSettingsCard() {
                 value={security}
                 onChange={(e) => setSecurity(e.target.value as typeof security)}
               >
-                <option value="starttls">STARTTLS</option>
-                <option value="ssl">SSL/TLS</option>
-                <option value="none">None</option>
+                <option value="starttls" className="bg-background text-foreground">STARTTLS</option>
+                <option value="ssl" className="bg-background text-foreground">SSL/TLS</option>
+                <option value="none" className="bg-background text-foreground">None</option>
               </select>
             </FormField>
             <FormField label="Alert recipients" htmlFor="smtp-recipients">
