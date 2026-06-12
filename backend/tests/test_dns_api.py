@@ -432,3 +432,74 @@ async def test_cloudflare_pull_zone_missing_in_account(settings):
             resp = await c.post("/api/dns/zones/example.com./pull/cloudflare")
             assert resp.status_code == 409
             assert resp.json()["error"]["code"] == "cloudflare_zone_missing"
+
+
+# --- delegation detection ------------------------------------------------------------
+
+
+def _fake_doh(ns: list[str], ips: list[str]):
+    async def doh(name: str, rtype: str) -> list[str]:
+        return ns if rtype == "NS" else ips
+
+    return doh
+
+
+async def test_delegation_unresolved(admin_client, pdns, app):
+    await admin_client.post("/api/dns/zones", json={"name": "example.com"})
+    app.state.doh_query = _fake_doh([], [])
+    body = (await admin_client.get("/api/dns/zones/example.com./delegation")).json()
+    assert body["points_here"] is None
+    assert body["live_nameservers"] == []
+    assert "could not be resolved" in body["detail"]
+
+
+async def test_delegation_elsewhere_and_here(settings):
+    s = settings.model_copy(update={"public_ip": "192.0.2.7"})
+    application = create_app(s)
+    async with application.router.lifespan_context(application):
+        application.state.pdns_client = FakePDNS()
+        transport = ASGITransport(app=application)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+            token = await setup_and_login(c)
+            c.headers["Authorization"] = f"Bearer {token}"
+            await c.post("/api/dns/zones", json={"name": "example.com"})
+
+            # Registrar points at Cloudflare, whose nameservers are NOT this IP.
+            application.state.doh_query = _fake_doh(
+                ["audrey.ns.cloudflare.com.", "clyde.ns.cloudflare.com."], ["104.16.1.1"]
+            )
+            body = (await c.get("/api/dns/zones/example.com./delegation")).json()
+            assert body["points_here"] is False
+            assert "NOT live" in body["detail"]
+            assert "audrey.ns.cloudflare.com" in body["detail"]
+
+            # Registrar nameservers resolve to this server -> zone is live.
+            application.state.doh_query = _fake_doh(["ns1.example.com."], ["192.0.2.7"])
+            body = (await c.get("/api/dns/zones/example.com./delegation")).json()
+            assert body["points_here"] is True
+            assert "live" in body["detail"]
+
+
+async def test_delegation_without_public_ip_lists_nameservers(admin_client, pdns, app):
+    await admin_client.post("/api/dns/zones", json={"name": "example.com"})
+    app.state.doh_query = _fake_doh(["audrey.ns.cloudflare.com."], ["104.16.1.1"])
+    body = (await admin_client.get("/api/dns/zones/example.com./delegation")).json()
+    # Test settings have no HOSTY_PUBLIC_IP -> the panel cannot give a verdict.
+    assert body["points_here"] is None
+    assert "audrey.ns.cloudflare.com" in body["detail"]
+
+
+async def test_apex_ns_is_read_only(admin_client, pdns):
+    await admin_client.post("/api/dns/zones", json={"name": "example.com"})
+    resp = await admin_client.put(
+        "/api/dns/zones/example.com./records",
+        json={"name": "@", "type": "NS", "records": ["audrey.ns.cloudflare.com"]},
+    )
+    assert resp.status_code == 409
+    assert "registrar" in resp.json()["error"]["message"]
+    # Subdomain delegation NS records remain allowed.
+    resp = await admin_client.put(
+        "/api/dns/zones/example.com./records",
+        json={"name": "sub", "type": "NS", "records": ["ns1.elsewhere.example"]},
+    )
+    assert resp.status_code == 204

@@ -221,6 +221,75 @@ async def create_zone(
     return _zone_detail(await client.get_zone(zone_id))
 
 
+class DelegationResponse(BaseModel):
+    zone: str
+    live_nameservers: list[str]
+    # True/False once determined; None when it cannot be told (domain does not
+    # resolve, or HOSTY_PUBLIC_IP is unset).
+    points_here: bool | None
+    detail: str
+
+
+@router.get("/zones/{zone_id}/delegation", response_model=DelegationResponse)
+async def zone_delegation(
+    request: Request,
+    zone_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> DelegationResponse:
+    """Where does the internet ACTUALLY send queries for this domain?
+
+    Looks up the live NS set via DNS-over-HTTPS and checks whether any of
+    those nameservers resolve to this server's public IP. Purely advisory —
+    helps users see when a panel zone is just a working copy (e.g. the
+    registrar delegates to Cloudflare).
+    """
+    zone = await _require_zone_access(db, user, zone_id)
+    settings = _settings(request)
+    doh = getattr(request.app.state, "doh_query", dns.doh_query)
+    bare = zone.rstrip(".")
+
+    live_ns = await doh(bare, "NS")
+    if not live_ns:
+        return DelegationResponse(
+            zone=zone,
+            live_nameservers=[],
+            points_here=None,
+            detail=(
+                "The domain's nameservers could not be resolved — it may not be "
+                "registered yet, or the delegation is still propagating."
+            ),
+        )
+    if not settings.public_ip:
+        return DelegationResponse(
+            zone=zone,
+            live_nameservers=live_ns,
+            points_here=None,
+            detail=(
+                "The registrar delegates this domain to "
+                f"{', '.join(n.rstrip('.') for n in live_ns)}. Set HOSTY_PUBLIC_IP to "
+                "let the panel check whether that is this server."
+            ),
+        )
+    points_here = False
+    for ns in live_ns[:4]:
+        if settings.public_ip in await doh(ns, "A"):
+            points_here = True
+            break
+    if points_here:
+        detail = "The registrar delegates this domain here — records in this zone are live."
+    else:
+        detail = (
+            f"The registrar delegates this domain to {', '.join(n.rstrip('.') for n in live_ns)} "
+            "— records in this zone are NOT live. Manage DNS there (for Cloudflare, use "
+            "Pull/Push to keep this zone in sync), or point the domain's nameservers at "
+            "this server."
+        )
+    return DelegationResponse(
+        zone=zone, live_nameservers=live_ns, points_here=points_here, detail=detail
+    )
+
+
 @router.get("/zones/{zone_id}", response_model=ZoneDetailResponse)
 async def get_zone(
     request: Request,
@@ -265,6 +334,12 @@ async def upsert_record(
     rrset = dns.make_rrset(
         zone_id, body.name, body.type, body.ttl or settings.dns_default_ttl, body.records
     )
+    if rrset.rtype == "NS" and rrset.name == dns.canonical(zone_id):
+        raise ConflictError(
+            "The apex NS set is managed by the panel — it lists this zone's own "
+            "nameservers, not where your domain points. To change where the domain "
+            "points, update the nameservers at your registrar."
+        )
     await _client(request).patch_rrsets(zone_id, [dns.replace_patch(rrset)])
 
 

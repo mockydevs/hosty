@@ -357,3 +357,36 @@ class PowerDNSClient:
             raise DNSValidationError(f"PowerDNS rejected the change: {resp.text[:300]}")
         if resp.status_code not in (200, 204):
             raise self._unexpected(resp, "update records")
+
+
+# --- live delegation lookup (DNS-over-HTTPS) ----------------------------------------
+
+DOH_URL = "https://cloudflare-dns.com/dns-query"
+_DOH_TYPES = {"NS": 2, "A": 1}
+
+
+async def doh_query(name: str, rtype: str, *, doh_url: str = DOH_URL) -> list[str]:
+    """Resolve `name` via DNS-over-HTTPS (no local resolver / extra deps).
+
+    Returns record contents (lowercased, trailing dots kept for names) or []
+    when the name doesn't resolve. Network errors also return [] — delegation
+    detection is advisory and must never break the zone page.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                doh_url,
+                params={"name": name.rstrip("."), "type": rtype},
+                headers={"accept": "application/dns-json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("doh_query_failed", name=name, rtype=rtype, error=str(exc))
+        return []
+    wanted = _DOH_TYPES.get(rtype.upper())
+    return sorted(
+        str(a.get("data", "")).strip().lower()
+        for a in data.get("Answer", []) or []
+        if a.get("type") == wanted and a.get("data")
+    )

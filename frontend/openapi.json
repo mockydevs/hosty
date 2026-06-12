@@ -2571,6 +2571,54 @@
         ]
       }
     },
+    "/api/dns/zones/{zone_id}/delegation": {
+      "get": {
+        "tags": [
+          "dns"
+        ],
+        "summary": "Zone Delegation",
+        "description": "Where does the internet ACTUALLY send queries for this domain?\n\nLooks up the live NS set via DNS-over-HTTPS and checks whether any of\nthose nameservers resolve to this server's public IP. Purely advisory \u2014\nhelps users see when a panel zone is just a working copy (e.g. the\nregistrar delegates to Cloudflare).",
+        "operationId": "zone_delegation_api_dns_zones__zone_id__delegation_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "zone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Zone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dns/zones/{zone_id}": {
       "get": {
         "tags": [
@@ -5052,6 +5100,44 @@
           "created_at"
         ],
         "title": "DatabaseResponse"
+      },
+      "DelegationResponse": {
+        "properties": {
+          "zone": {
+            "type": "string",
+            "title": "Zone"
+          },
+          "live_nameservers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Live Nameservers"
+          },
+          "points_here": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points Here"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "zone",
+          "live_nameservers",
+          "points_here",
+          "detail"
+        ],
+        "title": "DelegationResponse"
       },
       "DeleteBackupRequest": {
         "properties": {

@@ -212,6 +212,7 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 - [x] Common templates: "point to this server", "Google Workspace MX", "SPF/DMARC for external mail"
 - [x] Cloudflare integration: `services/cloudflare.py` + one-click **Push to Cloudflare** per zone — creates/updates/skips records, never deletes; needs `HOSTY_CLOUDFLARE_API_TOKEN` (Zone.DNS edit) and the domain already added in Cloudflare
 - [x] One-click **Pull from Cloudflare** per zone (`POST /api/dns/zones/{id}/pull/cloudflare`): imports the domain's current Cloudflare records into the panel zone — create/update only, panel-only records never deleted, SOA/apex-NS untouched; same per-user token resolution as push
+- [x] Delegation detection (`GET /api/dns/zones/{id}/delegation`): live NS lookup via DNS-over-HTTPS + NS→A resolution compared to `HOSTY_PUBLIC_IP`; zone page banner says whether records here are live or the registrar delegates elsewhere (e.g. Cloudflare) — advisory only, lookup failures never break the page
 - [ ] Verify Cloudflare push against a real Cloudflare account/token
 - [x] Cloudflare token managed in the UI: Settings card verifies the token (`/user/tokens/verify`) and stores it encrypted in `panel_settings` (`services/cloudflare_config.py`); env var remains a bootstrap fallback
 - [x] Cloudflare account management: list zones + add/edit/delete DNS records (A/AAAA/CNAME/TXT/MX/NS, proxied toggle) under `/api/dns/cloudflare/*` with `/dns/cloudflare` UI

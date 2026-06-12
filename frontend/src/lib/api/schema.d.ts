@@ -965,6 +965,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dns/zones/{zone_id}/delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Zone Delegation
+         * @description Where does the internet ACTUALLY send queries for this domain?
+         *
+         *     Looks up the live NS set via DNS-over-HTTPS and checks whether any of
+         *     those nameservers resolve to this server's public IP. Purely advisory —
+         *     helps users see when a panel zone is just a working copy (e.g. the
+         *     registrar delegates to Cloudflare).
+         */
+        get: operations["zone_delegation_api_dns_zones__zone_id__delegation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dns/zones/{zone_id}": {
         parameters: {
             query?: never;
@@ -1702,6 +1727,17 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DelegationResponse */
+        DelegationResponse: {
+            /** Zone */
+            zone: string;
+            /** Live Nameservers */
+            live_nameservers: string[];
+            /** Points Here */
+            points_here: boolean | null;
+            /** Detail */
+            detail: string;
         };
         /** DeleteBackupRequest */
         DeleteBackupRequest: {
@@ -4239,6 +4275,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ZoneDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    zone_delegation_api_dns_zones__zone_id__delegation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationResponse"];
                 };
             };
             /** @description Validation Error */

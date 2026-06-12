@@ -84,8 +84,11 @@ describe("DnsZonePage", () => {
     expect(
       screen.queryByRole("button", { name: /edit SOA example\.com\./i }),
     ).not.toBeInTheDocument();
-    // apex NS: editable but NOT deletable
-    expect(screen.getByRole("button", { name: /edit NS example\.com\./i })).toBeInTheDocument();
+    // apex NS: read-only like SOA — it lists the zone's own nameservers, so
+    // editing it cannot change where the domain points (that's the registrar).
+    expect(
+      screen.queryByRole("button", { name: /edit NS example\.com\./i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /delete NS example\.com\./i }),
     ).not.toBeInTheDocument();

@@ -346,6 +346,40 @@ function CloudflarePullButton({ zoneId }: { zoneId: string }) {
   );
 }
 
+/** Where the internet ACTUALLY sends queries for this domain — warns when the
+ * registrar delegates elsewhere (e.g. Cloudflare), so edits here aren't live. */
+function DelegationBanner({ zoneId }: { zoneId: string }) {
+  const delegation = useQuery({
+    queryKey: ["dns", "zone", zoneId, "delegation"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/dns/zones/{zone_id}/delegation", {
+        params: { path: { zone_id: zoneId } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Delegation check failed"));
+      return data;
+    },
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+
+  if (!delegation.data) return null;
+  const d = delegation.data;
+  const tone =
+    d.points_here === true
+      ? "border-success/40 text-muted-foreground"
+      : d.points_here === false
+        ? "border-destructive/40"
+        : "border-border text-muted-foreground";
+  return (
+    <div className={`rounded-md border px-4 py-3 text-sm ${tone}`} role="status">
+      {d.points_here === false && (
+        <strong className="mr-1 font-medium text-foreground">Heads up:</strong>
+      )}
+      {d.detail}
+    </div>
+  );
+}
+
 export function DnsZonePage() {
   const { zoneId = "" } = useParams();
   const meta = useDnsMeta();
@@ -397,6 +431,8 @@ export function DnsZonePage() {
           </Button>
         </div>
       </div>
+
+      <DelegationBanner zoneId={zoneId} />
 
       <div className="flex flex-wrap gap-2">
         {meta.data?.server_ip && (
@@ -460,7 +496,11 @@ export function DnsZonePage() {
                   ))}
                 </TableCell>
                 <TableCell className="text-right">
-                  {!isSoa && (
+                  {/* SOA and apex NS are panel-managed: the apex NS set lists
+                      this zone's own nameservers — editing it here would have
+                      no effect on where the domain points (that lives at the
+                      registrar), so it is read-only to avoid confusion. */}
+                  {!isSoa && !isApexNs && (
                     <>
                       <Button
                         variant="ghost"
@@ -470,16 +510,14 @@ export function DnsZonePage() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      {!isApexNs && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Delete ${rrset.type} ${rrset.name}`}
-                          onClick={() => setDeletingRecord({ name: rrset.name, type: rrset.type })}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${rrset.type} ${rrset.name}`}
+                        onClick={() => setDeletingRecord({ name: rrset.name, type: rrset.type })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </>
                   )}
                 </TableCell>
