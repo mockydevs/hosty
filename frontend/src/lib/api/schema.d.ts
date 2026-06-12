@@ -1634,6 +1634,8 @@ export interface components {
              * @default false
              */
             point_to_server: boolean;
+            /** Site Id */
+            site_id?: number | null;
         };
         /** CreatedUserResponse */
         CreatedUserResponse: {

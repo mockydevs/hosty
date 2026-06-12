@@ -4860,6 +4860,17 @@
             "type": "boolean",
             "title": "Point To Server",
             "default": false
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
           }
         },
         "type": "object",

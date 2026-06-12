@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db, is_admin
+from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin
 from app.core.config import Settings
 from app.core.errors import ConflictError, NotFoundError
 from app.db.models import DnsZoneOwner, User
@@ -104,6 +104,10 @@ class ZoneDetailResponse(BaseModel):
 class CreateZoneRequest(BaseModel):
     name: str = Field(min_length=3, max_length=253)
     point_to_server: bool = False
+    # Bridge from the Sites UI: when set, the zone name must match the site's
+    # domain and zone ownership follows the SITE owner — so an admin creating
+    # a zone for a client's site hands the zone to that client.
+    site_id: int | None = None
 
 
 class UpsertRecordRequest(BaseModel):
@@ -198,13 +202,19 @@ async def create_zone(
         raise ConflictError(
             "Set HOSTY_PUBLIC_IP on the server to use 'point to this server' records"
         )
+    owner_id = user.id
+    if body.site_id is not None:
+        site = await fetch_owned_site(db, user, body.site_id)
+        if dns.canonical(site.domain) != dns.canonical(name):
+            raise ConflictError("Zone name does not match the site's domain")
+        owner_id = site.owner_id if site.owner_id is not None else user.id
     client = _client(request)
     created = await client.create_zone(
         name, dns.default_nameservers(name, settings.dns_nameservers)
     )
     zone_id = str(created.get("id", name))
     # Phase 11b: record ownership (admins too — keeps the mapping complete).
-    db.add(DnsZoneOwner(zone=dns.canonical(name), owner_id=user.id))
+    db.add(DnsZoneOwner(zone=dns.canonical(name), owner_id=owner_id))
     await db.commit()
     if body.point_to_server:
         await client.patch_rrsets(zone_id, _point_to_server_patches(name, settings))

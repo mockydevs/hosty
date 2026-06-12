@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/table";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
-import { useAuth } from "@/lib/auth";
 /**
  * Sites list: searchable table with status/PHP badges, plus the create-site
  * wizard (domain validation incl. punycode via the URL parser).
@@ -74,8 +73,6 @@ export function CreateSiteDialog({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
   const form = useForm<CreateSiteValues>({
     resolver: zodResolver(createSiteSchema),
     defaultValues: { domain: "", php_version: "8.3", create_dns_zone: false },
@@ -94,7 +91,7 @@ export function CreateSiteDialog({
       body: {
         domain,
         php_version: values.php_version,
-        create_dns_zone: isAdmin && values.create_dns_zone,
+        create_dns_zone: values.create_dns_zone,
       },
     });
     if (error || !data) {
@@ -151,20 +148,18 @@ export function CreateSiteDialog({
               ))}
             </select>
           </FormField>
-          {isAdmin && (
-            <label className="flex items-start gap-2 text-sm" htmlFor="create_dns_zone">
-              <input
-                id="create_dns_zone"
-                type="checkbox"
-                className="mt-0.5"
-                {...form.register("create_dns_zone")}
-              />
-              <span className="text-muted-foreground">
-                Also create a DNS zone (SOA, NS and, when the server IP is configured, A/www records
-                pointing here)
-              </span>
-            </label>
-          )}
+          <label className="flex items-start gap-2 text-sm" htmlFor="create_dns_zone">
+            <input
+              id="create_dns_zone"
+              type="checkbox"
+              className="mt-0.5"
+              {...form.register("create_dns_zone")}
+            />
+            <span className="text-muted-foreground">
+              Also create a DNS zone (SOA, NS and, when the server IP is configured, A/www records
+              pointing here)
+            </span>
+          </label>
           <DialogActions>
             <Button variant="outline" onClick={onClose}>
               Cancel

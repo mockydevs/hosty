@@ -125,38 +125,13 @@ export function App() {
                 <Route path="/sites" element={<SitesPage />} />
                 <Route path="/sites/:siteId" element={<SiteDetailPage />} />
                 <Route path="/databases" element={<DatabasesPage />} />
-                <Route
-                  path="/dns"
-                  element={
-                    <RequireAdmin>
-                      <DnsPage />
-                    </RequireAdmin>
-                  }
-                />
-                <Route
-                  path="/dns/cloudflare"
-                  element={
-                    <RequireAdmin>
-                      <CloudflareZonesPage />
-                    </RequireAdmin>
-                  }
-                />
-                <Route
-                  path="/dns/cloudflare/:cfZoneId"
-                  element={
-                    <RequireAdmin>
-                      <CloudflareZonePage />
-                    </RequireAdmin>
-                  }
-                />
-                <Route
-                  path="/dns/:zoneId"
-                  element={
-                    <RequireAdmin>
-                      <DnsZonePage />
-                    </RequireAdmin>
-                  }
-                />
+                {/* Phase 11b: DNS is tenant-scoped — the backend shows each
+                    client only their own zones (and Cloudflare uses per-user
+                    tokens), so these routes are open to every account. */}
+                <Route path="/dns" element={<DnsPage />} />
+                <Route path="/dns/cloudflare" element={<CloudflareZonesPage />} />
+                <Route path="/dns/cloudflare/:cfZoneId" element={<CloudflareZonePage />} />
+                <Route path="/dns/:zoneId" element={<DnsZonePage />} />
                 <Route path="/backups" element={<BackupsPage />} />
                 <Route path="/usage" element={<UsagePage />} />
                 <Route path="/audit" element={<AuditPage />} />

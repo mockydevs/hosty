@@ -34,7 +34,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 
 type RRSet = components["schemas"]["RRSetResponse"];
@@ -48,6 +48,103 @@ function useDnsMeta() {
       return data;
     },
   });
+}
+
+// --- sites ↔ zones bridge ------------------------------------------------------------
+
+/** Sites whose domain has no PowerDNS zone yet: one click creates the zone
+ * (SOA/NS + A/www when the server IP is configured) owned by the site owner. */
+function SitesWithoutZones({
+  zoneNames,
+  serverIp,
+}: {
+  zoneNames: string[];
+  serverIp: string;
+}) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [creatingFor, setCreatingFor] = useState<number | null>(null);
+
+  const sites = useQuery({
+    queryKey: ["sites"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/sites");
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load sites"));
+      return data;
+    },
+  });
+
+  const create = useMutation({
+    mutationFn: async (site: { id: number; domain: string }) => {
+      const { data, error } = await api.POST("/api/dns/zones", {
+        body: {
+          name: site.domain,
+          site_id: site.id,
+          point_to_server: serverIp !== "",
+        },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to create the zone"));
+      return data;
+    },
+    onSuccess: async (zone) => {
+      await queryClient.invalidateQueries({ queryKey: ["dns", "zones"] });
+      toast.success(`Zone ${zone.name.replace(/\.$/, "")} created`);
+      navigate(`/dns/${encodeURIComponent(zone.id)}`);
+    },
+    onError: (err) => toast.error(err.message),
+    onSettled: () => setCreatingFor(null),
+  });
+
+  const zoneSet = new Set(zoneNames.map((n) => n.replace(/\.$/, "").toLowerCase()));
+  const missing = (sites.data ?? []).filter(
+    (s) => s.status === "active" && !zoneSet.has(s.domain.toLowerCase()),
+  );
+  if (missing.length === 0) return null;
+
+  return (
+    <section aria-label="Sites without a DNS zone" className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight">Sites without a zone</h2>
+        <p className="text-sm text-muted-foreground">
+          These sites are hosted here but their DNS isn't. Create a zone to manage records
+          {serverIp ? " — apex and www will point at this server." : "."}
+        </p>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Site</TableHead>
+            <TableHead className="text-right">Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {missing.map((site) => (
+            <TableRow key={site.id}>
+              <TableCell className="font-mono text-xs">
+                <Link to={`/sites/${site.id}`} className="hover:underline">
+                  {site.domain}
+                </Link>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={create.isPending && creatingFor === site.id}
+                  disabled={create.isPending}
+                  onClick={() => {
+                    setCreatingFor(site.id);
+                    create.mutate(site);
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden /> Create zone
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </section>
+  );
 }
 
 // --- zone list ---------------------------------------------------------------------
@@ -92,7 +189,7 @@ export function DnsPage() {
       ) : zones.data.length === 0 ? (
         <EmptyState
           title="No DNS zones yet"
-          description="Create a zone to manage records for a domain on this server."
+          description="Create a zone below for one of your sites, or use “New zone” for any other domain."
         />
       ) : (
         <Table>
@@ -134,6 +231,13 @@ export function DnsPage() {
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {zones.isSuccess && (
+        <SitesWithoutZones
+          zoneNames={zones.data.map((z) => z.name)}
+          serverIp={meta.data?.server_ip ?? ""}
+        />
       )}
 
       <CreateZoneDialog

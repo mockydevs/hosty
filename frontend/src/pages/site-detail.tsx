@@ -23,7 +23,7 @@ import type { components } from "@/lib/api/schema";
 import { SiteStatusBadge } from "@/pages/sites";
 /** Site detail: overview plus per-site WordPress, files, databases, and backups workflows. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { ArrowLeft, Network, RefreshCw, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
@@ -149,6 +149,98 @@ function SslStatusCard({ site }: { site: Site }) {
             Let's Encrypt
           </span>
         </label>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Bridge to the DNS page: link the site's zone, or create it in one click. */
+function DnsCard({ site }: { site: Site }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const meta = useQuery({
+    queryKey: ["dns", "meta"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/dns/meta");
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load DNS settings"));
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  const zones = useQuery({
+    queryKey: ["dns", "zones"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/dns/zones");
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load zones"));
+      return data;
+    },
+    enabled: meta.data?.enabled === true,
+  });
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/dns/zones", {
+        body: {
+          name: site.domain,
+          site_id: site.id,
+          point_to_server: (meta.data?.server_ip ?? "") !== "",
+        },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to create the zone"));
+      return data;
+    },
+    onSuccess: async (zone) => {
+      await queryClient.invalidateQueries({ queryKey: ["dns", "zones"] });
+      toast.success(`Zone ${zone.name.replace(/\.$/, "")} created`);
+      navigate(`/dns/${encodeURIComponent(zone.id)}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  if (meta.data?.enabled === false) return null;
+
+  const zone = zones.data?.find(
+    (z) => z.name.replace(/\.$/, "").toLowerCase() === site.domain.toLowerCase(),
+  );
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">DNS</CardTitle>
+        <Network className="h-4 w-4 text-muted-foreground" aria-hidden />
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {zones.isPending || meta.isPending ? (
+          <p className="text-muted-foreground">Checking…</p>
+        ) : zone ? (
+          <>
+            <p className="text-muted-foreground">This server hosts the zone for {site.domain}.</p>
+            <Link
+              to={`/dns/${encodeURIComponent(zone.id)}`}
+              className="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-transparent px-3 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              Manage DNS records
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="text-muted-foreground">
+              No zone on this server — DNS is managed elsewhere (registrar, Cloudflare…). Create one
+              to manage records here
+              {meta.data?.server_ip ? " — apex and www will point at this server." : "."}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={create.isPending}
+              onClick={() => create.mutate()}
+            >
+              Create DNS zone
+            </Button>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -362,7 +454,10 @@ export function SiteDetailPage() {
                   <SslStatusCard site={s} />
                 </div>
               </div>
-              <PhpCard site={s} />
+              <div className="flex flex-col gap-4">
+                <PhpCard site={s} />
+                <DnsCard site={s} />
+              </div>
             </div>
           ) : (
             <DetailsCard site={s} />

@@ -204,7 +204,7 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 ### Week 17: PowerDNS integration
 - [x] PowerDNS auth server + REST API enabled in provisioning script
 - [x] `services/dns.py`: zones CRUD, records CRUD (A, AAAA, CNAME, MX, TXT, SRV, CAA)
-- [ ] Auto-create zone with sane defaults (SOA, NS, A → server IP) when a site is created (optional toggle)
+- [x] Auto-create zone with sane defaults (SOA, NS, A → server IP) when a site is created (optional toggle) — wizard toggle for every account; plus sites↔DNS bridge: DNS page lists hosted sites without a zone (one-click create, zone ownership follows the site owner via `site_id` on `POST /api/dns/zones`), and the site Overview gets a DNS card linking to / creating its zone; installer now auto-detects `HOSTY_PUBLIC_IP`
 - [x] Record validation (Pydantic models per record type)
 
 ### Week 18: DNS UI

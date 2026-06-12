@@ -68,6 +68,16 @@ corepack enable
 
 log "Configuration → $ENV_FILE"
 PANEL_DOMAIN="${HOSTY_PANEL_DOMAIN:-}"
+# Public IPv4: enables DNS "point to this server" records and templates.
+# Override with HOSTY_PUBLIC_IP=... ; detection: external echo, then first
+# local address as a fallback (fine for VMs with a public primary interface).
+PUBLIC_IP="${HOSTY_PUBLIC_IP:-}"
+if [[ -z $PUBLIC_IP ]]; then
+  PUBLIC_IP=$(curl -fsS4 --max-time 5 https://api.ipify.org 2>/dev/null || true)
+fi
+if [[ -z $PUBLIC_IP ]]; then
+  PUBLIC_IP=$(hostname -I | awk '{print $1}')
+fi
 if [[ ! -f $ENV_FILE ]]; then
   cat > "$ENV_FILE" <<ENV
 HOSTY_ENV=prod
@@ -80,9 +90,13 @@ HOSTY_COOKIE_SECURE=$([[ -n $PANEL_DOMAIN ]] && echo true || echo false)
 HOSTY_CREATE_TABLES_ON_STARTUP=false
 HOSTY_FRONTEND_DIST=$APP_DIR/frontend/dist
 HOSTY_PDNS_API_KEY=$(cat /etc/hosty/pdns-api-key 2>/dev/null || echo "")
+HOSTY_PUBLIC_IP=$PUBLIC_IP
 ENV
   [[ -n $PANEL_DOMAIN ]] && echo "HOSTY_PANEL_DOMAIN=$PANEL_DOMAIN" >> "$ENV_FILE"
   chmod 600 "$ENV_FILE"
+elif ! grep -q '^HOSTY_PUBLIC_IP=' "$ENV_FILE"; then
+  # Idempotent upgrade path: older installs predate HOSTY_PUBLIC_IP.
+  echo "HOSTY_PUBLIC_IP=$PUBLIC_IP" >> "$ENV_FILE"
 fi
 
 log "Database schema (alembic upgrade head)"
@@ -96,7 +110,7 @@ systemctl daemon-reload
 systemctl enable --now hosty
 systemctl restart hosty
 
-IP=$(hostname -I | awk '{print $1}')
+IP=$PUBLIC_IP
 log "Done."
 cat <<MSG
 

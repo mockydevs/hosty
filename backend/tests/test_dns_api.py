@@ -299,3 +299,64 @@ async def test_cloudflare_push_zone_missing_in_account(settings):
             resp = await c.post("/api/dns/zones/example.com./push/cloudflare")
             assert resp.status_code == 409
             assert resp.json()["error"]["code"] == "cloudflare_zone_missing"
+
+
+# --- create zone for a site (Sites UI bridge) --------------------------------------
+
+
+@pytest_asyncio.fixture
+async def fake_system(monkeypatch):
+    from tests.test_sites_api import FakeSystem
+
+    fake = FakeSystem()
+    fake.install(monkeypatch)
+    return fake
+
+
+async def test_create_zone_for_site_assigns_site_owner(admin_client, client, pdns, fake_system):
+    from tests.test_multi_tenancy import make_active_client
+
+    headers = await make_active_client(admin_client, client, "alice")
+    resp = await client.post("/api/sites", json={"domain": "client-site.example"}, headers=headers)
+    assert resp.status_code == 202, resp.text
+    site_id = resp.json()["site"]["id"]
+
+    # The admin creates the zone on the client's behalf — ownership follows the site.
+    resp = await admin_client.post(
+        "/api/dns/zones", json={"name": "client-site.example", "site_id": site_id}
+    )
+    assert resp.status_code == 201, resp.text
+
+    # The client sees (and can manage) the zone.
+    zones = (await client.get("/api/dns/zones", headers=headers)).json()
+    assert [z["name"] for z in zones] == ["client-site.example."]
+
+
+async def test_create_zone_for_site_name_must_match(admin_client, pdns, fake_system):
+    resp = await admin_client.post("/api/sites", json={"domain": "match.example"})
+    assert resp.status_code == 202, resp.text
+    site_id = resp.json()["site"]["id"]
+    resp = await admin_client.post(
+        "/api/dns/zones", json={"name": "other.example", "site_id": site_id}
+    )
+    assert resp.status_code == 409
+    assert pdns.zones == {}
+
+
+async def test_create_zone_for_other_tenants_site_is_404(admin_client, client, pdns, fake_system):
+    from tests.test_multi_tenancy import make_active_client
+
+    alice = await make_active_client(admin_client, client, "alice")
+    resp = await client.post("/api/sites", json={"domain": "alices.example"}, headers=alice)
+    assert resp.status_code == 202, resp.text
+    site_id = resp.json()["site"]["id"]
+
+    # Bob cannot piggyback on Alice's site — existence never leaks (404, not 403).
+    bob = await make_active_client(admin_client, client, "bob")
+    resp = await client.post(
+        "/api/dns/zones",
+        json={"name": "alices.example", "site_id": site_id},
+        headers=bob,
+    )
+    assert resp.status_code == 404
+    assert pdns.zones == {}
