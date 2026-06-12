@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from ipaddress import ip_network
+from typing import Annotated, Any
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -44,14 +47,14 @@ class Settings(BaseSettings):
     # Phase 6: file manager (Filebrowser)
     filebrowser_enabled: bool = True
     filebrowser_internal_addr: str = "127.0.0.1:8082"
-    filebrowser_db: str = "/var/lib/hosty/filebrowser.db"
+    filebrowser_db: str = "/var/lib/hosty/filebrowser/filebrowser.db"
     filebrowser_admin_user: str = "admin"  # created at provision time, password locked
     files_session_ttl_seconds: int = 30 * 60
 
     # Phase 9: hardening
     panel_domain: str | None = None  # production: Caddy fronts the panel on this host
     panel_upstream: str = "127.0.0.1:8800"
-    panel_allowed_ips: list[str] = []
+    panel_allowed_ips: Annotated[list[str], NoDecode] = []
     # Where UI-driven config changes (panel domain, cookie flag) are persisted.
     env_file_path: str = "/var/lib/hosty/hosty.env"
     frontend_dist: str = "../frontend/dist"  # served as SPA when the directory exists
@@ -71,11 +74,19 @@ class Settings(BaseSettings):
     # Phase 11c/11d: usage metering + uploads
     caddy_access_log_path: str = "/var/log/caddy/hosty-access.log"
     uploads_dir: str = "/var/lib/hosty/uploads"  # staging area for site imports
+    max_import_upload_bytes: int = 1024 * 1024 * 1024
+    max_user_upload_bytes: int = 2 * 1024 * 1024 * 1024
+    max_total_upload_bytes: int = 10 * 1024 * 1024 * 1024
+    upload_ttl_seconds: int = 24 * 60 * 60
+    max_archive_members: int = 100_000
+    max_archive_expanded_bytes: int = 10 * 1024 * 1024 * 1024
+    files_proxy_max_request_bytes: int = 1024 * 1024 * 1024
     usage_check_interval_seconds: int = 3600  # disk-quota & health sweep cadence
     disk_full_threshold_percent: int = 90  # server disk "nearly full" notification
 
     # Phase 8: backups
     backups_root: str = "/var/lib/hosty/backups"
+    restore_staging_root: str = "/var/lib/hosty/restore-staging"
     backup_scheduler_enabled: bool = True
     s3_endpoint: str = ""  # e.g. http://127.0.0.1:9000 (MinIO) — empty disables S3
     s3_bucket: str = ""
@@ -83,6 +94,22 @@ class Settings(BaseSettings):
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_prefix: str = "hosty"
+
+    @field_validator("panel_allowed_ips", mode="before")
+    @classmethod
+    def parse_panel_allowed_ips(cls, value: Any) -> list[str]:
+        if value in (None, ""):
+            return []
+        if isinstance(value, str):
+            value = [item.strip() for item in value.split(",") if item.strip()]
+        if not isinstance(value, list):
+            raise ValueError("panel_allowed_ips must be a comma-separated list")
+        normalized: list[str] = []
+        for item in value:
+            raw = str(item).strip()
+            ip_network(raw, strict=False)
+            normalized.append(raw)
+        return normalized
 
     @property
     def is_prod(self) -> bool:

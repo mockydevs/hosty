@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Hosty production installer for a FRESH Ubuntu 24.04 server.
 # Idempotent: safe to re-run. Usage:
-#   curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
-# or, from a clone:  sudo bash installer/install.sh
+# Run from a verified clone: sudo env HOSTY_REF=$(git rev-parse HEAD) bash installer/install.sh
 set -euo pipefail
 
 # The caller may be sitting inside a directory this script replaces (e.g.
@@ -14,7 +13,11 @@ cd /
 [[ ${VERSION_ID:-} == "24.04" ]] || echo "WARNING: tested on Ubuntu 24.04, found ${VERSION_ID:-unknown}"
 
 REPO_URL="${HOSTY_REPO_URL:-https://github.com/mockydevs/hosty.git}"
-REPO_REF="${HOSTY_REF:-main}"
+REPO_REF="${HOSTY_REF:-}"
+[[ $REPO_REF =~ ^[0-9a-f]{40}$ ]] || {
+  echo "HOSTY_REF must be an immutable full 40-character Git commit SHA" >&2
+  exit 1
+}
 APP_DIR=/opt/hosty
 STATE_DIR=/var/lib/hosty
 ENV_FILE=$STATE_DIR/hosty.env
@@ -25,34 +28,32 @@ log() { printf '\n==> %s\n' "$*"; }
 log "Hosty source → $APP_DIR (ref: $REPO_REF)"
 apt-get update -q && apt-get install -qy git
 if [[ -d $APP_DIR/.git ]]; then
-  git -C "$APP_DIR" fetch --tags origin
-  git -C "$APP_DIR" checkout -q "$REPO_REF"
-  # Deploy checkout: force it to match the remote (a swallowed pull here once
-  # made re-installs silently keep old code).
-  if git -C "$APP_DIR" rev-parse -q --verify "origin/$REPO_REF" >/dev/null 2>&1; then
-    git -C "$APP_DIR" reset --hard "origin/$REPO_REF"
-  fi
+  git -C "$APP_DIR" fetch origin "$REPO_REF"
 else
-  git clone --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
+  git clone --no-checkout "$REPO_URL" "$APP_DIR"
+  git -C "$APP_DIR" fetch origin "$REPO_REF"
 fi
+git -C "$APP_DIR" checkout -q --detach "$REPO_REF"
+[[ $(git -C "$APP_DIR" rev-parse HEAD) == "$REPO_REF" ]] || {
+  echo "Checked-out source does not match HOSTY_REF" >&2
+  exit 1
+}
 
 log "Stack (Caddy, PHP, MariaDB, PowerDNS, Filebrowser, Adminer, WP-CLI)"
 bash "$APP_DIR/installer/provision.sh"
 
 log "uv"
 if ! command -v uv >/dev/null; then
-  curl -LsSf https://astral.sh/uv/install.sh \
-    | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+  bash "$APP_DIR/installer/install-tools.sh" uv
 fi
 
 log "Backend dependencies → $VENV"
 install -d -m 0750 "$STATE_DIR"
-(cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync)
+(cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync --frozen)
 
 log "Frontend build"
 if ! command -v node >/dev/null; then
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -qy nodejs
+  bash "$APP_DIR/installer/install-tools.sh" node
 fi
 # pnpm version is pinned via "packageManager" in frontend/package.json;
 # corepack fetches exactly that version (no floating to latest).
@@ -68,6 +69,7 @@ corepack enable
 
 log "Configuration → $ENV_FILE"
 PANEL_DOMAIN="${HOSTY_PANEL_DOMAIN:-}"
+PANEL_ALLOWED_IPS="${HOSTY_PANEL_ALLOWED_IPS:-}"
 # Public IPv4: enables DNS "point to this server" records and templates.
 # Override with HOSTY_PUBLIC_IP=... ; detection: external echo, then first
 # local address as a fallback (fine for VMs with a public primary interface).
@@ -93,10 +95,15 @@ HOSTY_PDNS_API_KEY=$(cat /etc/hosty/pdns-api-key 2>/dev/null || echo "")
 HOSTY_PUBLIC_IP=$PUBLIC_IP
 ENV
   [[ -n $PANEL_DOMAIN ]] && echo "HOSTY_PANEL_DOMAIN=$PANEL_DOMAIN" >> "$ENV_FILE"
+  [[ -n $PANEL_ALLOWED_IPS ]] && echo "HOSTY_PANEL_ALLOWED_IPS=$PANEL_ALLOWED_IPS" >> "$ENV_FILE"
   chmod 600 "$ENV_FILE"
 elif ! grep -q '^HOSTY_PUBLIC_IP=' "$ENV_FILE"; then
   # Idempotent upgrade path: older installs predate HOSTY_PUBLIC_IP.
   echo "HOSTY_PUBLIC_IP=$PUBLIC_IP" >> "$ENV_FILE"
+fi
+if [[ -n $PANEL_ALLOWED_IPS ]]; then
+  sed -i '/^HOSTY_PANEL_ALLOWED_IPS=/d' "$ENV_FILE"
+  echo "HOSTY_PANEL_ALLOWED_IPS=$PANEL_ALLOWED_IPS" >> "$ENV_FILE"
 fi
 
 log "Database schema (alembic upgrade head)"
@@ -116,8 +123,11 @@ cat <<MSG
 
   Hosty is running.
 
-  Panel:     http://${PANEL_DOMAIN:-$IP:8800}  (HTTPS via Caddy once HOSTY_PANEL_DOMAIN
-             is set and the domain points at this server)
+  Panel:     ${PANEL_DOMAIN:+https://$PANEL_DOMAIN}
+  ${PANEL_DOMAIN:+Caddy is the only public panel ingress.}
+  ${PANEL_DOMAIN:-No panel domain was configured. Use an SSH tunnel:}
+  ${PANEL_DOMAIN:-  ssh -L 8800:127.0.0.1:8800 root@$IP}
+  ${PANEL_DOMAIN:-Then open http://127.0.0.1:8800.}
   First run: open the panel and create the admin account (first-boot setup).
   Update:    sudo bash $APP_DIR/installer/update.sh
   Uninstall: sudo bash $APP_DIR/installer/uninstall.sh

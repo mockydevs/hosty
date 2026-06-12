@@ -287,13 +287,17 @@ async def run_create_site(
             await users.delete(site.site_user)
 
         async def do_docroot() -> None:
-            await fs.create_dir(site.doc_root, root=settings.sites_root)
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root
+            )
             fs.write_file(
                 f"{site.doc_root}/index.php",
                 INDEX_SKELETON.format(domain=site.domain),
                 root=settings.sites_root,
             )
-            await fs.chown_recursive(site.site_user, site_dir, root=settings.sites_root)
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root, create=False
+            )
 
         async def undo_docroot() -> None:
             await fs.remove_tree(site_dir, root=settings.sites_root)
@@ -303,6 +307,7 @@ async def run_create_site(
                 site.site_user,
                 site.php_version,
                 settings,
+                doc_root=site.doc_root,
                 memory_limit=site.php_memory_limit,
                 upload_max_filesize=site.php_upload_max_filesize,
             )
@@ -500,6 +505,7 @@ async def change_php_version(
         site.site_user,
         new_version,
         settings,
+        doc_root=site.doc_root,
         memory_limit=site.php_memory_limit,
         upload_max_filesize=site.php_upload_max_filesize,
     )
@@ -530,6 +536,7 @@ async def update_php_settings(
         site.site_user,
         site.php_version,
         settings,
+        doc_root=site.doc_root,
         memory_limit=memory_limit,
         upload_max_filesize=upload_max_filesize,
     )

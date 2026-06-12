@@ -6,9 +6,11 @@ import json
 
 import httpx
 import pytest
+from sqlalchemy import select
 
 from app.core.config import Settings
 from app.core.tickets import issue_token, token_scope
+from app.db.models import User
 from app.services import filebrowser
 from app.services.filebrowser import (
     AUTH_HEADER,
@@ -31,7 +33,12 @@ def fb_settings() -> Settings:
 
 def test_config_init_argv(fb_settings):
     argv = build_config_init_argv(fb_settings)
-    assert argv[:4] == ["filebrowser", "-d", "/var/lib/hosty/filebrowser.db", "config"]
+    assert argv[:4] == [
+        "filebrowser",
+        "-d",
+        "/var/lib/hosty/filebrowser/filebrowser.db",
+        "config",
+    ]
     assert "--auth.method=proxy" in argv
     assert f"--auth.header={AUTH_HEADER}" in argv
     assert "--root=/var/www" in argv
@@ -253,6 +260,30 @@ async def test_files_proxy_rejects_anonymous_and_garbage(
 ):
     assert (await client.get("/files/")).status_code == 401
     assert (await client.get("/files/?hosty_ticket=files-ticket:x.999.bad")).status_code == 401
+    assert fake_files_upstream == []
+
+
+async def test_files_proxy_rechecks_current_account_state(
+    admin_client, app, fake_system, fake_filebrowser, fake_files_upstream
+):
+    site_id = await _site(admin_client)
+    url = (await admin_client.post(f"/api/sites/{site_id}/files-session")).json()["url"]
+    async with app.state.sessionmaker() as db:
+        user = (await db.execute(select(User).where(User.username == "admin"))).scalar_one()
+        user.suspended = True
+        await db.commit()
+    assert (await admin_client.get(url)).status_code == 401
+    assert fake_files_upstream == []
+
+
+async def test_files_proxy_rejects_oversized_requests_before_upstream(
+    admin_client, app, fake_system, fake_filebrowser, fake_files_upstream
+):
+    app.state.settings.files_proxy_max_request_bytes = 4
+    site_id = await _site(admin_client)
+    url = (await admin_client.post(f"/api/sites/{site_id}/files-session")).json()["url"]
+    response = await admin_client.post(url, content=b"12345")
+    assert response.status_code == 409
     assert fake_files_upstream == []
 
 

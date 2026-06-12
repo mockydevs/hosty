@@ -63,9 +63,14 @@ pm.max_requests = 500
 
 php_admin_value[error_log] = /home/site-a-abc123/php-error.log
 php_admin_flag[log_errors] = on
-php_admin_value[open_basedir] = none
+php_admin_value[open_basedir] = /var/www/a.example/public_html:/home/site-a-abc123:/tmp
 php_value[memory_limit] = 256M
 php_value[upload_max_filesize] = 64M
 php_value[post_max_size] = 64M
 """
-    assert render_pool_config("site-a-abc123", "8.3", settings) == expected
+    assert render_pool_config(
+        "site-a-abc123",
+        "8.3",
+        settings,
+        doc_root="/var/www/a.example/public_html",
+    ) == expected

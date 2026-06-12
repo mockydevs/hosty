@@ -36,8 +36,15 @@ Screenshots are tracked under `docs/screenshots/` during VM verification.
 Target: a fresh Ubuntu 24.04 server with at least 2 GB RAM and ports 80/443
 available.
 
+Choose a full 40-character commit SHA from a signed Hosty release, then clone
+and install that immutable revision:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
+HOSTY_REF=<FULL_40_CHARACTER_COMMIT_SHA>
+git clone --no-checkout https://github.com/mockydevs/hosty.git hosty
+git -C hosty fetch origin "$HOSTY_REF"
+git -C hosty checkout --detach "$HOSTY_REF"
+sudo env HOSTY_REF="$HOSTY_REF" bash hosty/installer/install.sh
 ```
 
 The installer prints the panel URL when it finishes. On first visit, create the
@@ -48,21 +55,22 @@ before running the installer:
 
 ```bash
 export HOSTY_PANEL_DOMAIN=panel.example.com
-curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
+sudo env HOSTY_REF="$HOSTY_REF" HOSTY_PANEL_DOMAIN="$HOSTY_PANEL_DOMAIN" \
+  bash hosty/installer/install.sh
 ```
 
 Optional install-time settings:
 
 - `HOSTY_PANEL_ALLOWED_IPS`: comma-separated allowlist for panel access.
 - `HOSTY_REPO_URL`: alternate Git repository.
-- `HOSTY_REF`: branch, tag, or commit to install.
+- `HOSTY_REF`: required immutable full 40-character commit SHA.
 
 ### Update Hosty
 
-To update to the latest version of Hosty, run the following command:
+Choose the verified commit SHA for the release you want, then run:
 
 ```bash
-sudo bash /opt/hosty/installer/update.sh
+sudo bash /opt/hosty/installer/update.sh <FULL_40_CHARACTER_COMMIT_SHA>
 ```
 
 ### Uninstall Hosty

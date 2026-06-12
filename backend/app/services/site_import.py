@@ -10,7 +10,9 @@ for WordPress sites — runs `wp search-replace old-domain new-domain`.
 from __future__ import annotations
 
 import os
+import stat
 import tarfile
+import tempfile
 import zipfile
 
 import structlog
@@ -19,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.models import Database, Operation, Site
-from app.services import backup, wordpress
+from app.services import backup, mariadb, wordpress
 from app.system import fs, runner
 
 log = structlog.get_logger("hosty.site_import")
@@ -53,25 +55,48 @@ def _validate_member_name(name: str) -> str:
     return name
 
 
-def extract_archive(archive_path: str, dest: str) -> int:
+def extract_archive(
+    archive_path: str,
+    dest: str,
+    *,
+    max_members: int = 100_000,
+    max_expanded_bytes: int = 10 * 1024 * 1024 * 1024,
+) -> int:
     """Extract a validated archive into `dest`; returns the member count.
 
     tarfile uses the Python 3.12 'data' filter (strips setuid, device nodes,
     absolute names); zip members are validated by hand.
     """
     count = 0
+    if os.path.islink(dest):
+        raise ImportError_("Archive destination must not be a symlink")
     if archive_path.endswith((".tar.gz", ".tgz")):
         with tarfile.open(archive_path, "r:gz") as tar:
-            for member in tar.getmembers():
+            members = tar.getmembers()
+            expanded_size = sum(member.size for member in members)
+            if len(members) > max_members or expanded_size > max_expanded_bytes:
+                raise ImportError_("Archive exceeds the configured expansion limit")
+            for member in members:
                 _validate_member_name(member.name)
+                if not (member.isdir() or member.isreg()):
+                    raise ImportError_(
+                        f"Archive contains an unsupported link or special file: {member.name!r}"
+                    )
             tar.extractall(dest, filter="data")
-            count = len(tar.getmembers())
+            count = len(members)
     elif archive_path.endswith(".zip"):
         with zipfile.ZipFile(archive_path) as zf:
-            for info in zf.infolist():
+            members = zf.infolist()
+            expanded_size = sum(info.file_size for info in members)
+            if len(members) > max_members or expanded_size > max_expanded_bytes:
+                raise ImportError_("Archive exceeds the configured expansion limit")
+            for info in members:
                 _validate_member_name(info.filename)
+                mode = info.external_attr >> 16
+                if stat.S_ISLNK(mode):
+                    raise ImportError_(f"Archive contains a symbolic link: {info.filename!r}")
             zf.extractall(dest)
-            count = len(zf.infolist())
+            count = len(members)
     else:
         raise ImportError_(f"Unsupported archive type: {os.path.basename(archive_path)!r}")
     return count
@@ -101,8 +126,26 @@ async def run_import_site(
 
         async def do_files() -> None:
             assert archive_path is not None
-            count = extract_archive(archive_path, site.doc_root)
-            await fs.chown_recursive(site.site_user, site.doc_root, root=settings.sites_root)
+            site_dir = os.path.dirname(site.doc_root)
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root, create=False
+            )
+            with tempfile.TemporaryDirectory(prefix=".extract-", dir=settings.uploads_dir) as dest:
+                count = extract_archive(
+                    archive_path,
+                    dest,
+                    max_members=settings.max_archive_members,
+                    max_expanded_bytes=settings.max_archive_expanded_bytes,
+                )
+                await fs.mirror_import_tree(
+                    dest,
+                    site.doc_root,
+                    import_root=settings.uploads_dir,
+                    sites_root=settings.sites_root,
+                )
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root, create=False
+            )
             log.info("import_files_extracted", domain=site.domain, members=count)
 
         async def do_database() -> None:
@@ -114,11 +157,12 @@ async def run_import_site(
             ).scalar_one_or_none()
             if row is None:
                 raise ImportError_(f"Database {target_db!r} does not belong to this site")
-            result = await runner.run(
-                backup.build_mysql_restore_argv(row.name),
-                timeout=1800,
-                stdin_path=sql_path,
-            )
+            async with mariadb.restricted_client_config(row.name) as defaults_file:
+                result = await runner.run(
+                    backup.build_mysql_restore_argv(row.name, defaults_file=defaults_file),
+                    timeout=1800,
+                    stdin_path=sql_path,
+                )
             if not result.ok:
                 raise ImportError_(f"SQL import failed: {result.stderr.strip()[:300]}")
 
@@ -145,6 +189,11 @@ async def run_import_site(
             steps.append(_Step("search_replace", do_search_replace, None))
         steps.append(_Step("finalize", do_finalize, None))
 
-        ok, error = await _run_pipeline(db, op, steps)
-        await _finish(db, op, status="succeeded" if ok else "failed", error=error)
-        log.info("import_finished", domain=site.domain, ok=ok)
+        try:
+            ok, error = await _run_pipeline(db, op, steps)
+            await _finish(db, op, status="succeeded" if ok else "failed", error=error)
+            log.info("import_finished", domain=site.domain, ok=ok)
+        finally:
+            for path in (archive_path, sql_path):
+                if path and os.path.exists(path):
+                    os.unlink(path)

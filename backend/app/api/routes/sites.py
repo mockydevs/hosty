@@ -627,12 +627,12 @@ class StartImportRequest(BaseModel):
 UPLOAD_ID_RE = r"^[a-f0-9]{32}\.(files\.(tar\.gz|tgz|zip)|sql)$"
 
 
-def _upload_path(settings, upload_id: str) -> str:
+def _upload_path(settings, user_id: int, upload_id: str) -> str:
     import re as _re
 
     if not _re.fullmatch(UPLOAD_ID_RE, upload_id):
         raise NotFoundError("Upload not found")
-    return f"{settings.uploads_dir}/{upload_id}"
+    return f"{settings.uploads_dir}/{user_id}/{upload_id}"
 
 
 @router.post(
@@ -651,6 +651,7 @@ async def upload_import_file(
     """Raw-body upload (no multipart): ?kind=files&filename=site.tar.gz or ?kind=sql.
     The body is streamed to disk, never held in memory."""
     import os as _os
+    import time as _time
     import uuid as _uuid
 
     await fetch_owned_site(db, user, site_id)
@@ -670,13 +671,56 @@ async def upload_import_file(
     else:
         raise NotFoundError("kind must be 'files' or 'sql'")
     upload_id = f"{_uuid.uuid4().hex}.{suffix}"
-    _os.makedirs(settings.uploads_dir, exist_ok=True)
-    path = f"{settings.uploads_dir}/{upload_id}"
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            declared_size = int(content_length)
+        except ValueError:
+            raise ConflictError("Invalid Content-Length header") from None
+        if declared_size < 0:
+            raise ConflictError("Invalid Content-Length header")
+        if declared_size > settings.max_import_upload_bytes:
+            raise ConflictError("Upload exceeds the configured size limit")
+    user_dir = f"{settings.uploads_dir}/{user.id}"
+    path = f"{user_dir}/{upload_id}"
     size = 0
-    with open(path, "wb") as fh:
-        async for chunk in request.stream():
-            size += len(chunk)
-            fh.write(chunk)
+    async with request.app.state.upload_lock:
+        _os.makedirs(user_dir, mode=0o700, exist_ok=True)
+        cutoff = _time.time() - settings.upload_ttl_seconds
+        for base, _dirs, files in _os.walk(settings.uploads_dir):
+            for name in files:
+                candidate = _os.path.join(base, name)
+                try:
+                    if _os.path.getmtime(candidate) < cutoff:
+                        _os.unlink(candidate)
+                except FileNotFoundError:
+                    pass
+        user_bytes = sum(
+            _os.path.getsize(_os.path.join(user_dir, name))
+            for name in _os.listdir(user_dir)
+            if _os.path.isfile(_os.path.join(user_dir, name))
+        )
+        total_bytes = sum(
+            _os.path.getsize(_os.path.join(base, name))
+            for base, _dirs, files in _os.walk(settings.uploads_dir)
+            for name in files
+            if _os.path.isfile(_os.path.join(base, name))
+        )
+        try:
+            with open(path, "xb") as fh:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > settings.max_import_upload_bytes:
+                        raise ConflictError("Upload exceeds the configured size limit")
+                    if user_bytes + size > settings.max_user_upload_bytes:
+                        raise ConflictError("Pending uploads exceed your storage limit")
+                    if total_bytes + size > settings.max_total_upload_bytes:
+                        raise ConflictError("Server upload storage is full")
+                    fh.write(chunk)
+        except BaseException:
+            if _os.path.exists(path):
+                _os.unlink(path)
+            raise
     if size == 0:
         _os.unlink(path)
         raise ConflictError("Upload was empty")
@@ -706,11 +750,11 @@ async def start_import(
         raise ConflictError("Provide a files upload, an SQL upload, or both")
     archive_path = sql_path = None
     if body.files_upload_id:
-        archive_path = _upload_path(settings, body.files_upload_id)
+        archive_path = _upload_path(settings, user.id, body.files_upload_id)
         if not _os.path.exists(archive_path):
             raise NotFoundError("Files upload not found — upload it first")
     if body.sql_upload_id:
-        sql_path = _upload_path(settings, body.sql_upload_id)
+        sql_path = _upload_path(settings, user.id, body.sql_upload_id)
         if not _os.path.exists(sql_path):
             raise NotFoundError("SQL upload not found — upload it first")
         if not body.target_db:

@@ -3,6 +3,8 @@
 # Idempotent: safe to re-run; every step checks before it changes anything.
 set -euo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
 [[ $EUID -eq 0 ]] || { echo "Run as root (sudo $0)" >&2; exit 1; }
 
 export DEBIAN_FRONTEND=noninteractive
@@ -32,8 +34,8 @@ fi
 log "Base packages"
 apt-get update -q
 apt-get install -qy --no-install-recommends \
-  ca-certificates curl gnupg software-properties-common debian-keyring \
-  debian-archive-keyring apt-transport-https unzip less sqlite3
+  acl ca-certificates curl gnupg software-properties-common debian-keyring \
+  debian-archive-keyring apt-transport-https unzip less sqlite3 xz-utils
 
 log "PHP ${PHP_VERSIONS[*]} via ondrej/php PPA"
 if ! grep -rq "ondrej/php" /etc/apt/sources.list.d/ 2>/dev/null; then
@@ -77,6 +79,8 @@ log "MariaDB"
 apt-get install -qy mariadb-server
 apt-get install -qy zstd   # Phase 8: tar --zstd backups
 install -d -m 0700 /var/lib/hosty/backups
+id -u hosty-restore >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin hosty-restore
+install -d -o root -g root -m 0711 /var/lib/hosty/restore-staging
 systemctl enable --now mariadb
 
 log "PowerDNS"
@@ -121,66 +125,86 @@ systemctl enable pdns
 systemctl restart pdns
 
 log "WP-CLI"
-if ! command -v wp >/dev/null; then
-  curl -fsSL -o /usr/local/bin/wp \
-    https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-  chmod +x /usr/local/bin/wp
-fi
-install -d -m 0777 /var/cache/hosty/wp-cli   # shared WP-CLI download cache
+bash "$SCRIPT_DIR/install-tools.sh" wp-cli
+install -d -m 1777 /var/cache/hosty/wp-cli
 
 log "Adminer"
-install -d -m 0755 /var/lib/hosty/adminer
-if [[ ! -f /var/lib/hosty/adminer/adminer.php ]]; then
-  # NB: don't use github .../latest/download/adminer.php — Adminer v5 renamed
-  # its release assets (adminer-<version>.php), so that URL now 404s.
-  curl -fsSL -o /var/lib/hosty/adminer/adminer.php https://www.adminer.org/latest.php
-fi
+bash "$SCRIPT_DIR/install-tools.sh" adminer
 chown -R www-data:www-data /var/lib/hosty/adminer
 
 log "Filebrowser"
-if ! command -v filebrowser >/dev/null; then
-  curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+bash "$SCRIPT_DIR/install-tools.sh" filebrowser
+id -u hosty-filebrowser >/dev/null 2>&1 || useradd --system --home-dir /nonexistent \
+  --shell /usr/sbin/nologin --user-group hosty-filebrowser
+install -d -o hosty-filebrowser -g hosty-filebrowser -m 0700 /var/lib/hosty/filebrowser
+if [[ -f /var/lib/hosty/filebrowser.db && ! -f /var/lib/hosty/filebrowser/filebrowser.db ]]; then
+  mv /var/lib/hosty/filebrowser.db /var/lib/hosty/filebrowser/filebrowser.db
 fi
-install -d -m 0755 /var/lib/hosty
+FILEBROWSER_DB=/var/lib/hosty/filebrowser/filebrowser.db
 # Default scope is a quarantine dir: proxy auth AUTO-CREATES unknown users
 # with the default scope, and the default must never expose other sites.
-if [[ ! -f /var/lib/hosty/filebrowser.db ]]; then
-  filebrowser -d /var/lib/hosty/filebrowser.db config init \
+if [[ ! -f $FILEBROWSER_DB ]]; then
+  filebrowser -d "$FILEBROWSER_DB" config init \
     --auth.method=proxy --auth.header=X-Hosty-Fb-User \
     --root=/var/www --scope=/.hosty-quarantine --baseurl=/files \
     --branding.theme=dark \
     --address=127.0.0.1 --port=8082 --signup=false
 fi
 install -d -m 0755 /var/www/.hosty-quarantine
-if [[ ! -f /etc/systemd/system/hosty-filebrowser.service ]]; then
-  cat > /etc/systemd/system/hosty-filebrowser.service <<'UNIT'
+chown hosty-filebrowser:hosty-filebrowser /var/www/.hosty-quarantine
+cat > /etc/systemd/system/hosty-filebrowser.service <<'UNIT'
 [Unit]
 Description=Hosty Filebrowser (internal)
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/filebrowser -d /var/lib/hosty/filebrowser.db
+User=hosty-filebrowser
+Group=hosty-filebrowser
+ExecStart=/usr/local/bin/filebrowser -d /var/lib/hosty/filebrowser/filebrowser.db
 Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hosty/filebrowser /var/www
 
 [Install]
 WantedBy=multi-user.target
 UNIT
-  systemctl daemon-reload
-fi
+systemctl daemon-reload
 # Admin user for the panel's user-management API (header auth; password is
 # random and locked — never used). CLI needs the BoltDB lock: stop the daemon.
 systemctl stop hosty-filebrowser 2>/dev/null || true
 # --branding.theme=dark: embedded in the (dark) panel UI — match it.
-filebrowser -d /var/lib/hosty/filebrowser.db config set \
+filebrowser -d "$FILEBROWSER_DB" config set \
   --scope=/.hosty-quarantine --baseurl=/files --branding.theme=dark
-ADMIN_ADD_OUT=$(filebrowser -d /var/lib/hosty/filebrowser.db users add admin \
+ADMIN_ADD_OUT=$(filebrowser -d "$FILEBROWSER_DB" users add admin \
   "$(openssl rand -base64 24)" --perm.admin --lockPassword 2>&1) \
   || echo "$ADMIN_ADD_OUT" | grep -qi "already exists" \
   || { echo "$ADMIN_ADD_OUT" >&2; exit 1; }
+chown -R hosty-filebrowser:hosty-filebrowser /var/lib/hosty/filebrowser
 systemctl enable --now hosty-filebrowser
 
 log "Site directories"
-install -d -m 0755 /var/www
+install -d -o root -g root -m 0711 /var/www
+# Upgrade existing sites to the same tenant boundary used for new sites.
+for doc_root in /var/www/*/public_html; do
+  [[ -d $doc_root && ! -L $doc_root ]] || continue
+  site_dir=${doc_root%/public_html}
+  [[ ! -L $site_dir ]] || { echo "Refusing symlinked site directory: $site_dir" >&2; exit 1; }
+  site_user=$(stat -c '%U' "$doc_root")
+  [[ $site_user =~ ^site-[a-z0-9-]+-[a-f0-9]{6}$ ]] || {
+    echo "Refusing unexpected site owner $site_user for $doc_root" >&2
+    exit 1
+  }
+  chown "root:$site_user" "$site_dir"
+  chmod 0710 "$site_dir"
+  find "$doc_root" -type d -exec chmod 0750 {} +
+  find "$doc_root" -type f -exec chmod 0640 {} +
+  setfacl -m u:caddy:--x,u:hosty-filebrowser:--x "$site_dir"
+  setfacl -R -m u:caddy:r-X,u:hosty-filebrowser:rwx,o::--- "$doc_root"
+  setfacl -m d:u:caddy:r-X,d:u:hosty-filebrowser:rwx,d:o::--- "$doc_root"
+done
 
 log "Done. Versions:"
 caddy version

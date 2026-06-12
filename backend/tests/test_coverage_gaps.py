@@ -125,7 +125,9 @@ def pool_env(tmp_path, settings, monkeypatch):
 
 async def test_install_and_remove_pool_lifecycle(pool_env):
     s, reloads = pool_env
-    await php_fpm.install_pool("site-a-abc123", "8.3", s)
+    await php_fpm.install_pool(
+        "site-a-abc123", "8.3", s, doc_root="/var/www/a.example/public_html"
+    )
     path = php_fpm.pool_file_path("site-a-abc123", "8.3", s)
     with open(path) as fh:
         assert "[site-a-abc123]" in fh.read()

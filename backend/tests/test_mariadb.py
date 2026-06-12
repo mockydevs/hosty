@@ -9,6 +9,7 @@ from app.services.mariadb import (
     build_create_sql,
     build_drop_sql,
     build_mariadb_argv,
+    build_restricted_user_sql,
     db_identifiers_for,
     generate_password,
     validate_identifier,
@@ -86,6 +87,13 @@ def test_mariadb_argv_is_single_execute_item():
     assert argv[:4] == ["mariadb", "--protocol=socket", "--user=root", "--batch"]
     assert argv[4] == "--execute"
     assert argv[5] == sql and len(argv) == 6
+
+
+def test_import_user_is_limited_to_one_schema():
+    sql = build_restricted_user_sql("shop_db", "hosty_import_abcdef123456", "a" * 48)
+    assert "GRANT ALL PRIVILEGES ON `shop_db`.*" in sql
+    assert " ON *.*" not in sql
+    assert "root" not in sql
 
 
 def test_reset_password_sql_snapshot():

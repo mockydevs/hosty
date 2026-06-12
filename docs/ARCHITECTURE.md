@@ -185,3 +185,54 @@ Phase 10).
   backup; the error message says exactly that.
 - Restores have no rollback by design (they overwrite in place); scope can be
   full, files-only, or databases-only, fetched from S3 when not local.
+
+### ADR-011: Containerized apps are a new SITE TYPE, not a pivot to a general PaaS
+
+**Status:** proposed (Phase 12)
+
+Hosty will host containerized apps (Django, Next.js, Postgres, …) alongside
+PHP/WordPress sites — as an **extension of the existing model, explicitly not
+a rebuild of Coolify/Dokploy/CapRover**.
+
+Why extend rather than pivot: Hosty's differentiation is the
+hosting-business layer that developer-PaaS tools lack — client accounts,
+quotas and plans, suspension that 503s sites, impersonation, per-client usage
+metering, DNS/Cloudflare management, one-click WordPress. The container
+runtime slots UNDER that layer; the layer itself is the product
+("Coolify for hosting businesses"). Competing head-on with Coolify at
+git-push-deploy is a losing race at this project's pace, and running Coolify
+NEXT TO Hosty doesn't work either: two stacks fight over ports 80/443
+(observed in production — Docker's iptables DNAT silently hijacks external
+traffic even when Caddy holds the host sockets).
+
+Decisions:
+
+- **One proxy.** Caddy remains the only thing on 80/443. App containers are
+  reached via `reverse_proxy` to `127.0.0.1:<published_port>` or a Docker
+  network address — same vhost pipeline, TLS, and suspension semantics as
+  PHP sites. A second proxy (Traefik et al.) is rejected outright.
+- **Docker via the system layer.** All engine calls go through one module
+  (`system/docker.py` or the Docker SDK behind the same seam), with the same
+  argv/audit/test discipline as every other mutation (ADR-005). The Docker
+  socket is root-equivalent: it is never exposed to tenants, and tenant
+  workloads run with user namespaces / no privileged containers.
+- **Deploy modes in cost order.** 12a: prebuilt image (registry pull) and
+  `compose.yaml` (one app = one compose project, validated against a safety
+  policy — no privileged/host-network/host-mounts/80-443 publishing; the
+  panel owns networks and volumes). 12c: `docker build` from a git repo or
+  tarball — cheap because the PROJECT ships the build recipe (Dockerfile).
+  Buildpacks/nixpacks ("build without a Dockerfile") is deliberately last
+  and optional — it is the endless-maintenance half of a PaaS.
+- **Apps inherit tenancy.** `apps.owner_id`, quota checks (per-plan
+  max_apps / memory / CPU via the existing limits model), usage metering
+  (image+volume disk counted per client), suspension, audit — all reuse
+  Phase 11 machinery. Container resource caps map to the same per-client
+  limits that drive systemd slices for PHP sites.
+- **Backups stay one engine.** App volumes and managed-database dumps join
+  the existing backup directory format (ADR-010) rather than a parallel
+  system.
+
+Rejected: pivoting the whole panel to containers (WordPress-on-PHP-FPM with
+per-site Linux users is simpler, denser, and already battle-tested here);
+exposing raw Docker/compose to clients (admin-curated at first); Kubernetes
+(wrong weight class for single-VPS hosting businesses).

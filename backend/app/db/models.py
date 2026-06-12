@@ -42,6 +42,18 @@ class User(Base):
     totp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     password_changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    # Carried by access and proxied-app tokens. Incrementing this value
+    # invalidates credentials immediately without timestamp races.
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class SetupState(Base):
+    """Singleton row claimed atomically by the first successful setup request."""
+
+    __tablename__ = "setup_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
 
 class Plan(Base):
@@ -68,6 +80,7 @@ class RefreshToken(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    family_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

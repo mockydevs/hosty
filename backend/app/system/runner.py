@@ -17,6 +17,29 @@ import structlog
 
 log = structlog.get_logger("hosty.system")
 
+# The panel service environment contains signing keys and infrastructure
+# credentials. Child processes receive only ordinary process-locale/runtime
+# variables plus explicit caller overrides.
+SAFE_ENV_KEYS = frozenset(
+    {
+        "PATH",
+        "LANG",
+        "LANGUAGE",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TZ",
+        "HOME",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        # Windows development/test process discovery.
+        "SYSTEMROOT",
+        "WINDIR",
+        "PATHEXT",
+        "COMSPEC",
+    }
+)
+
 
 class InvalidCommandError(ValueError):
     """An argv list failed validation before execution."""
@@ -56,6 +79,16 @@ def validate_argv(argv: list[str] | tuple[str, ...]) -> tuple[str, ...]:
     return tuple(argv)
 
 
+def build_subprocess_env(overrides: Mapping[str, str] | None = None) -> dict[str, str]:
+    child_env = {key: value for key, value in os.environ.items() if key.upper() in SAFE_ENV_KEYS}
+    if overrides:
+        for key, value in overrides.items():
+            if not isinstance(key, str) or not isinstance(value, str) or "\x00" in key + value:
+                raise InvalidCommandError("environment overrides must be NUL-free strings")
+            child_env[key] = value
+    return child_env
+
+
 async def run(
     argv: list[str] | tuple[str, ...],
     *,
@@ -64,6 +97,7 @@ async def run(
     env: Mapping[str, str] | None = None,
     stdout_path: str | None = None,
     stdin_path: str | None = None,
+    umask: int = 0o027,
 ) -> CommandResult:
     """Execute argv. `stdout_path`/`stdin_path` redirect to/from files so that
     large streams (database dumps/restores) never pass through memory or a
@@ -75,13 +109,18 @@ async def run(
     stdin_f = open(stdin_path, "rb") if stdin_path else None  # noqa: SIM115
     try:
         try:
+            process_kwargs = {
+                "stdin": stdin_f,
+                "stdout": stdout_f if stdout_f is not None else asyncio.subprocess.PIPE,
+                "stderr": asyncio.subprocess.PIPE,
+                "cwd": cwd,
+                "env": build_subprocess_env(env),
+            }
+            if os.name != "nt":
+                process_kwargs["umask"] = umask
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdin=stdin_f,
-                stdout=stdout_f if stdout_f is not None else asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                env={**os.environ, **env} if env is not None else None,
+                **process_kwargs,
             )
         except FileNotFoundError as exc:
             raise CommandNotFoundError(f"Executable not found: {cmd[0]}") from exc
@@ -108,7 +147,8 @@ async def run(
     )
     log.info(
         "command_executed",
-        argv=list(cmd),
+        executable=cmd[0],
+        argument_count=len(cmd) - 1,
         returncode=result.returncode,
         duration_ms=duration_ms,
     )

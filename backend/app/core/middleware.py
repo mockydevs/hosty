@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from ipaddress import ip_address, ip_network
 
 import structlog
 from starlette.background import BackgroundTask, BackgroundTasks
@@ -148,7 +149,13 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
         allowed = request.app.state.settings.panel_allowed_ips
         if allowed:
             client_ip = request.client.host if request.client else None
-            if client_ip not in allowed:
+            try:
+                permitted = client_ip is not None and any(
+                    ip_address(client_ip) in ip_network(entry, strict=False) for entry in allowed
+                )
+            except ValueError:
+                permitted = False
+            if not permitted:
                 from fastapi.responses import JSONResponse
 
                 return JSONResponse(

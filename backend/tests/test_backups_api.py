@@ -16,12 +16,12 @@ async def env(settings, tmp_path, monkeypatch):
     calls: list[list[str]] = []
     monkeypatch.setattr("app.system.runner.run", make_fake_runner(calls))
 
-    async def fake_chown(user, path, *, root):  # restore touches ownership
-        calls.append(["chown", user, path])
-
-    monkeypatch.setattr("app.services.backup_ops.fs.chown_recursive", fake_chown)
-
-    s = settings.model_copy(update={"backups_root": str(tmp_path / "backups")})
+    s = settings.model_copy(
+        update={
+            "backups_root": str(tmp_path / "backups"),
+            "restore_staging_root": str(tmp_path / "restore-staging"),
+        }
+    )
     application = create_app(s)
     async with application.router.lifespan_context(application):
         async with application.state.sessionmaker() as db:
@@ -84,7 +84,7 @@ async def test_backup_then_restore_full_cycle(env):
     assert backups[0]["s3"] is False
     assert backups[0]["size_bytes"] > 0
 
-    # restore: wrong confirmation -> 409; right -> runs tar -xf + chown
+    # restore: wrong confirmation -> 409; right -> isolated extraction + mirror
     resp = await client.post(
         f"/api/sites/{site_id}/backups/{backup_id}/restore",
         json={"scope": "full", "confirm_domain": "wrong.com"},
@@ -97,7 +97,7 @@ async def test_backup_then_restore_full_cycle(env):
     assert resp.status_code == 202
     op = await _poll_operation(client, resp.json()["operation_id"])
     assert op["status"] == "succeeded", op
-    assert any(call[:3] == ["tar", "--zstd", "-xf"] for call in env["calls"])
+    assert any(call[0] == "systemd-run" for call in env["calls"])
     assert any(call[0] == "chown" for call in env["calls"])
 
     # delete with confirmation

@@ -9,7 +9,6 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utc_timestamp
 from app.core.errors import AppError, ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.models import Site, User
@@ -53,14 +52,15 @@ async def get_current_user(
         impersonator = await db.get(User, int(impersonator_id))
         if impersonator is None or impersonator.role != "admin":
             raise UnauthorizedError("Impersonation token is no longer valid")
+        if payload.get("imp_ver") != impersonator.token_version:
+            raise UnauthorizedError("Impersonation token is no longer valid")
         request.state.impersonator = impersonator
-        # Skip the iat-vs-password-change check: the ADMIN minted this token;
+        # Skip the target's token-version check: the ADMIN minted this token;
         # the client's own credential changes must not kill a support session.
         if user.must_change_password and request.url.path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
             raise PasswordChangeRequiredError("Change your temporary password to continue")
         return user
-    # Tokens issued before the last password change are invalid.
-    if int(payload["iat"]) < utc_timestamp(user.password_changed_at):
+    if payload.get("ver") != user.token_version:
         raise UnauthorizedError("Token is no longer valid")
     if user.suspended:
         raise UnauthorizedError("Account suspended — contact your administrator")

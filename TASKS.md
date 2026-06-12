@@ -332,6 +332,40 @@ Each client sees and manages ONLY their own services; the admin sees everything.
 
 ---
 
+# Phase 12 — Containerized Apps (post-11; see ADR-011)
+
+Goal: host any containerized project (Django, Next.js, Postgres, …) NEXT TO
+PHP/WordPress sites — one Caddy on 80/443, one tenancy/quota/billing model.
+Explicitly NOT a Coolify rebuild: bring-an-image first, git builds last.
+
+### Phase 12a: Container runtime + Apps MVP
+- [ ] Docker engine in the provisioner (official repo), daemon hardened: no TCP socket, userns-remap (or per-container user namespaces), default seccomp; `installer/provision.sh` port-check stays authoritative — Docker must never publish 80/443
+- [ ] `system/docker.py`: single seam for engine calls (create/start/stop/rm, networks, volumes, logs, stats, image pull with digest pinning) — argv/SDK behind the same audit + unit-test discipline as ADR-005
+- [ ] `App` model + migration: name, owner_id (FK users), image ref, env (secrets encrypted at rest), published internal port, volumes, memory/CPU limits, status; quota `max_apps` joins plans/limits
+- [ ] Create/delete app as an operations pipeline with compensating rollback (pull image → create volumes/network → run container → Caddy vhost → DB record), same progress UI as site provisioning
+- [ ] Caddy: app vhost route (domain → container), suspension 503s reuse Phase 11d semantics; app domains join the sites↔DNS bridge and delegation banner
+- [ ] Compose deploys: upload/paste a `compose.yaml` as ONE app — parsed and validated against a safety policy (reject privileged, host network/PID, host bind mounts outside the app dir, publishing 80/443; panel assigns the project network + volumes), one designated web service routed via Caddy; per-service status/logs/restart
+- [ ] Apps UI: list + create wizard (deploy mode: image OR compose; domain, port, env editor with show-once secrets, limits), detail page with live logs (follow), restart/stop/start, env edit + redeploy
+- [ ] Per-client metering: image + volume disk usage folded into the Usage page; bandwidth via the existing Caddy access-log pipeline
+- [ ] Tests: docker argv builders (no injection), pipeline rollback chaos cases, vhost snapshot, quota enforcement
+- [ ] **Milestone: a client deploys a prebuilt Next.js image with a custom domain + HTTPS from the UI, within their plan limits**
+
+### Phase 12b: Managed data services
+- [ ] One-click Postgres / MySQL / Redis containers: pinned image, volume, panel-generated credentials (shown once, hash-stored), internal-network-only by default
+- [ ] Wire dumps into the existing backup engine (ADR-010 directory format: `pg_dump`/`mysqldump`/RDB alongside volume snapshots), restore paths verified
+- [ ] Connection info surfaced to the owning client; optional exposure on a high port with IP allowlist (off by default)
+- [ ] Adminer gains Postgres support for managed DBs (it already speaks it); per-tenant access via the existing ticket proxy
+- [ ] **Milestone: Django app container + managed Postgres, nightly backup restores cleanly**
+
+### Phase 12c: Builds (decide AFTER 12a/b ship)
+- [ ] **Dockerfile builds first** — the project ships its own build recipe, so this is the cheap 80%: `docker build` from a git URL or uploaded tarball, build queue (one at a time, disk-quota-aware), build logs in the operation UI, image GC
+- [ ] Git integration: deploy keys for private repos + webhook receiver (push → rebuild → redeploy)
+- [ ] Rolling redeploys: health check → start new → repoint Caddy → drain old (zero-downtime, reuses the PHP-version-switch pattern)
+- [ ] Re-evaluate buildpacks/nixpacks (build WITHOUT a Dockerfile) honestly only after the above ships — that is the endless-maintenance half; skipping it is a valid outcome (ADR update either way)
+- [ ] **Milestone: `git push` on a repo with a Dockerfile → live deploy with build log, on a client account**
+
+---
+
 ## Recurring (every week)
 
 - [ ] All CI checks green before merge — never bypass

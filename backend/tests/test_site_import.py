@@ -75,6 +75,54 @@ def test_extract_tar_with_traversal_member_rejected(tmp_path):
         site_import.extract_archive(str(archive), str(tmp_path / "dest"))
 
 
+def test_extract_tar_rejects_symlinks_before_writing(tmp_path):
+    archive = tmp_path / "link.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo(name="escape")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "/etc"
+        tar.addfile(info)
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with pytest.raises(ImportError_, match="unsupported"):
+        site_import.extract_archive(str(archive), str(dest))
+    assert list(dest.iterdir()) == []
+
+
+def test_extract_zip_rejects_symlinks_and_expansion_limits(tmp_path):
+    archive = tmp_path / "link.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        link = zipfile.ZipInfo("escape")
+        link.create_system = 3
+        link.external_attr = 0o120777 << 16
+        zf.writestr(link, "/etc")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with pytest.raises(ImportError_, match="symbolic link"):
+        site_import.extract_archive(str(archive), str(dest))
+
+    large = tmp_path / "large.zip"
+    with zipfile.ZipFile(large, "w") as zf:
+        zf.writestr("large.bin", b"12345")
+    with pytest.raises(ImportError_, match="expansion limit"):
+        site_import.extract_archive(str(large), str(dest), max_expanded_bytes=4)
+
+
+def test_extract_rejects_symlink_destination(tmp_path):
+    archive = tmp_path / "site.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("index.html", "ok")
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "dest"
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks are unavailable on this platform")
+    with pytest.raises(ImportError_, match="symlink"):
+        site_import.extract_archive(str(archive), str(link))
+
+
 def test_unsupported_archive_type(tmp_path):
     p = tmp_path / "site.rar"
     p.write_bytes(b"whatever")
@@ -134,6 +182,19 @@ async def test_upload_validates_kind_and_filename(admin_client, fake_system, app
     body = resp.json()
     assert body["size_bytes"] == len(b"not-really-a-tarball")
     assert body["upload_id"].endswith(".files.tar.gz")
+
+
+async def test_upload_enforces_streaming_size_cap_and_cleans_partial_file(
+    admin_client, fake_system, app, tmp_path
+):
+    app.state.settings.uploads_dir = str(tmp_path)
+    app.state.settings.max_import_upload_bytes = 4
+    site_id = await _make_site(admin_client)
+    response = await admin_client.post(
+        f"/api/sites/{site_id}/import/upload?kind=sql", content=b"12345"
+    )
+    assert response.status_code == 409
+    assert not list(tmp_path.rglob("*.sql"))
 
 
 async def test_start_import_requires_uploads_and_target_db(

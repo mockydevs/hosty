@@ -225,8 +225,18 @@ async def run_restore_site(
         async def do_files() -> None:
             if scope not in ("full", "files") or not _has_archive():
                 return  # backup was made without files — nothing to restore
-            await backup.restore_files(directory, site_dir)
-            await fs.chown_recursive(site.site_user, site_dir, root=settings.sites_root)
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root, create=False
+            )
+            await backup.restore_files(
+                directory,
+                site.doc_root,
+                sites_root=settings.sites_root,
+                staging_root=settings.restore_staging_root,
+            )
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root, create=False
+            )
 
         async def do_databases() -> None:
             if scope not in ("full", "db"):

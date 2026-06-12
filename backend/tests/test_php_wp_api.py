@@ -124,7 +124,11 @@ async def test_update_php_settings(admin_client, fake_system):
     assert body["php_memory_limit"] == "512M"
     assert body["php_upload_max_filesize"] == "128M"
     install = next(c for c in fake_system.calls if c[0] == "install_pool")
-    assert install[3] == {"memory_limit": "512M", "upload_max_filesize": "128M"}
+    assert install[3] == {
+        "doc_root": "/var/www/example.com/public_html",
+        "memory_limit": "512M",
+        "upload_max_filesize": "128M",
+    }
 
 
 async def test_update_php_settings_rejects_garbage(admin_client, fake_system):

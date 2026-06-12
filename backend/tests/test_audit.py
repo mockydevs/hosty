@@ -109,6 +109,14 @@ async def test_ip_allowlist_blocks_unknown_clients(allowlist_settings):
             assert (await c.get("/api/health")).status_code == 200
 
 
+def test_allowlist_parses_comma_separated_cidrs():
+    settings = Settings(
+        panel_allowed_ips="203.0.113.7, 198.51.100.0/24",  # type: ignore[arg-type]
+        _env_file=None,
+    )
+    assert settings.panel_allowed_ips == ["203.0.113.7", "198.51.100.0/24"]
+
+
 # --- panel behind Caddy ----------------------------------------------------------
 
 

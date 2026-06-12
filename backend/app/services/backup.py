@@ -17,11 +17,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 import shutil
+import stat
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 import structlog
@@ -31,7 +34,7 @@ from app.core.clock import utcnow
 from app.core.config import Settings
 from app.core.errors import AppError, NotFoundError
 from app.services import mariadb
-from app.system import runner
+from app.system import fs, runner
 
 log = structlog.get_logger("hosty.backup")
 
@@ -77,8 +80,29 @@ def build_tar_create_argv(archive: Path, site_dir: str) -> list[str]:
     return ["tar", "--zstd", "-cf", str(archive), "-C", site_dir, "."]
 
 
-def build_tar_extract_argv(archive: Path, site_dir: str) -> list[str]:
-    return ["tar", "--zstd", "-xf", str(archive), "-C", site_dir]
+def build_tar_extract_argv(staging_dir: str) -> list[str]:
+    return [
+        "systemd-run",
+        "--quiet",
+        "--wait",
+        "--pipe",
+        "--collect",
+        "--uid=hosty-restore",
+        "--property=NoNewPrivileges=yes",
+        "--property=PrivateDevices=yes",
+        "--property=PrivateTmp=yes",
+        "--property=ProtectHome=yes",
+        "--property=ProtectSystem=strict",
+        f"--property=ReadWritePaths={staging_dir}",
+        "tar",
+        "--zstd",
+        "--extract",
+        "--file=-",
+        "--directory",
+        staging_dir,
+        "--no-same-owner",
+        "--no-same-permissions",
+    ]
 
 
 def build_mysqldump_argv(db_name: str) -> list[str]:
@@ -91,8 +115,16 @@ def build_mysqldump_argv(db_name: str) -> list[str]:
     ]
 
 
-def build_mysql_restore_argv(db_name: str) -> list[str]:
-    return ["mysql", mariadb.validate_identifier(db_name)]
+def build_mysql_restore_argv(db_name: str, *, defaults_file: str) -> list[str]:
+    absolute = Path(defaults_file).is_absolute() or PurePosixPath(defaults_file).is_absolute()
+    if not absolute or "\x00" in defaults_file:
+        raise BackupError("Invalid mysql client configuration path")
+    return [
+        "mysql",
+        f"--defaults-extra-file={defaults_file}",
+        "--database",
+        mariadb.validate_identifier(db_name),
+    ]
 
 
 # --- manifest ----------------------------------------------------------------------
@@ -254,11 +286,54 @@ async def archive_files(site_dir: str, dest: Path) -> None:
     )
 
 
-async def restore_files(directory: Path, site_dir: str) -> None:
+def _validate_extracted_tree(root: Path) -> None:
+    for current, dir_names, file_names in os.walk(root, followlinks=False):
+        for name in [*dir_names, *file_names]:
+            path = Path(current) / name
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode) or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
+                raise BackupError(f"Backup contains an unsupported file type: {path.name}")
+
+
+async def restore_files(
+    directory: Path,
+    doc_root: str,
+    *,
+    sites_root: str,
+    staging_root: str,
+) -> None:
     archive = directory / FILES_ARCHIVE
     if not archive.is_file():
         raise BackupError("Backup contains no file archive")
-    await _run_or_raise(build_tar_extract_argv(archive, site_dir), "extracting files", timeout=3600)
+    root = Path(staging_root)
+    root.mkdir(parents=True, exist_ok=True, mode=0o711)
+    if root.is_symlink() or not root.is_dir():
+        raise BackupError("Restore staging root must be a real directory")
+    root.chmod(0o711)
+    staging = Path(tempfile.mkdtemp(prefix="restore-", dir=root))
+    try:
+        chown = await runner.run(["chown", "hosty-restore:hosty-restore", str(staging)])
+        if not chown.ok:
+            raise BackupError("Could not prepare the isolated restore directory")
+        result = await runner.run(
+            build_tar_extract_argv(str(staging)),
+            timeout=3600,
+            stdin_path=str(archive),
+        )
+        if not result.ok:
+            raise BackupError(f"extracting files failed: {result.stderr.strip()}")
+        _validate_extracted_tree(staging)
+        source = staging / "public_html"
+        if not source.is_dir() or source.is_symlink():
+            raise BackupError("Backup contains no valid public_html directory")
+        await fs.mirror_import_tree(
+            str(source),
+            doc_root,
+            import_root=str(root),
+            sites_root=sites_root,
+        )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 async def restore_databases(directory: Path, db_names: list[str]) -> None:
@@ -266,12 +341,13 @@ async def restore_databases(directory: Path, db_names: list[str]) -> None:
         dump = directory / DB_DIR / f"{mariadb.validate_identifier(name)}.sql"
         if not dump.is_file():
             raise BackupError(f"Backup contains no dump for database {name}")
-        await _run_or_raise(
-            build_mysql_restore_argv(name),
-            f"restoring database {name}",
-            stdin_path=str(dump),
-            timeout=1800,
-        )
+        async with mariadb.restricted_client_config(name) as defaults_file:
+            await _run_or_raise(
+                build_mysql_restore_argv(name, defaults_file=defaults_file),
+                f"restoring database {name}",
+                stdin_path=str(dump),
+                timeout=1800,
+            )
 
 
 # --- S3 mirror -----------------------------------------------------------------------
@@ -377,8 +453,21 @@ async def download_backup(s3: S3Like, prefix: str, root: str, domain: str, backu
     keys = await s3.list_keys(key_prefix)
     if not keys:
         raise NotFoundError(f"Backup {backup_id} not found in S3")
+    target_root = target.resolve()
     for key in keys:
-        await s3.download_file(key, target / key.removeprefix(key_prefix))
+        if not key.startswith(key_prefix):
+            raise BackupError("S3 returned an object outside the requested backup prefix")
+        relative = PurePosixPath(key[len(key_prefix) :])
+        unsafe_parts = any(part in {"", ".", ".."} for part in relative.parts)
+        if relative.is_absolute() or not relative.parts or unsafe_parts:
+            raise BackupError(f"Unsafe S3 backup object key: {key!r}")
+        local = (target / Path(*relative.parts)).resolve()
+        try:
+            local.relative_to(target_root)
+        except ValueError as exc:
+            raise BackupError(f"S3 backup object escaped the local target: {key!r}") from exc
+        local.parent.mkdir(parents=True, exist_ok=True)
+        await s3.download_file(key, local)
     return target
 
 

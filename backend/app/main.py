@@ -131,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.login_limiter = SlidingWindowLimiter(
         settings.login_rate_limit_attempts, settings.login_rate_limit_window_seconds
     )
+    app.state.upload_lock = asyncio.Lock()
 
     if settings.cors_origins:
         app.add_middleware(

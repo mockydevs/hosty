@@ -9,6 +9,7 @@ fast. The install itself is a transactional pipeline with rollback.
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 from dataclasses import dataclass
@@ -164,7 +165,13 @@ async def run_install_wordpress(
                 INDEX_SKELETON.format(domain=site.domain),
                 root=settings.sites_root,
             )
-            await fs.chown_recursive(site.site_user, site.doc_root, root=settings.sites_root)
+            await fs.secure_site_layout(
+                os.path.dirname(site.doc_root),
+                site.doc_root,
+                site.site_user,
+                root=settings.sites_root,
+                create=False,
+            )
 
         async def do_configure() -> None:
             await run_wp(

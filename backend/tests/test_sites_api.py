@@ -48,6 +48,17 @@ class FakeSystem:
             fake._maybe_fail("doc_root")
             fake.calls.append(("create_dir", path))
 
+        async def secure_site_layout(
+            site_dir: str,
+            doc_root: str,
+            user: str,
+            *,
+            root: str,
+            create: bool = True,
+        ) -> None:
+            fake._maybe_fail("doc_root")
+            fake.calls.append(("secure_site_layout", site_dir, doc_root, user, create))
+
         def write_file(path: str, content: str, *, root: str) -> None:
             fake.files[path] = content
 
@@ -84,6 +95,7 @@ class FakeSystem:
         monkeypatch.setattr(users, "create", user_create)
         monkeypatch.setattr(users, "delete", user_delete)
         monkeypatch.setattr(fs, "create_dir", create_dir)
+        monkeypatch.setattr(fs, "secure_site_layout", secure_site_layout)
         monkeypatch.setattr(fs, "write_file", write_file)
         monkeypatch.setattr(fs, "chown_recursive", chown_recursive)
         monkeypatch.setattr(fs, "remove_tree", remove_tree)

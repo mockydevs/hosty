@@ -8,6 +8,7 @@ version, so this layer cannot write outside the PHP pool directories.
 from __future__ import annotations
 
 import os
+import posixpath
 import re
 
 import structlog
@@ -69,6 +70,7 @@ def render_pool_config(
     version: str,
     settings: Settings,
     *,
+    doc_root: str,
     memory_limit: str = "256M",
     upload_max_filesize: str = "64M",
 ) -> str:
@@ -77,6 +79,14 @@ def render_pool_config(
     validate_php_version(version, allowed=settings.php_versions)
     validate_php_size(memory_limit, name="memory_limit")
     validate_php_size(upload_max_filesize, name="upload_max_filesize")
+    normalized_root = posixpath.normpath(doc_root)
+    sites_root = posixpath.normpath(settings.sites_root)
+    if (
+        normalized_root != doc_root
+        or not normalized_root.startswith(sites_root + "/")
+        or any(char in doc_root for char in ("\x00", "\n", "\r", ":"))
+    ):
+        raise InvalidPhpSettingError("doc_root must be a normalized path inside sites_root")
     socket = socket_path(site_user, version, settings)
     return f"""\
 ; Managed by HostyPanel — do not edit by hand.
@@ -96,7 +106,7 @@ pm.max_requests = 500
 
 php_admin_value[error_log] = /home/{site_user}/php-error.log
 php_admin_flag[log_errors] = on
-php_admin_value[open_basedir] = none
+php_admin_value[open_basedir] = {doc_root}:/home/{site_user}:/tmp
 php_value[memory_limit] = {memory_limit}
 php_value[upload_max_filesize] = {upload_max_filesize}
 php_value[post_max_size] = {upload_max_filesize}
@@ -108,6 +118,7 @@ async def install_pool(
     version: str,
     settings: Settings,
     *,
+    doc_root: str,
     memory_limit: str = "256M",
     upload_max_filesize: str = "64M",
 ) -> None:
@@ -117,6 +128,7 @@ async def install_pool(
         site_user,
         version,
         settings,
+        doc_root=doc_root,
         memory_limit=memory_limit,
         upload_max_filesize=upload_max_filesize,
     )

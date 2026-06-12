@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
+from httpx import ASGITransport, AsyncClient
+
+from app.main import create_app
 from tests.conftest import TEST_PASSWORD, TEST_USER, setup_and_login
 
 NEW_PASSWORD = "an-even-longer-password-42"
@@ -27,6 +30,27 @@ async def test_setup_locks_after_first_user(client):
     resp = await client.post("/api/auth/setup", json={"username": "intruder", "password": "x" * 20})
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "conflict"
+
+
+async def test_concurrent_setup_creates_exactly_one_admin(settings, tmp_path):
+    db_path = (tmp_path / "setup-race.db").as_posix()
+    application = create_app(
+        settings.model_copy(update={"database_url": f"sqlite+aiosqlite:///{db_path}"})
+    )
+    async with application.router.lifespan_context(application):
+        transport = ASGITransport(app=application)
+
+        async def attempt(index: int) -> int:
+            async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+                response = await c.post(
+                    "/api/auth/setup",
+                    json={"username": f"admin{index}", "password": TEST_PASSWORD},
+                )
+                return response.status_code
+
+        statuses = await asyncio.gather(*(attempt(index) for index in range(8)))
+        assert statuses.count(201) == 1
+        assert statuses.count(409) == 7
 
 
 async def test_setup_rejects_weak_password(client):
@@ -122,6 +146,26 @@ async def test_refresh_reuse_revokes_session_family(client):
     assert after.status_code == 401
 
 
+async def test_concurrent_refresh_allows_only_one_rotation(client, app):
+    await setup_and_login(client)
+    old_cookie = client.cookies["hosty_refresh"]
+    transport = ASGITransport(app=app)
+
+    async def rotate() -> tuple[int, str | None]:
+        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+            response = await c.post(
+                "/api/auth/refresh", headers={"Cookie": f"hosty_refresh={old_cookie}"}
+            )
+            return response.status_code, c.cookies.get("hosty_refresh")
+
+    results = await asyncio.gather(rotate(), rotate())
+    assert sorted(status for status, _cookie in results) == [200, 401]
+    successor = next(cookie for status, cookie in results if status == 200)
+    client.cookies.clear()
+    client.cookies.set("hosty_refresh", successor, domain="testserver", path="/api/auth")
+    assert (await client.post("/api/auth/refresh")).status_code == 401
+
+
 async def test_refresh_without_cookie(client):
     resp = await client.post("/api/auth/refresh")
     assert resp.status_code == 401
@@ -143,9 +187,6 @@ async def test_change_password_revokes_everything(client):
     token = await setup_and_login(client)
     auth = {"Authorization": f"Bearer {token}"}
     refresh_cookie = client.cookies["hosty_refresh"]
-
-    # Ensure the old token's iat second is strictly before the change
-    await asyncio.sleep(1.1)
 
     resp = await client.post(
         "/api/auth/change-password",

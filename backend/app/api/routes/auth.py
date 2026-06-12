@@ -5,11 +5,13 @@ See docs/ARCHITECTURE.md ADR-004 for the token design.
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
@@ -27,7 +29,7 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
-from app.db.models import RefreshToken, User
+from app.db.models import RefreshToken, SetupState, User
 
 router = APIRouter()
 
@@ -98,19 +100,26 @@ async def _user_count(db: AsyncSession) -> int:
 
 
 async def _issue_tokens(
-    request: Request, response: Response, db: AsyncSession, user: User
+    request: Request,
+    response: Response,
+    db: AsyncSession,
+    user: User,
+    *,
+    family_id: str | None = None,
 ) -> TokenResponse:
     settings = _settings(request)
     access = create_access_token(
         subject=str(user.id),
         secret=settings.secret_key,
         ttl_seconds=settings.access_token_ttl_seconds,
+        extra_claims={"ver": user.token_version},
     )
     raw_refresh = generate_refresh_token()
     db.add(
         RefreshToken(
             user_id=user.id,
             token_hash=hash_token(raw_refresh),
+            family_id=family_id or secrets.token_hex(32),
             expires_at=utcnow() + timedelta(seconds=settings.refresh_token_ttl_seconds),
         )
     )
@@ -129,7 +138,8 @@ async def _issue_tokens(
 
 @router.get("/setup", response_model=SetupStatusResponse)
 async def setup_status(db: AsyncSession = Depends(get_db)) -> SetupStatusResponse:
-    return SetupStatusResponse(setup_required=await _user_count(db) == 0)
+    claimed = await db.get(SetupState, 1)
+    return SetupStatusResponse(setup_required=claimed is None and await _user_count(db) == 0)
 
 
 @router.post("/setup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -138,8 +148,13 @@ async def setup(body: SetupRequest, db: AsyncSession = Depends(get_db)) -> User:
     if await _user_count(db) > 0:
         raise ConflictError("Setup has already been completed")
     user = User(username=body.username, password_hash=hash_password(body.password), role="admin")
+    db.add(SetupState(id=1, completed_at=utcnow()))
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ConflictError("Setup has already been completed") from exc
     await db.refresh(user)
     return user
 
@@ -219,7 +234,7 @@ async def refresh(
         # Reuse of a rotated token => assume theft, revoke the whole family.
         await db.execute(
             update(RefreshToken)
-            .where(RefreshToken.user_id == row.user_id, RefreshToken.revoked_at.is_(None))
+            .where(RefreshToken.family_id == row.family_id, RefreshToken.revoked_at.is_(None))
             .values(revoked_at=now)
         )
         await db.commit()
@@ -231,8 +246,20 @@ async def refresh(
         raise UnauthorizedError("User no longer exists")
     if user.suspended:
         raise UnauthorizedError("Account suspended — contact your administrator")
-    row.revoked_at = now
-    return await _issue_tokens(request, response, db, user)
+    claimed = await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.id == row.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=now)
+    )
+    if claimed.rowcount != 1:
+        await db.execute(
+            update(RefreshToken)
+            .where(RefreshToken.family_id == row.family_id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        await db.commit()
+        raise UnauthorizedError("Refresh token reuse detected; session family revoked")
+    return await _issue_tokens(request, response, db, user, family_id=row.family_id)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -259,8 +286,9 @@ async def change_password(
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False  # temp password fulfilled (Phase 11a)
     user.password_changed_at = utcnow()
+    user.token_version += 1
     db.add(user)
-    # Revoke every active session: old access tokens die via iat check.
+    # Revoke every active session; token_version invalidates access tokens immediately.
     await db.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))

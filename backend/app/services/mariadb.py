@@ -12,8 +12,13 @@ databases take arbitrary (user-chosen) names.
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
+import tempfile
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 
@@ -86,6 +91,52 @@ def build_drop_sql(database: str, user: str) -> str:
 
 def build_mariadb_argv(sql: str) -> list[str]:
     return ["mariadb", "--protocol=socket", "--user=root", "--batch", "--execute", sql]
+
+
+def build_restricted_user_sql(database: str, user: str, password: str) -> str:
+    database = validate_identifier(database)
+    user = validate_identifier(user)
+    password = _validate_password(password)
+    return (
+        f"CREATE USER '{user}'@'localhost' IDENTIFIED BY '{password}'; "
+        f"GRANT ALL PRIVILEGES ON `{database}`.* TO '{user}'@'localhost'; "
+        "FLUSH PRIVILEGES;"
+    )
+
+
+def build_drop_user_sql(user: str) -> str:
+    user = validate_identifier(user)
+    return f"DROP USER IF EXISTS '{user}'@'localhost'; FLUSH PRIVILEGES;"
+
+
+@asynccontextmanager
+async def restricted_client_config(database: str) -> AsyncIterator[str]:
+    """Yield a protected mysql client config for an ephemeral schema-only user."""
+    database = validate_identifier(database)
+    user = validate_identifier(f"hosty_import_{secrets.token_hex(6)}")
+    password = generate_password()
+    fd, path = tempfile.mkstemp(prefix="hosty-mysql-", suffix=".cnf")
+    create_attempted = False
+    primary_error: BaseException | None = None
+    try:
+        os.chmod(path, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as config:
+            config.write(f"[client]\nprotocol=socket\nuser={user}\npassword={password}\n")
+        create_attempted = True
+        await _execute(build_restricted_user_sql(database, user, password), "create import user")
+        yield path
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        Path(path).unlink(missing_ok=True)
+        if create_attempted:
+            try:
+                await _execute(build_drop_user_sql(user), "drop import user")
+            except Exception:
+                if primary_error is None:
+                    raise
+                log.exception("mariadb_import_user_cleanup_failed", user=user)
 
 
 async def _execute(sql: str, what: str) -> None:

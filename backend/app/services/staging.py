@@ -109,9 +109,20 @@ async def run_create_staging(
             await users.delete(site.site_user)
 
         async def do_docroot() -> None:
-            await fs.create_dir(site.doc_root, root=settings.sites_root)
+            await fs.secure_site_layout(
+                site_dir_for(source.domain, settings),
+                source.doc_root,
+                source.site_user,
+                root=settings.sites_root,
+                create=False,
+            )
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root
+            )
             await fs.mirror_tree(source.doc_root, site.doc_root, root=settings.sites_root)
-            await fs.chown_recursive(site.site_user, site_dir, root=settings.sites_root)
+            await fs.secure_site_layout(
+                site_dir, site.doc_root, site.site_user, root=settings.sites_root, create=False
+            )
 
         async def undo_docroot() -> None:
             await fs.remove_tree(site_dir, root=settings.sites_root)
@@ -121,6 +132,7 @@ async def run_create_staging(
                 site.site_user,
                 site.php_version,
                 settings,
+                doc_root=site.doc_root,
                 memory_limit=site.php_memory_limit,
                 upload_max_filesize=site.php_upload_max_filesize,
             )
@@ -232,13 +244,29 @@ async def run_push_staging(
         await db.commit()
 
         async def do_files() -> None:
+            await fs.secure_site_layout(
+                site_dir_for(staging_site.domain, settings),
+                staging_site.doc_root,
+                staging_site.site_user,
+                root=settings.sites_root,
+                create=False,
+            )
+            await fs.secure_site_layout(
+                site_dir_for(production.domain, settings),
+                production.doc_root,
+                production.site_user,
+                root=settings.sites_root,
+                create=False,
+            )
             await fs.mirror_tree(
                 staging_site.doc_root, production.doc_root, root=settings.sites_root, delete=True
             )
-            await fs.chown_recursive(
-                production.site_user,
+            await fs.secure_site_layout(
                 site_dir_for(production.domain, settings),
+                production.doc_root,
+                production.site_user,
                 root=settings.sites_root,
+                create=False,
             )
 
         async def do_database() -> None:
@@ -327,9 +355,12 @@ async def runner_dump(db_name: str, dump_path: str):
 async def runner_restore(db_name: str, dump_path: str):
     from app.system import runner
 
-    return await runner.run(
-        backup.build_mysql_restore_argv(db_name), timeout=1800, stdin_path=dump_path
-    )
+    async with mariadb.restricted_client_config(db_name) as defaults_file:
+        return await runner.run(
+            backup.build_mysql_restore_argv(db_name, defaults_file=defaults_file),
+            timeout=1800,
+            stdin_path=dump_path,
+        )
 
 
 def make_staging_site(source: Site, settings: Settings) -> Site:

@@ -197,6 +197,9 @@ async def _revoke_sessions(db: AsyncSession, user_id: int) -> None:
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=utcnow())
     )
+    await db.execute(
+        update(User).where(User.id == user_id).values(token_version=User.token_version + 1)
+    )
 
 
 @router.get("", response_model=list[UserAdminResponse])
@@ -440,7 +443,11 @@ async def impersonate_user(
         subject=str(user.id),
         secret=settings.secret_key,
         ttl_seconds=settings.access_token_ttl_seconds,
-        extra_claims={"imp": admin.id},
+        extra_claims={
+            "imp": admin.id,
+            "imp_ver": admin.token_version,
+            "ver": user.token_version,
+        },
     )
     log.info("impersonation_started", admin=admin.username, client=user.username)
     return ImpersonateResponse(

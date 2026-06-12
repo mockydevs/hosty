@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Hosty self-update: pull a ref/tag, sync deps, rebuild frontend, migrate, restart.
-#   sudo bash /opt/hosty/installer/update.sh [git-ref]   (default: latest main)
+#   sudo bash /opt/hosty/installer/update.sh <full-commit-sha>
 set -euo pipefail
 cd /  # guard against a deleted/inaccessible caller cwd
 [[ $EUID -eq 0 ]] || { echo "Run as root" >&2; exit 1; }
@@ -9,7 +9,11 @@ APP_DIR=/opt/hosty
 STATE_DIR=/var/lib/hosty
 ENV_FILE=$STATE_DIR/hosty.env
 VENV=$STATE_DIR/venv
-REF="${1:-main}"
+REF="${1:-}"
+[[ $REF =~ ^[0-9a-f]{40}$ ]] || {
+  echo "Pass an immutable full 40-character Git commit SHA" >&2
+  exit 1
+}
 
 log() { printf '\n==> %s\n' "$*"; }
 
@@ -24,18 +28,17 @@ fi
 
 # ── Pull latest code ─────────────────────────────────────────────────────────
 log "Updating source to $REF"
-git -C "$APP_DIR" fetch --tags origin
-git -C "$APP_DIR" checkout -q "$REF"
-# /opt/hosty is a deploy checkout: force it to match the remote exactly.
-# (A swallowed `pull --ff-only || true` here once made updates silently no-op.)
-if git -C "$APP_DIR" rev-parse -q --verify "origin/$REF" >/dev/null 2>&1; then
-  git -C "$APP_DIR" reset --hard "origin/$REF"
-fi
+git -C "$APP_DIR" fetch origin "$REF"
+git -C "$APP_DIR" checkout -q --detach "$REF"
+[[ $(git -C "$APP_DIR" rev-parse HEAD) == "$REF" ]] || {
+  echo "Checked-out source does not match requested commit" >&2
+  exit 1
+}
 echo "    Commit: $(git -C "$APP_DIR" describe --tags --always)"
 
 # ── Backend dependencies + migrations ────────────────────────────────────────
 log "Backend dependencies"
-(cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync)
+(cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync --frozen)
 
 log "Database migrations (alembic upgrade head)"
 (cd "$APP_DIR/backend" \

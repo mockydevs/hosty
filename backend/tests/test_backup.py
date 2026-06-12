@@ -38,13 +38,27 @@ def test_tar_argv_exact(tmp_path):
         "/var/www/example.com",
         ".",
     ]
-    assert backup.build_tar_extract_argv(archive, "/var/www/example.com") == [
+    assert backup.build_tar_extract_argv("/var/lib/hosty/restore-staging/job") == [
+        "systemd-run",
+        "--quiet",
+        "--wait",
+        "--pipe",
+        "--collect",
+        "--uid=hosty-restore",
+        "--property=NoNewPrivileges=yes",
+        "--property=PrivateDevices=yes",
+        "--property=PrivateTmp=yes",
+        "--property=ProtectHome=yes",
+        "--property=ProtectSystem=strict",
+        "--property=ReadWritePaths=/var/lib/hosty/restore-staging/job",
         "tar",
         "--zstd",
-        "-xf",
-        str(archive),
-        "-C",
-        "/var/www/example.com",
+        "--extract",
+        "--file=-",
+        "--directory",
+        "/var/lib/hosty/restore-staging/job",
+        "--no-same-owner",
+        "--no-same-permissions",
     ]
 
 
@@ -56,7 +70,12 @@ def test_mysql_argv_exact():
         "--routines",
         "shop_db",
     ]
-    assert backup.build_mysql_restore_argv("shop_db") == ["mysql", "shop_db"]
+    assert backup.build_mysql_restore_argv("shop_db", defaults_file="/tmp/mysql.cnf") == [
+        "mysql",
+        "--defaults-extra-file=/tmp/mysql.cnf",
+        "--database",
+        "shop_db",
+    ]
 
 
 def test_mysql_argv_rejects_bad_identifier():
@@ -177,6 +196,11 @@ def make_fake_runner(calls: list[list[str]]):
             Path(stdout_path).write_text(f"-- dump of {argv[-1]}\n")
         if argv[0] == "tar" and "-cf" in argv:
             Path(argv[argv.index("-cf") + 1]).write_bytes(b"FAKE-TAR-CONTENT" * 16)
+        if argv[0] == "systemd-run":
+            staging_arg = next(arg for arg in argv if arg.startswith("--property=ReadWritePaths="))
+            staging = Path(staging_arg.split("=", 2)[2])
+            (staging / "public_html").mkdir()
+            (staging / "public_html" / "index.php").write_text("restored")
         return runner.CommandResult(tuple(argv), 0, "", "", 1.0)
 
     return fake_run
@@ -198,10 +222,19 @@ async def test_restore_runs_extract_and_mysql(tmp_path, monkeypatch):
     _make_backup_dir(directory, databases=["shop_db"])
     calls: list[list[str]] = []
     monkeypatch.setattr("app.system.runner.run", make_fake_runner(calls))
-    await backup.restore_files(directory, "/var/www/a.com")
+    await backup.restore_files(
+        directory,
+        "/var/www/a.com/public_html",
+        sites_root="/var/www",
+        staging_root=str(tmp_path / "restore-staging"),
+    )
     await backup.restore_databases(directory, ["shop_db"])
-    assert calls[0][:3] == ["tar", "--zstd", "-xf"]
-    assert calls[1] == ["mysql", "shop_db"]
+    assert calls[0][0] == "chown"
+    assert calls[1][0] == "systemd-run"
+    assert calls[2][0] == "rsync"
+    assert calls[3][0] == "mariadb"  # create restricted restore user
+    assert calls[4][0] == "mysql" and calls[4][-1] == "shop_db"
+    assert calls[5][0] == "mariadb"  # drop restricted restore user
 
 
 async def test_restore_missing_dump_fails(tmp_path):
@@ -271,6 +304,16 @@ async def test_download_backup_restores_local_copy(tmp_path, settings):
 
     with pytest.raises(NotFoundError):
         await backup.download_backup(fake, "hosty", str(other_root), "a.com", "20260101T000000Z")
+
+
+async def test_download_backup_rejects_traversal_keys(tmp_path):
+    prefix = "hosty/a.com/20260611T030000Z/"
+    fake = FakeS3({prefix + "../../escape": b"owned"})
+    with pytest.raises(backup.BackupError, match="Unsafe S3"):
+        await backup.download_backup(
+            fake, "hosty", str(tmp_path / "backups"), "a.com", "20260611T030000Z"
+        )
+    assert not (tmp_path / "escape").exists()
 
 
 def test_s3_enabled_requires_all_settings(settings):

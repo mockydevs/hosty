@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from app.system import fs
 from app.system.fs import (
     InvalidSitePathError,
+    assert_no_symlink,
     build_chown_argv,
     build_mkdir_argv,
     build_rmtree_argv,
@@ -81,3 +83,48 @@ def test_rmtree_injection_attempts_stay_single_argv_items():
             continue
         assert argv[:3] == ["rm", "-rf", "--"] and len(argv) == 4
         assert argv[3] == validate_site_path(evil, root=ROOT)
+
+
+def test_existing_symlink_component_is_rejected(tmp_path):
+    root = tmp_path / "sites"
+    real = tmp_path / "real"
+    root.mkdir()
+    real.mkdir()
+    link = root / "example.com"
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks are unavailable on this platform")
+    with pytest.raises(InvalidSitePathError, match="symlink"):
+        assert_no_symlink(str(link / "public_html"), root=str(root))
+
+
+async def test_import_mirror_rejects_symlink_source_and_destination(tmp_path):
+    imports = tmp_path / "imports"
+    sites = tmp_path / "sites"
+    source = imports / "source"
+    destination = sites / "example.com" / "public_html"
+    source.mkdir(parents=True)
+    destination.mkdir(parents=True)
+    source_link = imports / "source-link"
+    destination_link = sites / "linked.example"
+    try:
+        source_link.symlink_to(source, target_is_directory=True)
+        destination_link.symlink_to(destination, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks are unavailable on this platform")
+
+    with pytest.raises(InvalidSitePathError, match="symlink"):
+        await fs.mirror_import_tree(
+            str(source_link),
+            str(destination),
+            import_root=str(imports),
+            sites_root=str(sites),
+        )
+    with pytest.raises(InvalidSitePathError, match="symlink"):
+        await fs.mirror_import_tree(
+            str(source),
+            str(destination_link),
+            import_root=str(imports),
+            sites_root=str(sites),
+        )
