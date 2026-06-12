@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Hosty production installer for a FRESH Ubuntu 24.04 server.
 # Idempotent: safe to re-run. Usage:
-# Run from a verified clone: sudo env HOSTY_REF=$(git rev-parse HEAD) bash installer/install.sh
+#   curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
+# or, from a clone:  sudo bash installer/install.sh
 set -euo pipefail
 
 # The caller may be sitting inside a directory this script replaces (e.g.
@@ -13,11 +14,7 @@ cd /
 [[ ${VERSION_ID:-} == "24.04" ]] || echo "WARNING: tested on Ubuntu 24.04, found ${VERSION_ID:-unknown}"
 
 REPO_URL="${HOSTY_REPO_URL:-https://github.com/mockydevs/hosty.git}"
-REPO_REF="${HOSTY_REF:-}"
-[[ $REPO_REF =~ ^[0-9a-f]{40}$ ]] || {
-  echo "HOSTY_REF must be an immutable full 40-character Git commit SHA" >&2
-  exit 1
-}
+REPO_REF="${HOSTY_REF:-main}"
 APP_DIR=/opt/hosty
 STATE_DIR=/var/lib/hosty
 ENV_FILE=$STATE_DIR/hosty.env
@@ -28,16 +25,16 @@ log() { printf '\n==> %s\n' "$*"; }
 log "Hosty source → $APP_DIR (ref: $REPO_REF)"
 apt-get update -q && apt-get install -qy git
 if [[ -d $APP_DIR/.git ]]; then
-  git -C "$APP_DIR" fetch origin "$REPO_REF"
+  git -C "$APP_DIR" fetch --tags origin
+  git -C "$APP_DIR" checkout -q "$REPO_REF"
+  # Deploy checkout: force it to match the remote (a swallowed pull here once
+  # made re-installs silently keep old code).
+  if git -C "$APP_DIR" rev-parse -q --verify "origin/$REPO_REF" >/dev/null 2>&1; then
+    git -C "$APP_DIR" reset --hard "origin/$REPO_REF"
+  fi
 else
-  git clone --no-checkout "$REPO_URL" "$APP_DIR"
-  git -C "$APP_DIR" fetch origin "$REPO_REF"
+  git clone --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
 fi
-git -C "$APP_DIR" checkout -q --detach "$REPO_REF"
-[[ $(git -C "$APP_DIR" rev-parse HEAD) == "$REPO_REF" ]] || {
-  echo "Checked-out source does not match HOSTY_REF" >&2
-  exit 1
-}
 
 log "Stack (Caddy, PHP, MariaDB, PowerDNS, Filebrowser, Adminer, WP-CLI)"
 bash "$APP_DIR/installer/provision.sh"

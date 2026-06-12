@@ -36,30 +36,8 @@ Screenshots are tracked under `docs/screenshots/` during VM verification.
 Target: a fresh Ubuntu 24.04 server with at least 2 GB RAM and ports 80/443
 available.
 
-Choose a full 40-character commit SHA from a signed Hosty release, then
-install that immutable revision with one command:
-
 ```bash
-HOSTY_REF=<FULL_40_CHARACTER_COMMIT_SHA>
-curl --proto '=https' --tlsv1.2 -fsSL \
-  "https://raw.githubusercontent.com/mockydevs/hosty/$HOSTY_REF/installer/get.sh" \
-  | sudo env HOSTY_REF="$HOSTY_REF" bash
-```
-
-The bootstrap URL is pinned to the same commit SHA that gets installed, so
-the script and the installed tree come from one immutable revision — never a
-mutable branch. The bootstrap only clones and verifies that revision
-(`git rev-parse HEAD` must equal `HOSTY_REF`); the full installer then runs
-from the verified checkout and re-validates the SHA itself.
-
-If you prefer not to pipe curl into a shell, the equivalent manual flow:
-
-```bash
-HOSTY_REF=<FULL_40_CHARACTER_COMMIT_SHA>
-git clone --no-checkout https://github.com/mockydevs/hosty.git hosty
-git -C hosty fetch origin "$HOSTY_REF"
-git -C hosty checkout --detach "$HOSTY_REF"
-sudo env HOSTY_REF="$HOSTY_REF" bash hosty/installer/install.sh
+curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
 ```
 
 The installer prints the panel URL when it finishes. On first visit, create the
@@ -70,23 +48,21 @@ before running the installer:
 
 ```bash
 export HOSTY_PANEL_DOMAIN=panel.example.com
-curl --proto '=https' --tlsv1.2 -fsSL \
-  "https://raw.githubusercontent.com/mockydevs/hosty/$HOSTY_REF/installer/get.sh" \
-  | sudo env HOSTY_REF="$HOSTY_REF" HOSTY_PANEL_DOMAIN="$HOSTY_PANEL_DOMAIN" bash
+curl -fsSL https://raw.githubusercontent.com/mockydevs/hosty/main/installer/install.sh | sudo bash
 ```
 
 Optional install-time settings:
 
 - `HOSTY_PANEL_ALLOWED_IPS`: comma-separated allowlist for panel access.
 - `HOSTY_REPO_URL`: alternate Git repository.
-- `HOSTY_REF`: required immutable full 40-character commit SHA.
+- `HOSTY_REF`: branch, tag, or commit to install.
 
 ### Update Hosty
 
-Choose the verified commit SHA for the release you want, then run:
+To update to the latest version of Hosty, run the following command:
 
 ```bash
-sudo bash /opt/hosty/installer/update.sh <FULL_40_CHARACTER_COMMIT_SHA>
+sudo bash /opt/hosty/installer/update.sh
 ```
 
 ### Uninstall Hosty
