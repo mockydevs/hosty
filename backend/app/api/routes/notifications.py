@@ -133,6 +133,10 @@ class SMTPConfigResponse(BaseModel):
     username: str = ""
     notification_recipients: list[str] = Field(default_factory=list)
     has_password: bool = False
+    # Populated only by the PUT (save) response after credentials are checked.
+    # None means "not checked" (e.g. on GET); True/False is the verify result.
+    verified: bool | None = None
+    verify_error: str | None = None
 
 
 class UpdateSMTPConfigRequest(BaseModel):
@@ -208,7 +212,17 @@ async def set_smtp(
         password=body.password,
         notification_recipients=body.notification_recipients,
     )
-    return _smtp_response(config)
+    response = _smtp_response(config)
+    # Settings are persisted above regardless of reachability. We then attempt a
+    # live connect + auth so the admin gets immediate feedback on whether the
+    # credentials actually work, without losing the saved config on failure.
+    try:
+        await mail.verify(config)
+        response.verified = True
+    except mail.SMTPVerifyError as exc:
+        response.verified = False
+        response.verify_error = str(exc)
+    return response
 
 
 @router.post("/smtp/test", response_model=dict[str, bool])
@@ -226,7 +240,7 @@ async def test_smtp(
             text="This is a test email from Hosty.",
         )
     except Exception as exc:
-        raise ConflictError(f"SMTP Error: {exc}")
+        raise ConflictError(mail.describe_smtp_error(exc)) from exc
     return {"sent": True}
 
 

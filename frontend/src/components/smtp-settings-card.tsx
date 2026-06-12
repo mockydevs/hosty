@@ -55,7 +55,7 @@ export function SMTPSettingsCard() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error: apiError, response } = await api.PUT("/api/notifications/smtp", {
+      const { data, error: apiError, response } = await api.PUT("/api/notifications/smtp", {
         body: {
           host: host.trim(),
           port: Number(port),
@@ -67,13 +67,25 @@ export function SMTPSettingsCard() {
           notification_recipients: textToRecipients(recipients),
         },
       });
-      if (apiError) throw new Error(apiErrorMessage(apiError, `Save failed (${response.status})`));
+      if (apiError || !data)
+        throw new Error(apiErrorMessage(apiError, `Save failed (${response.status})`));
+      return data;
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["notifications", "smtp"] });
       setPassword("");
       setError(null);
-      toast.success("SMTP settings saved");
+      // The backend connects and authenticates after saving, so we can tell the
+      // admin right away whether the credentials actually work.
+      if (data.verified === false) {
+        const reason = data.verify_error ?? "could not reach the mail server";
+        setError(reason);
+        toast.warning(`Saved, but credentials could not be verified — ${reason}`);
+      } else if (data.verified === true) {
+        toast.success("SMTP settings saved and verified");
+      } else {
+        toast.success("SMTP settings saved");
+      }
     },
     onError: (err) => setError(err.message),
   });

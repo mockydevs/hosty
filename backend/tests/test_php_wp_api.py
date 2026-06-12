@@ -248,11 +248,12 @@ async def test_wp_status_unhealthy_when_panel_installed_but_check_fails(
     destructive install wizard for a live site)."""
     site_id = await _create_site(admin_client)
     fake_wp.installed = True
-    resp = await admin_client.post(f"/api/sites/{site_id}/wordpress", json=WP_BODY)
+    await admin_client.post(f"/api/sites/{site_id}/wordpress", json=WP_BODY)
     # Install rejected (already installed per the live check) — flip the flag
     # directly instead: simulate a panel-installed site whose check now fails.
-    from app.db.models import Site
     from sqlalchemy import update as sa_update
+
+    from app.db.models import Site
 
     async with admin_client._transport.app.state.sessionmaker() as db:  # type: ignore[attr-defined]
         await db.execute(sa_update(Site).where(Site.id == site_id).values(wordpress=True))

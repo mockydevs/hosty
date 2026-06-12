@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import smtplib
+import socket
+import ssl
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
@@ -22,6 +24,42 @@ log = structlog.get_logger("hosty.mail")
 
 SMTP_SETTINGS_KEY = "smtp"
 SMTP_SECURITY = Literal["starttls", "ssl", "none"]
+
+
+class SMTPVerifyError(Exception):
+    """Raised when the SMTP server cannot be reached or credentials are rejected.
+
+    Carries a human-readable message suitable for showing to the admin.
+    """
+
+
+def describe_smtp_error(exc: Exception) -> str:
+    """Map a low-level SMTP/socket error to a short, actionable message."""
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return "Authentication failed — check the login and password."
+    if isinstance(exc, smtplib.SMTPConnectError):
+        return "Could not connect to the mail server — check the host and port."
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return "The mail server closed the connection unexpectedly — check the security mode."
+    if isinstance(exc, smtplib.SMTPNotSupportedError):
+        return "The mail server does not support the selected security mode."
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        return "The mail server refused the recipient address."
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        return "The mail server refused the sender address — check the sender email."
+    if isinstance(exc, smtplib.SMTPException):
+        return str(exc) or "The mail server rejected the request."
+    if isinstance(exc, ssl.SSLError):
+        return "TLS handshake failed — check the security mode (STARTTLS vs SSL/TLS) and port."
+    if isinstance(exc, (socket.timeout, TimeoutError)):
+        return "Timed out reaching the mail server — check the host, port, and firewall."
+    if isinstance(exc, socket.gaierror):
+        return "Could not resolve the mail server hostname — check the host."
+    if isinstance(exc, ConnectionRefusedError):
+        return "Connection refused — check the host and port."
+    if isinstance(exc, OSError):
+        return f"Network error reaching the mail server: {exc}"
+    return str(exc) or exc.__class__.__name__
 
 
 @dataclass(frozen=True)
@@ -157,6 +195,32 @@ def _send_sync(config: SMTPConfig, message: EmailMessage) -> None:
         if config.username:
             smtp.login(config.username, config.password)
         smtp.send_message(message)
+
+
+async def verify(config: SMTPConfig) -> None:
+    """Connect, negotiate TLS, and authenticate without sending a message.
+
+    This confirms the stored host, port, security mode, and (when a username is
+    set) the login/password are accepted by the server. Raises
+    :class:`SMTPVerifyError` with a human-readable message on any failure.
+    """
+    try:
+        await asyncio.to_thread(_verify_sync, config)
+    except Exception as exc:
+        log.info("smtp_verify_failed", host=config.host, error=str(exc))
+        raise SMTPVerifyError(describe_smtp_error(exc)) from exc
+
+
+def _verify_sync(config: SMTPConfig) -> None:
+    smtp_cls = smtplib.SMTP_SSL if config.security == "ssl" else smtplib.SMTP
+    with smtp_cls(config.host, config.port, timeout=10) as smtp:
+        smtp.ehlo()
+        if config.security == "starttls":
+            smtp.starttls()
+            smtp.ehlo()
+        if config.username:
+            smtp.login(config.username, config.password)
+        smtp.noop()
 
 
 async def send_user_temp_password(

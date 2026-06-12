@@ -2158,6 +2158,10 @@ export interface components {
              * @default false
              */
             has_password: boolean;
+            /** Verified */
+            verified?: boolean | null;
+            /** Verify Error */
+            verify_error?: string | null;
         };
         /** ScheduleResponse */
         ScheduleResponse: {

@@ -133,7 +133,13 @@ async def test_smtp_config_roundtrip_and_test_email(admin_client, monkeypatch):
     async def fake_send(config, *, to, subject, text):
         sent.append((config.host, to, subject, text))
 
+    verified = []
+
+    async def fake_verify(config):
+        verified.append(config.host)
+
     monkeypatch.setattr(mail_service, "send", fake_send)
+    monkeypatch.setattr(mail_service, "verify", fake_verify)
 
     assert (await admin_client.get("/api/notifications/smtp")).json()["configured"] is False
 
@@ -156,6 +162,10 @@ async def test_smtp_config_roundtrip_and_test_email(admin_client, monkeypatch):
     assert body["from_email"] == "panel@example.com"
     assert body["has_password"] is True
     assert body["notification_recipients"] == ["admin@example.com"]
+    # Save verifies the stored credentials and reports the result.
+    assert body["verified"] is True
+    assert body["verify_error"] is None
+    assert verified == ["smtp.example.com"]
 
     resp = await admin_client.post("/api/notifications/smtp/test", json={"to": "ops@example.com"})
     assert resp.status_code == 200
@@ -172,13 +182,53 @@ async def test_smtp_config_roundtrip_and_test_email(admin_client, monkeypatch):
     assert (await admin_client.delete("/api/notifications/smtp")).status_code == 404
 
 
+async def test_smtp_save_reports_unverified_credentials(admin_client, monkeypatch):
+    async def failing_verify(config):
+        raise mail_service.SMTPVerifyError("Authentication failed — check the login and password.")
+
+    monkeypatch.setattr(mail_service, "verify", failing_verify)
+
+    resp = await admin_client.put(
+        "/api/notifications/smtp",
+        json={
+            "host": "smtp.example.com",
+            "port": 587,
+            "from_email": "panel@example.com",
+            "security": "starttls",
+            "username": "smtp-user",
+            "password": "wrong-secret",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["configured"] is True
+    assert body["verified"] is False
+    assert "Authentication failed" in body["verify_error"]
+    assert (await admin_client.get("/api/notifications/smtp")).json()["configured"] is True
+
+
+def test_describe_smtp_error_maps_common_failures():
+    import smtplib
+    import socket
+
+    assert "Authentication" in mail_service.describe_smtp_error(
+        smtplib.SMTPAuthenticationError(535, b"bad")
+    )
+    assert "resolve" in mail_service.describe_smtp_error(socket.gaierror())
+    assert "refused" in mail_service.describe_smtp_error(ConnectionRefusedError()).lower()
+
+
 async def test_notification_emit_can_email_recipients(admin_client, app, monkeypatch):
     sent = []
 
     async def fake_send(config, *, to, subject, text):
         sent.append((to, subject, text))
 
+    async def fake_verify(config):
+        return None
+
     monkeypatch.setattr(mail_service, "send", fake_send)
+    monkeypatch.setattr(mail_service, "verify", fake_verify)
     await admin_client.put(
         "/api/notifications/smtp",
         json={
