@@ -3,6 +3,24 @@
 ## Unreleased
 
 ### Added
+- **v2/M4 — blueprint engine + Stacks API/UI (ADR-013)**: typed blueprint
+  registry (`orchestration/blueprints/`) where each blueprint declares a
+  pydantic inputs model (drives the create wizard as JSON Schema — zero
+  per-blueprint UI code), renders a StackSpec at create time only, and
+  exposes day-2 actions with show-once result payloads; blueprint #0
+  `raw-image` deploys any OCI image (Django/Next.js/anything) with domain,
+  env, volumes and limits. New Stacks API (`/api/stacks`): list/get,
+  async create/delete (202 + operation), action dispatch, journald logs —
+  owner-scoped 404-not-403, `max_stacks` quota wired through plans, user
+  overrides and admin routes. The reconciler is now fully wired: DB-backed
+  desired state, full-ingress Caddy sync (stack endpoints join sites/apps),
+  status projection with K8s-style generation/observed_generation, and
+  deletion as convergence toward absence (rows finalize only after the host
+  is clean — even when the delete completes on a later cycle). Frontend:
+  Stacks list with convergence-truth status pills, schema-driven create
+  wizard with a generated-secret show-once dialog, and a detail page with
+  services, endpoints, logs viewer, confirmed actions and type-to-confirm
+  delete.
 - **v2/M0 — tenant foundation (ADR-013)**: per-client Linux users
   (`hosty-t-<id>`) with panel-allocated subuid/subgid ranges (ledger in the
   new `tenants` table, migration 0014), lingering user managers, and a

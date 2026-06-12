@@ -57,7 +57,11 @@ export function SMTPSettingsCard() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const { data, error: apiError, response } = await api.PUT("/api/notifications/smtp", {
+      const {
+        data,
+        error: apiError,
+        response,
+      } = await api.PUT("/api/notifications/smtp", {
         body: {
           host: host.trim(),
           port: Number(port),
@@ -218,9 +222,15 @@ export function SMTPSettingsCard() {
                 value={security}
                 onChange={(e) => setSecurity(e.target.value as typeof security)}
               >
-                <option value="starttls" className="bg-background text-foreground">STARTTLS</option>
-                <option value="ssl" className="bg-background text-foreground">SSL/TLS</option>
-                <option value="none" className="bg-background text-foreground">None</option>
+                <option value="starttls" className="bg-background text-foreground">
+                  STARTTLS
+                </option>
+                <option value="ssl" className="bg-background text-foreground">
+                  SSL/TLS
+                </option>
+                <option value="none" className="bg-background text-foreground">
+                  None
+                </option>
               </select>
             </FormField>
             <FormField label="Network" htmlFor="smtp-ip-family">
@@ -230,8 +240,12 @@ export function SMTPSettingsCard() {
                 value={ipFamily}
                 onChange={(e) => setIpFamily(e.target.value as typeof ipFamily)}
               >
-                <option value="ipv4" className="bg-background text-foreground">IPv4 only</option>
-                <option value="any" className="bg-background text-foreground">IPv4 + IPv6</option>
+                <option value="ipv4" className="bg-background text-foreground">
+                  IPv4 only
+                </option>
+                <option value="any" className="bg-background text-foreground">
+                  IPv4 + IPv6
+                </option>
               </select>
             </FormField>
             <FormField label="Alert recipients" htmlFor="smtp-recipients">

@@ -371,11 +371,11 @@ grammar and test patterns are salvaged).
 - [ ] **Milestone: kill a container by hand on the VM; the panel converges and notifies within one cycle** — FakeHost suite green; `tests/test_vm_reconcile.py` written, run with the other VM gates once the dev VM is back
 
 ### M4 — Blueprint engine + Stacks API/UI
-- [ ] Blueprint contract: typed Python registry — services, volumes, env contract (generated secrets / user inputs), web service, health, backup hooks, day-2 Actions
-- [ ] Blueprint #0 `raw-image`: image + port + env + volumes (covers Django/Next.js/anything)
-- [ ] Stacks API: CRUD + actions + logs, owner-scoped (404-not-403), `max_stacks` quota replaces max_sites/max_apps
-- [ ] Stacks UI: one list replacing Sites + Apps, create wizard driven by the blueprint's declared inputs, detail page (services, logs, actions, endpoints)
-- [ ] **Milestone: a client deploys a Next.js image with custom domain + HTTPS from the UI**
+- [x] Blueprint contract: typed Python registry — services, volumes, env contract (generated secrets / user inputs), web service, health, backup hooks, day-2 Actions (`orchestration/blueprints/base.py`: pydantic `inputs()` drives the UI form; `render` runs at create/upgrade only)
+- [x] Blueprint #0 `raw-image`: image + port + env + volumes (covers Django/Next.js/anything)
+- [x] Stacks API: CRUD + actions + logs, owner-scoped (404-not-403), `max_stacks` quota in plans/users/quotas + admin routes (`api/routes/stacks.py`; reconciler fully wired: DB-backed desired state, ingress sync, status projection; deletion = convergence toward absence)
+- [x] Stacks UI: list with convergence-driven status pills, create wizard rendered from the blueprint inputs JSON Schema (zero per-blueprint UI code), detail page (services, endpoints, journald logs, actions with confirm + show-once, type-to-confirm delete)
+- [ ] **Milestone: a client deploys a Next.js image with custom domain + HTTPS from the UI** — FakeHost API suite + Vitest green; run the e2e on the dev VM with the other queued VM gates (M0 spike, M2 round-trip, M3 reconcile)
 
 ### M5 — WordPress blueprint (the moat, at full parity)
 - [ ] Composition: `wordpress:<php>-apache` (pinned digest) + per-stack MariaDB service + wp-content volume

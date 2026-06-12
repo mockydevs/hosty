@@ -786,6 +786,201 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Apps */
+        get: operations["list_apps_api_apps_get"];
+        put?: never;
+        /** Create App */
+        post: operations["create_app_api_apps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apps/{app_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get App */
+        get: operations["get_app_api_apps__app_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete App */
+        delete: operations["delete_app_api_apps__app_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apps/{app_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start App */
+        post: operations["start_app_api_apps__app_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apps/{app_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop App */
+        post: operations["stop_app_api_apps__app_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apps/{app_id}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restart App */
+        post: operations["restart_app_api_apps__app_id__restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apps/{app_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** App Logs */
+        get: operations["app_logs_api_apps__app_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/blueprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Blueprints
+         * @description The catalog that drives the create wizard: each blueprint's typed
+         *     inputs as JSON Schema — no per-blueprint UI code.
+         */
+        get: operations["get_blueprints_api_stacks_blueprints_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Stacks */
+        get: operations["list_stacks_api_stacks_get"];
+        put?: never;
+        /** Create Stack */
+        post: operations["create_stack_api_stacks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stack */
+        get: operations["get_stack_api_stacks__stack_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Stack */
+        delete: operations["delete_stack_api_stacks__stack_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/actions/{action_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Stack Action */
+        post: operations["run_stack_action_api_stacks__stack_id__actions__action_name__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stack Logs */
+        get: operations["stack_logs_api_stacks__stack_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operations": {
         parameters: {
             query?: never;
@@ -1553,6 +1748,47 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** AppLogsResponse */
+        AppLogsResponse: {
+            /** Logs */
+            logs: string;
+        };
+        /** AppOperationAccepted */
+        AppOperationAccepted: {
+            app: components["schemas"]["AppResponse"];
+            /** Operation Id */
+            operation_id: number;
+        };
+        /** AppResponse */
+        AppResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Domain */
+            domain: string;
+            /** Image */
+            image: string;
+            /** Image Digest */
+            image_digest: string | null;
+            /** Internal Port */
+            internal_port: number;
+            /** Host Port */
+            host_port: number;
+            /** Memory Mb */
+            memory_mb: number | null;
+            /** Cpu Percent */
+            cpu_percent: number | null;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** AuditEntryResponse */
         AuditEntryResponse: {
             /** Id */
@@ -1607,6 +1843,19 @@ export interface components {
             s3_enabled: boolean;
             /** Scheduler Enabled */
             scheduler_enabled: boolean;
+        };
+        /** BlueprintResponse */
+        BlueprintResponse: {
+            /** Id */
+            id: string;
+            /** Version */
+            version: number;
+            /** Inputs Schema */
+            inputs_schema: {
+                [key: string]: unknown;
+            };
+            /** Actions */
+            actions: string[];
         };
         /** CertStatusResponse */
         CertStatusResponse: {
@@ -1705,6 +1954,27 @@ export interface components {
             /** Name Servers */
             name_servers: string[];
         };
+        /** CreateAppRequest */
+        CreateAppRequest: {
+            /** Name */
+            name: string;
+            /** Domain */
+            domain: string;
+            /** Image */
+            image: string;
+            /** Internal Port */
+            internal_port: number;
+            /** Env */
+            env?: {
+                [key: string]: string;
+            };
+            /** Volumes */
+            volumes?: components["schemas"]["VolumeSpec"][];
+            /** Memory Mb */
+            memory_mb?: number | null;
+            /** Cpu Percent */
+            cpu_percent?: number | null;
+        };
         /** CreateDatabaseRequest */
         CreateDatabaseRequest: {
             /** Name */
@@ -1722,6 +1992,17 @@ export interface components {
              */
             create_dns_zone: boolean;
         };
+        /** CreateStackRequest */
+        CreateStackRequest: {
+            /** Name */
+            name: string;
+            /** Blueprint Id */
+            blueprint_id: string;
+            /** Inputs */
+            inputs?: {
+                [key: string]: unknown;
+            };
+        };
         /** CreateUserRequest */
         CreateUserRequest: {
             /** Username */
@@ -1736,6 +2017,10 @@ export interface components {
             max_sites?: number | null;
             /** Max Databases */
             max_databases?: number | null;
+            /** Max Apps */
+            max_apps?: number | null;
+            /** Max Stacks */
+            max_stacks?: number | null;
             /** Plan Id */
             plan_id?: number | null;
         };
@@ -1810,6 +2095,11 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** DeleteAppRequest */
+        DeleteAppRequest: {
+            /** Confirm Name */
+            confirm_name: string;
+        };
         /** DeleteBackupRequest */
         DeleteBackupRequest: {
             /** Confirm Id */
@@ -1834,6 +2124,11 @@ export interface components {
         DeleteSiteRequest: {
             /** Confirm Domain */
             confirm_domain: string;
+        };
+        /** DeleteStackRequest */
+        DeleteStackRequest: {
+            /** Confirm Name */
+            confirm_name: string;
         };
         /** DeleteUserRequest */
         DeleteUserRequest: {
@@ -2097,6 +2392,10 @@ export interface components {
             max_sites: number | null;
             /** Max Databases */
             max_databases: number | null;
+            /** Max Apps */
+            max_apps?: number | null;
+            /** Max Stacks */
+            max_stacks?: number | null;
             /** Max Disk Mb */
             max_disk_mb: number | null;
             /** Cpu Quota Percent */
@@ -2332,6 +2631,108 @@ export interface components {
             /** Bandwidth Bytes */
             bandwidth_bytes: number;
         };
+        /** StackActionResponse */
+        StackActionResponse: {
+            /** Ok */
+            ok: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            };
+            /** Show Once */
+            show_once?: {
+                [key: string]: string;
+            };
+        };
+        /** StackEndpointResponse */
+        StackEndpointResponse: {
+            /** Domain */
+            domain: string;
+            /** Service Name */
+            service_name: string;
+            /** Behind Cloudflare */
+            behind_cloudflare: boolean;
+        };
+        /** StackLogsResponse */
+        StackLogsResponse: {
+            /** Service */
+            service: string;
+            /** Logs */
+            logs: string;
+        };
+        /** StackOperationAccepted */
+        StackOperationAccepted: {
+            stack: components["schemas"]["StackResponse"];
+            /** Operation Id */
+            operation_id: number;
+            /** Show Once */
+            show_once?: {
+                [key: string]: string;
+            };
+        };
+        /** StackResponse */
+        StackResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Blueprint Id */
+            blueprint_id: string;
+            /** Blueprint Version */
+            blueprint_version: number;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message: string | null;
+            /** Generation */
+            generation: number;
+            /** Observed Generation */
+            observed_generation: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Services */
+            services: components["schemas"]["StackServiceResponse"][];
+            /** Volumes */
+            volumes: components["schemas"]["StackVolumeResponse"][];
+            /** Endpoints */
+            endpoints: components["schemas"]["StackEndpointResponse"][];
+        };
+        /** StackServiceResponse */
+        StackServiceResponse: {
+            /** Name */
+            name: string;
+            /** Image */
+            image: string;
+            /** Image Digest */
+            image_digest: string | null;
+            /** Internal Port */
+            internal_port: number | null;
+            /** Host Port */
+            host_port: number | null;
+            /** Memory Mb */
+            memory_mb: number | null;
+            /** Cpu Percent */
+            cpu_percent: number | null;
+            /** Is Web */
+            is_web: boolean;
+        };
+        /** StackVolumeResponse */
+        StackVolumeResponse: {
+            /** Name */
+            name: string;
+            /** Service Name */
+            service_name: string;
+            /** Mount Path */
+            mount_path: string;
+        };
         /** StartImportRequest */
         StartImportRequest: {
             /** Files Upload Id */
@@ -2513,6 +2914,10 @@ export interface components {
             max_sites?: number | null;
             /** Max Databases */
             max_databases?: number | null;
+            /** Max Apps */
+            max_apps?: number | null;
+            /** Max Stacks */
+            max_stacks?: number | null;
             /** Max Disk Mb */
             max_disk_mb?: number | null;
             /** Cpu Quota Percent */
@@ -2531,6 +2936,16 @@ export interface components {
              * @default false
              */
             clear_max_databases: boolean;
+            /**
+             * Clear Max Apps
+             * @default false
+             */
+            clear_max_apps: boolean;
+            /**
+             * Clear Max Stacks
+             * @default false
+             */
+            clear_max_stacks: boolean;
             /**
              * Clear Max Disk Mb
              * @default false
@@ -2594,6 +3009,10 @@ export interface components {
             max_sites?: number | null;
             /** Max Databases */
             max_databases?: number | null;
+            /** Max Apps */
+            max_apps?: number | null;
+            /** Max Stacks */
+            max_stacks?: number | null;
             /** Max Disk Mb */
             max_disk_mb?: number | null;
             /** Cpu Quota Percent */
@@ -2640,6 +3059,10 @@ export interface components {
             max_sites: number | null;
             /** Max Databases */
             max_databases: number | null;
+            /** Max Apps */
+            max_apps?: number | null;
+            /** Max Stacks */
+            max_stacks?: number | null;
             /** Max Disk Mb */
             max_disk_mb?: number | null;
             /** Cpu Quota Percent */
@@ -2690,6 +3113,13 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VolumeSpec */
+        VolumeSpec: {
+            /** Name */
+            name: string;
+            /** Mount Path */
+            mount_path: string;
         };
         /** WebhookConfigResponse */
         WebhookConfigResponse: {
@@ -4163,6 +4593,456 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_apps_api_apps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResponse"][];
+                };
+            };
+        };
+    };
+    create_app_api_apps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAppRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_app_api_apps__app_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_app_api_apps__app_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAppRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_app_api_apps__app_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_app_api_apps__app_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restart_app_api_apps__app_id__restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    app_logs_api_apps__app_id__logs_get: {
+        parameters: {
+            query?: {
+                tail?: number;
+            };
+            header?: never;
+            path: {
+                app_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppLogsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_blueprints_api_stacks_blueprints_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlueprintResponse"][];
+                };
+            };
+        };
+    };
+    list_stacks_api_stacks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackResponse"][];
+                };
+            };
+        };
+    };
+    create_stack_api_stacks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stack_api_stacks__stack_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_stack_api_stacks__stack_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteStackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_stack_action_api_stacks__stack_id__actions__action_name__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                action_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stack_logs_api_stacks__stack_id__logs_get: {
+        parameters: {
+            query?: {
+                service?: string | null;
+                tail?: number;
+            };
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackLogsResponse"];
                 };
             };
             /** @description Validation Error */

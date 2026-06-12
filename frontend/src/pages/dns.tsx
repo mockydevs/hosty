@@ -371,12 +371,12 @@ function DelegationBanner({ zoneId }: { zoneId: string }) {
         ? "border-destructive/40"
         : "border-border text-muted-foreground";
   return (
-    <div className={`rounded-md border px-4 py-3 text-sm ${tone}`} role="status">
+    <output className={`block rounded-md border px-4 py-3 text-sm ${tone}`}>
       {d.points_here === false && (
         <strong className="mr-1 font-medium text-foreground">Heads up:</strong>
       )}
       {d.detail}
-    </div>
+    </output>
   );
 }
 

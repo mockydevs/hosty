@@ -2,14 +2,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { api, apiErrorMessage } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 /**
  * Admin notifications on the dashboard (Phase 11d): unresolved conditions —
  * service down, disk full, cert failures, quota overruns, failed backups.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, Check, X, Info, AlertTriangle, AlertCircle, Clock } from "lucide-react";
+import { AlertCircle, AlertTriangle, BellRing, Check, Clock, Info, X } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 const SEVERITY_CONFIG = {
   info: { icon: Info, colorClass: "text-blue-500", bgClass: "bg-blue-500/10" },
@@ -69,22 +69,25 @@ export function NotificationsCard() {
       </div>
       <div className="grid gap-3">
         {rows.map((n) => {
-          const config = SEVERITY_CONFIG[n.severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;
+          const config =
+            SEVERITY_CONFIG[n.severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;
           const Icon = config.icon;
           return (
             <div
               key={n.id}
               className={cn(
                 "group relative flex gap-4 rounded-xl border p-4 transition-all hover:shadow-md",
-                n.read ? "bg-card/50 border-border/50 opacity-70" : "bg-card border-border shadow-sm",
-                !n.read && "hover:border-primary/30"
+                n.read
+                  ? "bg-card/50 border-border/50 opacity-70"
+                  : "bg-card border-border shadow-sm",
+                !n.read && "hover:border-primary/30",
               )}
             >
               <div
                 className={cn(
                   "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
                   config.bgClass,
-                  config.colorClass
+                  config.colorClass,
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -95,7 +98,7 @@ export function NotificationsCard() {
                   <p
                     className={cn(
                       "text-sm font-semibold leading-none tracking-tight",
-                      n.read ? "text-muted-foreground" : "text-foreground"
+                      n.read ? "text-muted-foreground" : "text-foreground",
                     )}
                   >
                     {n.kind.replaceAll("_", " ")}
@@ -113,7 +116,7 @@ export function NotificationsCard() {
                 <p
                   className={cn(
                     "text-sm",
-                    n.read ? "text-muted-foreground/80" : "text-muted-foreground"
+                    n.read ? "text-muted-foreground/80" : "text-muted-foreground",
                   )}
                 >
                   {n.message}

@@ -30,6 +30,7 @@ class PlanResponse(BaseModel):
     max_sites: int | None
     max_databases: int | None
     max_apps: int | None = None
+    max_stacks: int | None = None
     max_disk_mb: int | None
     cpu_quota_percent: int | None
     memory_max_mb: int | None
@@ -42,6 +43,7 @@ class UpsertPlanRequest(BaseModel):
     max_sites: int | None = Field(default=None, ge=0, le=1000)
     max_databases: int | None = Field(default=None, ge=0, le=1000)
     max_apps: int | None = Field(default=None, ge=0, le=1000)
+    max_stacks: int | None = Field(default=None, ge=0, le=1000)
     max_disk_mb: int | None = Field(default=None, ge=1, le=1048576)
     cpu_quota_percent: int | None = Field(default=None, ge=1, le=1600)
     memory_max_mb: int | None = Field(default=None, ge=16, le=1048576)
@@ -65,6 +67,7 @@ def _response(plan: Plan, user_count: int) -> PlanResponse:
         max_sites=plan.max_sites,
         max_databases=plan.max_databases,
         max_apps=plan.max_apps,
+        max_stacks=plan.max_stacks,
         max_disk_mb=plan.max_disk_mb,
         cpu_quota_percent=plan.cpu_quota_percent,
         memory_max_mb=plan.memory_max_mb,
@@ -92,6 +95,7 @@ async def create_plan(body: UpsertPlanRequest, db: AsyncSession = Depends(get_db
         max_sites=body.max_sites,
         max_databases=body.max_databases,
         max_apps=body.max_apps,
+        max_stacks=body.max_stacks,
         max_disk_mb=body.max_disk_mb,
         cpu_quota_percent=body.cpu_quota_percent,
         memory_max_mb=body.memory_max_mb,
@@ -118,6 +122,7 @@ async def update_plan(
     plan.max_sites = body.max_sites
     plan.max_databases = body.max_databases
     plan.max_apps = body.max_apps
+    plan.max_stacks = body.max_stacks
     plan.max_disk_mb = body.max_disk_mb
     plan.cpu_quota_percent = body.cpu_quota_percent
     plan.memory_max_mb = body.memory_max_mb

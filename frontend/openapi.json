@@ -2060,6 +2060,721 @@
         }
       }
     },
+    "/api/apps": {
+      "get": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "List Apps",
+        "operationId": "list_apps_api_apps_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AppResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Apps Api Apps Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "Create App",
+        "operationId": "create_app_api_apps_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAppRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppOperationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/apps/{app_id}": {
+      "get": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "Get App",
+        "operationId": "get_app_api_apps__app_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "Delete App",
+        "operationId": "delete_app_api_apps__app_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAppRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppOperationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/{app_id}/start": {
+      "post": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "Start App",
+        "operationId": "start_app_api_apps__app_id__start_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/{app_id}/stop": {
+      "post": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "Stop App",
+        "operationId": "stop_app_api_apps__app_id__stop_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/{app_id}/restart": {
+      "post": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "Restart App",
+        "operationId": "restart_app_api_apps__app_id__restart_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/{app_id}/logs": {
+      "get": {
+        "tags": [
+          "apps"
+        ],
+        "summary": "App Logs",
+        "operationId": "app_logs_api_apps__app_id__logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "App Id"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Tail"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppLogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/blueprints": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Blueprints",
+        "description": "The catalog that drives the create wizard: each blueprint's typed\ninputs as JSON Schema \u2014 no per-blueprint UI code.",
+        "operationId": "get_blueprints_api_stacks_blueprints_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlueprintResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Blueprints Api Stacks Blueprints Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/stacks": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "List Stacks",
+        "operationId": "list_stacks_api_stacks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StackResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Stacks Api Stacks Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Create Stack",
+        "operationId": "create_stack_api_stacks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackOperationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/stacks/{stack_id}": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Stack",
+        "operationId": "get_stack_api_stacks__stack_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Delete Stack",
+        "operationId": "delete_stack_api_stacks__stack_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteStackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackOperationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/actions/{action_name}": {
+      "post": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Run Stack Action",
+        "operationId": "run_stack_action_api_stacks__stack_id__actions__action_name__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          },
+          {
+            "name": "action_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/logs": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Stack Logs",
+        "operationId": "stack_logs_api_stacks__stack_id__logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Service"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Tail"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackLogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/operations": {
       "get": {
         "tags": [
@@ -4562,6 +5277,133 @@
         ],
         "title": "AdminerSessionResponse"
       },
+      "AppLogsResponse": {
+        "properties": {
+          "logs": {
+            "type": "string",
+            "title": "Logs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "logs"
+        ],
+        "title": "AppLogsResponse"
+      },
+      "AppOperationAccepted": {
+        "properties": {
+          "app": {
+            "$ref": "#/components/schemas/AppResponse"
+          },
+          "operation_id": {
+            "type": "integer",
+            "title": "Operation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "app",
+          "operation_id"
+        ],
+        "title": "AppOperationAccepted"
+      },
+      "AppResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "image_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Digest"
+          },
+          "internal_port": {
+            "type": "integer",
+            "title": "Internal Port"
+          },
+          "host_port": {
+            "type": "integer",
+            "title": "Host Port"
+          },
+          "memory_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Mb"
+          },
+          "cpu_percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Percent"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "domain",
+          "image",
+          "image_digest",
+          "internal_port",
+          "host_port",
+          "memory_mb",
+          "cpu_percent",
+          "status",
+          "error_message",
+          "created_at"
+        ],
+        "title": "AppResponse"
+      },
       "AuditEntryResponse": {
         "properties": {
           "id": {
@@ -4721,6 +5563,38 @@
           "scheduler_enabled"
         ],
         "title": "BackupsMetaResponse"
+      },
+      "BlueprintResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "inputs_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs Schema"
+          },
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "inputs_schema",
+          "actions"
+        ],
+        "title": "BlueprintResponse"
       },
       "CertStatusResponse": {
         "properties": {
@@ -5025,6 +5899,82 @@
         ],
         "title": "CloudflareZoneResponse"
       },
+      "CreateAppRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "domain": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Domain"
+          },
+          "image": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Image"
+          },
+          "internal_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Internal Port"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Env"
+          },
+          "volumes": {
+            "items": {
+              "$ref": "#/components/schemas/VolumeSpec"
+            },
+            "type": "array",
+            "title": "Volumes"
+          },
+          "memory_mb": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 65536.0,
+                "minimum": 64.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Mb"
+          },
+          "cpu_percent": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1600.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Percent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "domain",
+          "image",
+          "internal_port"
+        ],
+        "title": "CreateAppRequest"
+      },
       "CreateDatabaseRequest": {
         "properties": {
           "name": {
@@ -5071,6 +6021,33 @@
           "domain"
         ],
         "title": "CreateSiteRequest"
+      },
+      "CreateStackRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "blueprint_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Blueprint Id"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "blueprint_id"
+        ],
+        "title": "CreateStackRequest"
       },
       "CreateUserRequest": {
         "properties": {
@@ -5143,6 +6120,32 @@
               }
             ],
             "title": "Max Databases"
+          },
+          "max_apps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Apps"
+          },
+          "max_stacks": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stacks"
           },
           "plan_id": {
             "anyOf": [
@@ -5358,6 +6361,19 @@
         ],
         "title": "DelegationResponse"
       },
+      "DeleteAppRequest": {
+        "properties": {
+          "confirm_name": {
+            "type": "string",
+            "title": "Confirm Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm_name"
+        ],
+        "title": "DeleteAppRequest"
+      },
       "DeleteBackupRequest": {
         "properties": {
           "confirm_id": {
@@ -5415,6 +6431,19 @@
           "confirm_domain"
         ],
         "title": "DeleteSiteRequest"
+      },
+      "DeleteStackRequest": {
+        "properties": {
+          "confirm_name": {
+            "type": "string",
+            "title": "Confirm Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm_name"
+        ],
+        "title": "DeleteStackRequest"
       },
       "DeleteUserRequest": {
         "properties": {
@@ -6153,6 +7182,28 @@
             ],
             "title": "Max Databases"
           },
+          "max_apps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Apps"
+          },
+          "max_stacks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stacks"
+          },
           "max_disk_mb": {
             "anyOf": [
               {
@@ -6725,6 +7776,292 @@
         ],
         "title": "SiteUsageResponse"
       },
+      "StackActionResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "show_once": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Show Once"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "StackActionResponse"
+      },
+      "StackEndpointResponse": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "behind_cloudflare": {
+            "type": "boolean",
+            "title": "Behind Cloudflare"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "service_name",
+          "behind_cloudflare"
+        ],
+        "title": "StackEndpointResponse"
+      },
+      "StackLogsResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "logs": {
+            "type": "string",
+            "title": "Logs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service",
+          "logs"
+        ],
+        "title": "StackLogsResponse"
+      },
+      "StackOperationAccepted": {
+        "properties": {
+          "stack": {
+            "$ref": "#/components/schemas/StackResponse"
+          },
+          "operation_id": {
+            "type": "integer",
+            "title": "Operation Id"
+          },
+          "show_once": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Show Once"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stack",
+          "operation_id"
+        ],
+        "title": "StackOperationAccepted"
+      },
+      "StackResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "blueprint_id": {
+            "type": "string",
+            "title": "Blueprint Id"
+          },
+          "blueprint_version": {
+            "type": "integer",
+            "title": "Blueprint Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "generation": {
+            "type": "integer",
+            "title": "Generation"
+          },
+          "observed_generation": {
+            "type": "integer",
+            "title": "Observed Generation"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/StackServiceResponse"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "volumes": {
+            "items": {
+              "$ref": "#/components/schemas/StackVolumeResponse"
+            },
+            "type": "array",
+            "title": "Volumes"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/StackEndpointResponse"
+            },
+            "type": "array",
+            "title": "Endpoints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "blueprint_id",
+          "blueprint_version",
+          "status",
+          "error_message",
+          "generation",
+          "observed_generation",
+          "created_at",
+          "services",
+          "volumes",
+          "endpoints"
+        ],
+        "title": "StackResponse"
+      },
+      "StackServiceResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "image_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Digest"
+          },
+          "internal_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internal Port"
+          },
+          "host_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Port"
+          },
+          "memory_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Mb"
+          },
+          "cpu_percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Percent"
+          },
+          "is_web": {
+            "type": "boolean",
+            "title": "Is Web"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "image",
+          "image_digest",
+          "internal_port",
+          "host_port",
+          "memory_mb",
+          "cpu_percent",
+          "is_web"
+        ],
+        "title": "StackServiceResponse"
+      },
+      "StackVolumeResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "mount_path": {
+            "type": "string",
+            "title": "Mount Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "service_name",
+          "mount_path"
+        ],
+        "title": "StackVolumeResponse"
+      },
       "StartImportRequest": {
         "properties": {
           "files_upload_id": {
@@ -7172,6 +8509,32 @@
             ],
             "title": "Max Databases"
           },
+          "max_apps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Apps"
+          },
+          "max_stacks": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stacks"
+          },
           "max_disk_mb": {
             "anyOf": [
               {
@@ -7230,6 +8593,16 @@
           "clear_max_databases": {
             "type": "boolean",
             "title": "Clear Max Databases",
+            "default": false
+          },
+          "clear_max_apps": {
+            "type": "boolean",
+            "title": "Clear Max Apps",
+            "default": false
+          },
+          "clear_max_stacks": {
+            "type": "boolean",
+            "title": "Clear Max Stacks",
             "default": false
           },
           "clear_max_disk_mb": {
@@ -7363,6 +8736,32 @@
               }
             ],
             "title": "Max Databases"
+          },
+          "max_apps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Apps"
+          },
+          "max_stacks": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stacks"
           },
           "max_disk_mb": {
             "anyOf": [
@@ -7520,6 +8919,28 @@
               }
             ],
             "title": "Max Databases"
+          },
+          "max_apps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Apps"
+          },
+          "max_stacks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stacks"
           },
           "max_disk_mb": {
             "anyOf": [
@@ -7688,6 +9109,28 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VolumeSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mount_path": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Mount Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "mount_path"
+        ],
+        "title": "VolumeSpec"
       },
       "WebhookConfigResponse": {
         "properties": {

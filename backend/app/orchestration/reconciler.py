@@ -152,9 +152,13 @@ class Reconciler:
             if not actions:
                 async with self._sessionmaker() as db:
                     await self._finish_operation(db, operation_id, actions, error=None)
-                    if spec is not None:
-                        status = "suspended" if spec.suspended else "ready"
-                        await self._on_stack_status(db, name, status, None)
+                    # spec=None converged means the host holds nothing for
+                    # this stack — "absent" lets the status hook finalize a
+                    # pending deletion (drop the rows).
+                    status = (
+                        "absent" if spec is None else ("suspended" if spec.suspended else "ready")
+                    )
+                    await self._on_stack_status(db, name, status, None)
                 return StackOutcome(stack=name, planned=0, executed=0)
             return await self._apply(name, spec, actions, tenants_in_use, operation_id)
 
@@ -205,9 +209,8 @@ class Reconciler:
 
             if op is not None:
                 await operations.finish(db, op, status="succeeded")
-            if spec is not None:
-                status = "suspended" if spec.suspended else "ready"
-                await self._on_stack_status(db, name, status, None)
+            status = "absent" if spec is None else ("suspended" if spec.suspended else "ready")
+            await self._on_stack_status(db, name, status, None)
             log.info("stack_converged", stack=name, actions=executed)
             return StackOutcome(stack=name, planned=len(actions), executed=executed)
 

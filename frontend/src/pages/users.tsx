@@ -221,6 +221,8 @@ function CreateUserDialog({
 const UPDATE_FLAG_DEFAULTS = {
   clear_max_sites: false,
   clear_max_databases: false,
+  clear_max_apps: false,
+  clear_max_stacks: false,
   clear_max_disk_mb: false,
   clear_cpu_quota_percent: false,
   clear_memory_max_mb: false,
@@ -238,6 +240,7 @@ function EditQuotasDialog({
   const queryClient = useQueryClient();
   const [maxSites, setMaxSites] = useState(user?.max_sites?.toString() ?? "");
   const [maxDatabases, setMaxDatabases] = useState(user?.max_databases?.toString() ?? "");
+  const [maxStacks, setMaxStacks] = useState(user?.max_stacks?.toString() ?? "");
   const [maxDisk, setMaxDisk] = useState(user?.max_disk_mb?.toString() ?? "");
   const [cpuQuota, setCpuQuota] = useState(user?.cpu_quota_percent?.toString() ?? "");
   const [memoryMax, setMemoryMax] = useState(user?.memory_max_mb?.toString() ?? "");
@@ -261,12 +264,15 @@ function EditQuotasDialog({
         body: {
           max_sites: num(maxSites),
           max_databases: num(maxDatabases),
+          max_stacks: num(maxStacks),
           max_disk_mb: num(maxDisk),
           cpu_quota_percent: num(cpuQuota),
           memory_max_mb: num(memoryMax),
           plan_id: planId === "" ? null : Number(planId),
           clear_max_sites: maxSites === "",
           clear_max_databases: maxDatabases === "",
+          clear_max_apps: false,
+          clear_max_stacks: maxStacks === "",
           clear_max_disk_mb: maxDisk === "",
           clear_cpu_quota_percent: cpuQuota === "",
           clear_memory_max_mb: memoryMax === "",
@@ -332,6 +338,16 @@ function EditQuotasDialog({
               placeholder="Unlimited"
               value={maxSites}
               onChange={(e) => setMaxSites(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Max stacks" htmlFor="edit-max-stacks">
+            <Input
+              id="edit-max-stacks"
+              type="number"
+              min={0}
+              placeholder="Unlimited"
+              value={maxStacks}
+              onChange={(e) => setMaxStacks(e.target.value)}
             />
           </FormField>
           <FormField label="Max databases" htmlFor="edit-max-databases">

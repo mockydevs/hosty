@@ -175,16 +175,56 @@ async def stack_routes(db: AsyncSession, settings: Settings) -> list[caddy.Stack
 
 async def on_stack_status(db: AsyncSession, name: str, status: str, error: str | None) -> None:
     """Reconciler hook: project convergence outcomes onto the stack row.
-    `observed_generation` catches up only when the stack is converged."""
+    `observed_generation` catches up only when the stack is converged.
+    `absent` (host fully torn down, stack not in desired state) finalizes a
+    deletion by removing the rows — and ONLY a deletion: a stack excluded
+    from desired state for any other reason keeps its row."""
     stack = (await db.execute(select(Stack).where(Stack.name == name))).scalar_one_or_none()
     if stack is None:
         return  # observed-only stack (teardown of host remnants)
+    if status == "absent":
+        if stack.status == "deleting":
+            await db.delete(stack)
+            await db.commit()
+        return
     stack.status = status
     stack.error_message = error
     if status in ("ready", "suspended"):
         stack.observed_generation = stack.generation
     stack.updated_at = utcnow()
     await db.commit()
+
+
+async def sync_ingress(db: AsyncSession, settings: Settings, *, client=None) -> None:
+    """Rebuild + apply the FULL Caddy config (sites + apps + stacks). The
+    executor's SyncCaddy action lands here; ownership of build_full_config
+    moves to services/ingress.py at M6."""
+    from app.services.sites import _caddy_client, build_full_config
+
+    await _caddy_client(settings, client).apply(await build_full_config(db, settings))
+
+
+def build_reconciler(sessionmaker, settings: Settings, *, observe=None, caddy_client=None):
+    """The fully wired reconciler: DB-backed desired state, full ingress
+    sync, and status projection. `observe`/`caddy_client` are injectable for
+    tests (FakeHost / fake Caddy admin)."""
+    from app.orchestration.reconciler import Reconciler
+
+    async def _load(db: AsyncSession):
+        return await load_desired(db, settings)
+
+    async def _sync(db: AsyncSession) -> None:
+        await sync_ingress(db, settings, client=caddy_client)
+
+    kwargs = {} if observe is None else {"observe": observe}
+    return Reconciler(
+        sessionmaker,
+        settings,
+        load_desired=_load,
+        sync_caddy=_sync,
+        on_stack_status=on_stack_status,
+        **kwargs,
+    )
 
 
 # --- create-time allocation -------------------------------------------------------

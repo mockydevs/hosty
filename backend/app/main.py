@@ -26,6 +26,7 @@ from app.api.routes import (
     notifications,
     plans,
     sites,
+    stacks,
     system,
     usage,
     users,
@@ -116,12 +117,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             scheduler_task = asyncio.create_task(scheduler.loop(app))
 
         # v2 (ADR-013): the stack reconciler — converge on startup (heals
-        # drift from downtime/reboots), then the interval loop. M4 wires the
-        # DB-backed desired-state loader and ingress sync; until then the
-        # desired set is empty and cycles are no-ops on stack-less hosts.
-        from app.orchestration.reconciler import Reconciler
+        # drift from downtime/reboots), then the interval loop. Fully wired
+        # (M4): DB-backed desired state, full ingress sync, status
+        # projection onto the stacks table.
+        from app.services import stacks as stacks_service
 
-        reconciler = Reconciler(factory, settings)
+        reconciler = stacks_service.build_reconciler(factory, settings)
         app.state.reconciler = reconciler
         reconciler_task: asyncio.Task | None = None
         if settings.reconcile_enabled and settings.env != "test":
@@ -175,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system.router, prefix="/api/system", tags=["system"])
     app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
     app.include_router(apps.router, prefix="/api/apps", tags=["apps"])
+    app.include_router(stacks.router, prefix="/api/stacks", tags=["stacks"])
     app.include_router(sites.operations_router, prefix="/api/operations", tags=["operations"])
     app.include_router(databases.router, prefix="/api/databases", tags=["databases"])
     app.include_router(databases.proxy_router)

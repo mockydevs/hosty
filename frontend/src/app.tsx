@@ -24,6 +24,13 @@ const SitesPage = lazy(() => import("@/pages/sites").then((m) => ({ default: m.S
 const SiteDetailPage = lazy(() =>
   import("@/pages/site-detail").then((m) => ({ default: m.SiteDetailPage })),
 );
+const StacksPage = lazy(() => import("@/pages/stacks").then((m) => ({ default: m.StacksPage })));
+const StackCreatePage = lazy(() =>
+  import("@/pages/stack-create").then((m) => ({ default: m.StackCreatePage })),
+);
+const StackDetailPage = lazy(() =>
+  import("@/pages/stack-detail").then((m) => ({ default: m.StackDetailPage })),
+);
 const DatabasesPage = lazy(() =>
   import("@/pages/databases").then((m) => ({ default: m.DatabasesPage })),
 );
@@ -124,6 +131,9 @@ export function App() {
                 <Route index element={<DashboardPage />} />
                 <Route path="/sites" element={<SitesPage />} />
                 <Route path="/sites/:siteId" element={<SiteDetailPage />} />
+                <Route path="/stacks" element={<StacksPage />} />
+                <Route path="/stacks/new" element={<StackCreatePage />} />
+                <Route path="/stacks/:stackId" element={<StackDetailPage />} />
                 <Route path="/databases" element={<DatabasesPage />} />
                 {/* Phase 11b: DNS is tenant-scoped — the backend shows each
                     client only their own zones (and Cloudflare uses per-user

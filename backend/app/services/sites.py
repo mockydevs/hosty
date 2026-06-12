@@ -106,14 +106,19 @@ async def build_full_config(
     db: AsyncSession, settings: Settings, *, exclude_domain: str | None = None
 ) -> dict:
     """The complete desired-state Caddy config for the current panel state."""
+    from app.services import stacks as stacks_service
+
     specs = await _served_specs(db, settings)
     app_specs = await _served_app_specs(db)
+    stack_routes = await stacks_service.stack_routes(db, settings)
     if exclude_domain is not None:
         specs = [s for s in specs if s.domain != exclude_domain]
         app_specs = [a for a in app_specs if a.domain != exclude_domain]
+        stack_routes = [r for r in stack_routes if r.domain != exclude_domain]
     return caddy.build_config(
         specs,
         apps=app_specs,
+        stacks=stack_routes,
         adminer=_adminer_spec(settings),
         panel=_panel_spec(settings),
         tls_internal=settings.caddy_tls_internal,
