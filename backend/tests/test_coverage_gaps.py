@@ -19,7 +19,7 @@ def _result(ok: bool = True, stdout: str = "", stderr: str = "") -> CommandResul
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(_env_file=None)
+    return Settings(caddy_sync_on_startup=False, _env_file=None)
 
 
 # --- services/ssl.py ---------------------------------------------------------------

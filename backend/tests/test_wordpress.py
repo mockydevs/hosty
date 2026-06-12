@@ -70,6 +70,9 @@ def _result(stdout: str = "", ok: bool = True) -> CommandResult:
 class FakeSite:
     site_user = SITE_USER
     doc_root = DOC_ROOT
+    # Not installed via the panel (status() reports unhealthy instead of
+    # absent for panel-installed sites when `wp core is-installed` fails).
+    wordpress = False
 
 
 async def test_status_not_installed(monkeypatch):

@@ -68,7 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await conn.run_sync(Base.metadata.create_all)
         app.state.engine = engine
         app.state.sessionmaker = factory
-        if settings.env != "test":
+        if settings.caddy_sync_on_startup:
             # Publish the FULL desired state (sites + panel vhost) on every
             # startup: Caddy restarts/reboots boot from the stock Caddyfile and
             # lose everything applied via the admin API — without this sync,

@@ -86,6 +86,7 @@ def allowlist_settings() -> Settings:
         create_tables_on_startup=True,
         cookie_secure=False,
         panel_allowed_ips=["203.0.113.7"],
+        caddy_sync_on_startup=False,
         _env_file=None,
     )
 

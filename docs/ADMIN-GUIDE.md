@@ -68,6 +68,30 @@ with explicit confirmation. The panel also snapshots its own database daily
 to `/var/lib/hosty/backups/_panel/` (keeps 7). For the full disaster
 procedure see `RUNBOOK-RESTORE.md`.
 
+## Settings
+
+**Panel domain (HTTPS):** Settings → Panel domain. Enter a domain and the
+panel publishes its own Caddy vhost, obtains a certificate and switches
+session cookies to HTTPS-only. The domain must resolve to this server first;
+if it does not, the error offers two paths: **Create the A record on the DNS
+page** (one click — publishes the record into the matching zone hosted on
+this panel's DNS page and retries) or **Enable anyway** while DNS propagates.
+The one-click record is only live on the internet if the zone is actually
+delegated to this server — check the zone's delegation status on the DNS page.
+
+**Email delivery:** Settings → Email delivery. Configure the outgoing SMTP
+account used for temporary passwords and panel alerts. Saving connects and
+authenticates immediately and reports the exact failure inline; use the test
+field to send yourself a message. The password is encrypted at rest and never
+re-displayed. **Network** defaults to IPv4 only; "IPv4 + IPv6" also tries
+IPv6, but IPv4 is always attempted first so broken IPv6 routing cannot block
+mail. Alert recipients receive notification emails (disk full, service down,
+backup failures).
+
+**Two-factor authentication:** Settings → Set up 2FA for one-time codes from
+an authenticator app. Active sessions are listed alongside — revoke anything
+you do not recognize.
+
 ## Audit log
 
 Settings → Audit log: every mutating action with user, timestamp, result and

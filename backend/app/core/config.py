@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     pdns_api_url: str = "http://127.0.0.1:8083/api/v1"  # provision.sh enables this
     pdns_api_key: str = "hosty-dev-key"
     pdns_server_id: str = "localhost"
+    # Republish the full Caddy config (sites + panel vhost) at startup.
+    caddy_sync_on_startup: bool = True
     dns_default_ttl: int = 3600
     dns_nameservers: list[str] = []  # empty -> ns1.<zone>./ns2.<zone>. (self-hosted)
     public_ip: str = ""  # enables "point to this server" records and templates

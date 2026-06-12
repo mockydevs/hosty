@@ -66,6 +66,7 @@ def _settings_with_ip() -> Settings:
         create_tables_on_startup=True,
         cookie_secure=False,
         public_ip="203.0.113.7",
+        caddy_sync_on_startup=False,
         _env_file=None,
     )
 

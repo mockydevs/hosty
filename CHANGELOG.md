@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Email delivery**: outgoing SMTP account in Settings, used for temporary
+  passwords, panel alert emails (configurable recipients) and a send-test
+  button. Credentials are encrypted at rest; saving verifies the connection
+  and login and reports the exact failure inline.
+- **Email network mode**: SMTP connects over IPv4 by default; an optional
+  "IPv4 + IPv6" mode also tries IPv6 — IPv4 is always attempted first, so a
+  half-configured IPv6 stack can never block outgoing mail. Connection
+  failures now report every attempted address ("IPv6 unreachable; IPv4 timed
+  out") instead of only the last one.
+- **Panel domain, one-click DNS**: when enabling HTTPS fails because the
+  domain does not resolve, a "Create the A record on the DNS page" button
+  publishes `<domain> -> this server` into the most specific zone hosted on
+  the panel's own DNS page, then retries automatically
+  (`POST /api/system/panel-domain/dns-record`, admin-only).
+
+### Changed
+- Startup Caddy resync is now controlled by an explicit
+  `HOSTY_CADDY_SYNC_ON_STARTUP` setting (default on) instead of being
+  silently skipped in test environments.
+
+### Fixed
+- SMTP connection errors surface per-address details to the admin instead of
+  a bare "Network is unreachable".
+
 ## v1.0.0-rc.1 — 2026-06-12
 
 First feature-complete release candidate. Final tag `v1.0.0` follows the

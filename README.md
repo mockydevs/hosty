@@ -22,6 +22,11 @@ and [CHANGELOG.md](CHANGELOG.md) for release notes.
 - Per-site Filebrowser sessions scoped to the selected site.
 - Authoritative DNS through PowerDNS, including common record templates.
 - Scheduled local and S3 backups with restore support.
+- Outgoing email (SMTP) for temporary passwords and panel alerts, with
+  verify-on-save, send-test, and IPv4-first delivery (optional IPv6).
+- Panel-on-domain HTTPS with one-click DNS record creation for the panel
+  domain when the zone is hosted on the panel itself.
+- Two-factor authentication and active-session management.
 - Audit log, dark mode, responsive UI, and keyboard-accessible workflows.
 
 Screenshots are tracked under `docs/screenshots/` during VM verification.

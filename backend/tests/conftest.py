@@ -19,6 +19,7 @@ def settings() -> Settings:
         database_url="sqlite+aiosqlite:///:memory:",
         create_tables_on_startup=True,
         cookie_secure=False,
+        caddy_sync_on_startup=False,
         _env_file=None,
     )
 
