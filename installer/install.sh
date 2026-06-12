@@ -5,6 +5,10 @@
 # or, from a clone:  sudo bash installer/install.sh
 set -euo pipefail
 
+# The caller may be sitting inside a directory this script replaces (e.g.
+# /opt/hosty); a deleted cwd breaks getcwd for every child process.
+cd /
+
 [[ $EUID -eq 0 ]] || { echo "Run as root (sudo $0)" >&2; exit 1; }
 . /etc/os-release
 [[ ${VERSION_ID:-} == "24.04" ]] || echo "WARNING: tested on Ubuntu 24.04, found ${VERSION_ID:-unknown}"
@@ -23,7 +27,11 @@ apt-get update -q && apt-get install -qy git
 if [[ -d $APP_DIR/.git ]]; then
   git -C "$APP_DIR" fetch --tags origin
   git -C "$APP_DIR" checkout -q "$REPO_REF"
-  git -C "$APP_DIR" pull -q --ff-only origin "$REPO_REF" 2>/dev/null || true
+  # Deploy checkout: force it to match the remote (a swallowed pull here once
+  # made re-installs silently keep old code).
+  if git -C "$APP_DIR" rev-parse -q --verify "origin/$REPO_REF" >/dev/null 2>&1; then
+    git -C "$APP_DIR" reset --hard "origin/$REPO_REF"
+  fi
 else
   git clone --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
 fi

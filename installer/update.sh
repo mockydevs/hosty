@@ -2,6 +2,7 @@
 # Hosty self-update: pull a ref/tag, sync deps, rebuild frontend, migrate, restart.
 #   sudo bash /opt/hosty/installer/update.sh [git-ref]   (default: latest main)
 set -euo pipefail
+cd /  # guard against a deleted/inaccessible caller cwd
 [[ $EUID -eq 0 ]] || { echo "Run as root" >&2; exit 1; }
 
 APP_DIR=/opt/hosty
