@@ -97,7 +97,6 @@ async def run(
     env: Mapping[str, str] | None = None,
     stdout_path: str | None = None,
     stdin_path: str | None = None,
-    umask: int = 0o027,
 ) -> CommandResult:
     """Execute argv. `stdout_path`/`stdin_path` redirect to/from files so that
     large streams (database dumps/restores) never pass through memory or a
@@ -109,18 +108,17 @@ async def run(
     stdin_f = open(stdin_path, "rb") if stdin_path else None  # noqa: SIM115
     try:
         try:
-            process_kwargs = {
-                "stdin": stdin_f,
-                "stdout": stdout_f if stdout_f is not None else asyncio.subprocess.PIPE,
-                "stderr": asyncio.subprocess.PIPE,
-                "cwd": cwd,
-                "env": build_subprocess_env(env),
-            }
-            if os.name != "nt":
-                process_kwargs["umask"] = umask
+            # NOTE: no extra kwargs (umask, preexec_fn, ...) here — production
+            # runs uvloop, which rejects anything beyond the standard set with
+            # "unexpected kwargs: ...". The default asyncio loop used in tests
+            # accepts them, so such a regression only surfaces on the server.
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
-                **process_kwargs,
+                stdin=stdin_f,
+                stdout=stdout_f if stdout_f is not None else asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=build_subprocess_env(env),
             )
         except FileNotFoundError as exc:
             raise CommandNotFoundError(f"Executable not found: {cmd[0]}") from exc
