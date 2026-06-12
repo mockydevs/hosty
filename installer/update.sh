@@ -25,7 +25,11 @@ fi
 log "Updating source to $REF"
 git -C "$APP_DIR" fetch --tags origin
 git -C "$APP_DIR" checkout -q "$REF"
-git -C "$APP_DIR" pull -q --ff-only origin "$REF" 2>/dev/null || true
+# /opt/hosty is a deploy checkout: force it to match the remote exactly.
+# (A swallowed `pull --ff-only || true` here once made updates silently no-op.)
+if git -C "$APP_DIR" rev-parse -q --verify "origin/$REF" >/dev/null 2>&1; then
+  git -C "$APP_DIR" reset --hard "origin/$REF"
+fi
 echo "    Commit: $(git -C "$APP_DIR" describe --tags --always)"
 
 # ── Backend dependencies + migrations ────────────────────────────────────────
