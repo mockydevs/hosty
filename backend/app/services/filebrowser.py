@@ -69,6 +69,8 @@ def build_config_init_argv(settings: Settings) -> list[str]:
         f"--scope={QUARANTINE_SCOPE}",
         # Served behind the panel's /files proxy: assets must resolve there.
         "--baseurl=/files",
+        # Embedded in the (dark) panel UI — match it.
+        "--branding.theme=dark",
         f"--address={host}",
         f"--port={port or '8082'}",
         "--signup=false",

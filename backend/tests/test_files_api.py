@@ -39,6 +39,7 @@ def test_config_init_argv(fb_settings):
     # quarantine, never expose the sites root.
     assert f"--scope={filebrowser.QUARANTINE_SCOPE}" in argv
     assert "--baseurl=/files" in argv  # assets must resolve under the panel proxy
+    assert "--branding.theme=dark" in argv  # embedded in the dark panel UI
     assert "--address=127.0.0.1" in argv and "--port=8082" in argv
 
 

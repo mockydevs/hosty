@@ -10,6 +10,25 @@ PHP_VERSIONS=(8.2 8.3 8.4)
 
 log() { printf '\n==> %s\n' "$*"; }
 
+# Hosty's web server (Caddy) must own ports 80 and 443. If another web stack
+# holds them (Traefik/nginx/Apache from a previous Coolify/Docker/LAMP setup),
+# Caddy cannot bind: every site silently answers through the FOREIGN proxy
+# (e.g. Traefik's "no available server") and HTTPS certificates never issue.
+# Refuse early with a clear message instead.
+if [[ -z "${HOSTY_SKIP_PORT_CHECK:-}" ]]; then
+  for p in 80 443; do
+    holder=$(ss -H -tlnp "sport = :$p" 2>/dev/null | head -1)
+    if [[ -n $holder && $holder != *'"caddy"'* ]]; then
+      echo "ERROR: port $p is already in use:" >&2
+      echo "  $holder" >&2
+      echo "Stop and disable/remove the conflicting web stack first (for Docker:" >&2
+      echo "  docker ps   to find it, then stop the proxy container/compose stack)," >&2
+      echo "then re-run. To override anyway: HOSTY_SKIP_PORT_CHECK=1" >&2
+      exit 1
+    fi
+  done
+fi
+
 log "Base packages"
 apt-get update -q
 apt-get install -qy --no-install-recommends \
@@ -119,6 +138,7 @@ if [[ ! -f /var/lib/hosty/filebrowser.db ]]; then
   filebrowser -d /var/lib/hosty/filebrowser.db config init \
     --auth.method=proxy --auth.header=X-Hosty-Fb-User \
     --root=/var/www --scope=/.hosty-quarantine --baseurl=/files \
+    --branding.theme=dark \
     --address=127.0.0.1 --port=8082 --signup=false
 fi
 install -d -m 0755 /var/www/.hosty-quarantine
@@ -140,7 +160,9 @@ fi
 # Admin user for the panel's user-management API (header auth; password is
 # random and locked — never used). CLI needs the BoltDB lock: stop the daemon.
 systemctl stop hosty-filebrowser 2>/dev/null || true
-filebrowser -d /var/lib/hosty/filebrowser.db config set --scope=/.hosty-quarantine --baseurl=/files
+# --branding.theme=dark: embedded in the (dark) panel UI — match it.
+filebrowser -d /var/lib/hosty/filebrowser.db config set \
+  --scope=/.hosty-quarantine --baseurl=/files --branding.theme=dark
 ADMIN_ADD_OUT=$(filebrowser -d /var/lib/hosty/filebrowser.db users add admin \
   "$(openssl rand -base64 24)" --perm.admin --lockPassword 2>&1) \
   || echo "$ADMIN_ADD_OUT" | grep -qi "already exists" \
