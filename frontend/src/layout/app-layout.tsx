@@ -67,7 +67,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const isAdmin = user?.role === "admin";
   const items = NAV.filter((item) => !("adminOnly" in item && item.adminOnly) || isAdmin);
   return (
-    <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Main">
+    <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
       {items.map(({ to, label, icon: Icon, ...rest }) => (
         <NavLink
           key={to}
@@ -95,7 +95,7 @@ function SidebarFooter() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   return (
-    <div className="flex items-center justify-between border-t border-border p-3">
+    <div className="flex shrink-0 items-center justify-between border-t border-border p-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{user?.username}</p>
         <p className="text-xs text-muted-foreground">{user?.role}</p>
@@ -131,9 +131,9 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-dvh">
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 flex-col border-r border-border md:flex">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-background md:flex">
         <Brand />
         <NavItems />
         <SidebarFooter />
@@ -161,7 +161,7 @@ export function AppLayout() {
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-border bg-background shadow-lg">
+          <div className="absolute inset-y-0 left-0 flex h-dvh w-72 flex-col border-r border-border bg-background shadow-lg">
             <div className="flex items-center justify-between pr-2">
               <Brand />
               <Button
@@ -183,7 +183,7 @@ export function AppLayout() {
         <div className="pt-14 md:pt-0">
           <ImpersonationBanner />
         </div>
-        <main className="flex-1 overflow-y-auto px-4 pb-8 pt-6 md:px-8 md:pt-8">
+        <main className="flex-1 px-4 pb-8 pt-6 md:px-8 md:pt-8">
           {/* Cap content width on very wide screens so pages don't stretch edge to edge. */}
           <div className="mx-auto w-full max-w-7xl">
             <Outlet />

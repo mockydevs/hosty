@@ -114,36 +114,38 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Change password</CardTitle>
-            <CardDescription>
-              Changing your password signs you out everywhere, including this session.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChangePasswordForm
-              onChanged={async () => {
-                await logout();
-                navigate("/login");
-              }}
-            />
-          </CardContent>
-        </Card>
-
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(380px,560px)]">
         <div className="space-y-6">
-          <TwoFactorCard />
-          <SessionsCard />
-        </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Change password</CardTitle>
+              <CardDescription>
+                Changing your password signs you out everywhere, including this session.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChangePasswordForm
+                onChanged={async () => {
+                  await logout();
+                  navigate("/login");
+                }}
+              />
+            </CardContent>
+          </Card>
 
-        {/* Phase 11b: every user manages their own Cloudflare token. */}
-        <CloudflareSettingsCard />
+          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-1">
+            <TwoFactorCard />
+            <SessionsCard />
+          </div>
+
+          {/* Phase 11b: every user manages their own Cloudflare token. */}
+          <CloudflareSettingsCard />
+        </div>
 
         {isAdmin && (
           <div className="space-y-6">
-            <PanelDomainCard />
             <SMTPSettingsCard />
+            <PanelDomainCard />
             <NotificationWebhookCard />
           </div>
         )}

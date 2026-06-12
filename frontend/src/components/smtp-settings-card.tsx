@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Mail, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -113,26 +114,28 @@ export function SMTPSettingsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">SMTP email</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Mail className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Email delivery
+        </CardTitle>
         <CardDescription>
-          Sends temporary passwords to users with email addresses and forwards panel notifications
-          to the recipients below.
+          Configure the outgoing mail account used for temporary passwords and panel alerts.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form
-          className="space-y-4"
+          className="space-y-5"
           onSubmit={(e) => {
             e.preventDefault();
             save.mutate();
           }}
           noValidate
         >
-          <div className="grid grid-cols-[1fr_96px] gap-3">
-            <FormField label="SMTP host" htmlFor="smtp-host" error={error ?? undefined}>
+          <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
+            <FormField label="Mail server" htmlFor="smtp-host" error={error ?? undefined}>
               <Input
                 id="smtp-host"
-                placeholder="smtp.example.com"
+                placeholder="mail.example.com"
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
               />
@@ -148,8 +151,9 @@ export function SMTPSettingsCard() {
               />
             </FormField>
           </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="From email" htmlFor="smtp-from-email">
+            <FormField label="Sender email" htmlFor="smtp-from-email">
               <Input
                 id="smtp-from-email"
                 type="email"
@@ -158,7 +162,29 @@ export function SMTPSettingsCard() {
                 onChange={(e) => setFromEmail(e.target.value)}
               />
             </FormField>
-            <FormField label="From name" htmlFor="smtp-from-name">
+            <FormField label="Password" htmlFor="smtp-password">
+              <Input
+                id="smtp-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder={config.data?.has_password ? "Stored; leave blank to keep" : ""}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Login" htmlFor="smtp-username">
+              <Input
+                id="smtp-username"
+                autoComplete="off"
+                placeholder="Usually the sender email"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </FormField>
+            <FormField label="Sender name" htmlFor="smtp-from-name">
               <Input
                 id="smtp-from-name"
                 value={fromName}
@@ -166,57 +192,39 @@ export function SMTPSettingsCard() {
               />
             </FormField>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="Username" htmlFor="smtp-username">
-              <Input
-                id="smtp-username"
-                autoComplete="off"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
+
+          <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+            <FormField label="Security" htmlFor="smtp-security">
+              <select
+                id="smtp-security"
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                value={security}
+                onChange={(e) => setSecurity(e.target.value as typeof security)}
+              >
+                <option value="starttls">STARTTLS</option>
+                <option value="ssl">SSL/TLS</option>
+                <option value="none">None</option>
+              </select>
             </FormField>
-            <FormField
-              label={config.data?.has_password ? "Password (stored)" : "Password"}
-              htmlFor="smtp-password"
-            >
+            <FormField label="Alert recipients" htmlFor="smtp-recipients">
               <Input
-                id="smtp-password"
-                type="password"
-                autoComplete="new-password"
-                placeholder={config.data?.has_password ? "Leave blank to keep current" : ""}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="smtp-recipients"
+                type="text"
+                placeholder="admin@example.com, ops@example.com"
+                value={recipients}
+                onChange={(e) => setRecipients(e.target.value)}
               />
             </FormField>
           </div>
-          <FormField label="Security" htmlFor="smtp-security">
-            <select
-              id="smtp-security"
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              value={security}
-              onChange={(e) => setSecurity(e.target.value as typeof security)}
-            >
-              <option value="starttls">STARTTLS</option>
-              <option value="ssl">SSL/TLS</option>
-              <option value="none">None</option>
-            </select>
-          </FormField>
-          <FormField label="Notification recipients" htmlFor="smtp-recipients">
-            <textarea
-              id="smtp-recipients"
-              className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
-              placeholder="admin@example.com"
-              value={recipients}
-              onChange={(e) => setRecipients(e.target.value)}
-            />
-          </FormField>
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
             <Button
               type="submit"
               disabled={host.trim() === "" || fromEmail.trim() === ""}
               loading={save.isPending}
             >
-              Save SMTP
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+              Save mail settings
             </Button>
             {config.data?.configured && (
               <Button
@@ -225,13 +233,14 @@ export function SMTPSettingsCard() {
                 loading={remove.isPending}
                 onClick={() => remove.mutate()}
               >
+                <Trash2 className="h-4 w-4" aria-hidden />
                 Remove
               </Button>
             )}
           </div>
         </form>
         {config.data?.configured && (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex gap-2 border-t border-border pt-4">
             <Input
               type="email"
               placeholder="test@example.com"
@@ -245,6 +254,7 @@ export function SMTPSettingsCard() {
               loading={sendTest.isPending}
               onClick={() => sendTest.mutate()}
             >
+              <Send className="h-4 w-4" aria-hidden />
               Send test
             </Button>
           </div>
