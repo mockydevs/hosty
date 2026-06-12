@@ -1,0 +1,201 @@
+"""Desired- and observed-state specs (v2/M1, ADR-013). Pure, frozen,
+ORM-free. Construction IS validation: an instance that exists is well-formed
+(`__post_init__` enforces the grammar and cross-references), so downstream
+code never re-checks.
+
+`spec_hash` is the convergence fingerprint: adapters embed it in generated
+unit files (`# hosty-spec-hash=<hash>`), observers read it back, and the
+planner compares. Unit content changes if and only if the hash changes.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+
+from app.domain.validate import (
+    SpecValidationError,
+    validate_domain_name,
+    validate_env_key,
+    validate_env_value,
+    validate_image_ref,
+    validate_mount_path,
+    validate_port,
+    validate_slug,
+)
+
+TENANT_RE_HINT = "hosty-t-<id>"
+
+
+@dataclass(frozen=True)
+class VolumeSpec:
+    """A persistent directory, bound into exactly one service."""
+
+    name: str
+    service: str
+    mount_path: str
+
+    def __post_init__(self) -> None:
+        validate_slug(self.name, what="volume name")
+        validate_slug(self.service, what="service reference")
+        validate_mount_path(self.mount_path)
+
+
+@dataclass(frozen=True)
+class ServiceSpec:
+    """One container. `env` is a sorted tuple of pairs (hashable, canonical);
+    encryption is a storage concern that never reaches the domain."""
+
+    name: str
+    image: str
+    env: tuple[tuple[str, str], ...] = ()
+    internal_port: int | None = None
+    host_port: int | None = None  # panel-allocated loopback port
+    memory_mb: int | None = None
+    cpu_percent: int | None = None
+    is_web: bool = False
+
+    def __post_init__(self) -> None:
+        validate_slug(self.name, what="service name")
+        validate_image_ref(self.image)
+        for key, value in self.env:
+            validate_env_key(key)
+            validate_env_value(key, value)
+        if list(self.env) != sorted(self.env):
+            raise SpecValidationError("Service env must be sorted (canonical form)")
+        if self.internal_port is not None:
+            validate_port(self.internal_port)
+        if self.host_port is not None:
+            validate_port(self.host_port)
+        if (self.internal_port is None) != (self.host_port is None):
+            raise SpecValidationError(
+                f"Service {self.name!r}: internal_port and host_port come together"
+            )
+        if self.memory_mb is not None and not 16 <= int(self.memory_mb) <= 1_048_576:
+            raise SpecValidationError(f"Service {self.name!r}: invalid memory_mb")
+        if self.cpu_percent is not None and not 1 <= int(self.cpu_percent) <= 6400:
+            raise SpecValidationError(f"Service {self.name!r}: invalid cpu_percent")
+
+
+@dataclass(frozen=True)
+class EndpointSpec:
+    """domain -> service's published loopback port, through Caddy."""
+
+    domain: str
+    service: str
+    behind_cloudflare: bool = False
+
+    def __post_init__(self) -> None:
+        validate_domain_name(self.domain)
+        validate_slug(self.service, what="service reference")
+
+
+@dataclass(frozen=True)
+class StackSpec:
+    """One deployable unit a client owns. Cross-references are verified at
+    construction: a StackSpec that exists is internally consistent."""
+
+    name: str
+    tenant: str  # tenant linux user (hosty-t-<id>)
+    services: tuple[ServiceSpec, ...]
+    volumes: tuple[VolumeSpec, ...] = ()
+    endpoints: tuple[EndpointSpec, ...] = ()
+    suspended: bool = False
+
+    def __post_init__(self) -> None:
+        validate_slug(self.name, what="stack name")
+        if not (
+            isinstance(self.tenant, str)
+            and self.tenant.startswith("hosty-t-")
+            and self.tenant[len("hosty-t-") :].isdigit()
+        ):
+            raise SpecValidationError(f"Invalid tenant {self.tenant!r} (must be {TENANT_RE_HINT})")
+        if not self.services:
+            raise SpecValidationError(f"Stack {self.name!r} has no services")
+        service_names = [s.name for s in self.services]
+        if len(set(service_names)) != len(service_names):
+            raise SpecValidationError(f"Stack {self.name!r}: duplicate service names")
+        volume_names = [v.name for v in self.volumes]
+        if len(set(volume_names)) != len(volume_names):
+            raise SpecValidationError(f"Stack {self.name!r}: duplicate volume names")
+        known = set(service_names)
+        for volume in self.volumes:
+            if volume.service not in known:
+                raise SpecValidationError(
+                    f"Stack {self.name!r}: volume {volume.name!r} mounts into "
+                    f"unknown service {volume.service!r}"
+                )
+        endpoint_domains = [e.domain for e in self.endpoints]
+        if len(set(endpoint_domains)) != len(endpoint_domains):
+            raise SpecValidationError(f"Stack {self.name!r}: duplicate endpoint domains")
+        by_name = {s.name: s for s in self.services}
+        for endpoint in self.endpoints:
+            target = by_name.get(endpoint.service)
+            if target is None:
+                raise SpecValidationError(
+                    f"Stack {self.name!r}: endpoint {endpoint.domain!r} routes to "
+                    f"unknown service {endpoint.service!r}"
+                )
+            if target.host_port is None:
+                raise SpecValidationError(
+                    f"Stack {self.name!r}: endpoint {endpoint.domain!r} routes to "
+                    f"service {endpoint.service!r} which publishes no port"
+                )
+
+    @property
+    def network(self) -> str:
+        return f"hosty-{self.name}"
+
+    def unit_base(self, service: str) -> str:
+        """Quadlet file base name: <base>.container -> <base>.service."""
+        return f"{self.name}-{service}"
+
+    def volumes_for(self, service: str) -> tuple[VolumeSpec, ...]:
+        return tuple(v for v in self.volumes if v.service == service)
+
+
+def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
+    """Convergence fingerprint of one service's runtime shape. Everything
+    that changes the generated unit/env files MUST be in here; anything that
+    does not (endpoint domains — they only touch Caddy) MUST NOT."""
+    payload = {
+        "image": service.image,
+        "env": list(service.env),
+        "internal_port": service.internal_port,
+        "host_port": service.host_port,
+        "memory_mb": service.memory_mb,
+        "cpu_percent": service.cpu_percent,
+        "network": stack.network,
+        "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:32]
+
+
+# --- observed state ---------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ObservedUnit:
+    """One service unit as the host reports it. `spec_hash` is read from the
+    `# hosty-spec-hash=` marker the adapter embeds; None means the file is
+    missing the marker (foreign/corrupt) and therefore always stale."""
+
+    spec_hash: str | None
+    active: bool
+
+
+@dataclass(frozen=True)
+class ObservedStack:
+    """Host-side artifacts attributed to one stack name. Observers only
+    report stacks that left ANY artifact; a fully absent stack has no entry."""
+
+    tenant: str
+    tenant_present: bool = True
+    units: dict[str, ObservedUnit] = field(default_factory=dict)  # service -> unit
+    volume_dirs: frozenset[str] = frozenset()
+
+
+# Observed world: stack name -> ObservedStack
+Observed = dict[str, ObservedStack]

@@ -15,12 +15,12 @@ import json
 import re
 
 import structlog
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.db.models import App, Operation
+from app.services import ports
 from app.services.caddy import CaddyClient
 from app.services.sites import (
     _caddy_client,
@@ -129,13 +129,13 @@ def render_env_file(env: dict[str, str]) -> str:
 
 
 async def allocate_host_port(db: AsyncSession, settings: Settings) -> int:
-    """Lowest free port in the panel's loopback range. The DB is the ledger:
-    host_port is UNIQUE, so a race loses at commit, not at runtime."""
-    used = set((await db.execute(select(App.host_port))).scalars().all())
-    for port in range(settings.app_port_min, settings.app_port_max + 1):
-        if port not in used:
-            return port
-    raise AppValidationError("No free app ports left on this server")
+    """Lowest free port in the panel's loopback range. Delegates to the
+    shared v2 ledger allocator (services/ports.py) so apps and stacks can
+    never collide; keeps this module's error contract."""
+    try:
+        return await ports.allocate_host_port(db, settings)
+    except ports.NoFreePortError as exc:
+        raise AppValidationError("No free app ports left on this server") from exc
 
 
 def container_spec_for(app: App, settings: Settings) -> docker.ContainerSpec:
