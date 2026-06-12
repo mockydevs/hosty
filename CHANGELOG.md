@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **v2/M5 — WordPress blueprint and stack backups (ADR-013)**: fully
+  containerized WordPress + per-stack MariaDB composition, Podman-backed
+  WP-CLI actions at v1 parity (install, updates, maintenance, salt rotation,
+  one-time admin login link, status and explicit PHP switching), and
+  blueprint backup hooks. Stack backups now archive the managed volume tree,
+  stream a consistent MariaDB dump without placing credentials in argv,
+  retain the checksum-verified ADR-010 manifest/S3 format, and restore with
+  deterministic stop/volume restore/start/database-import ordering. New
+  owner-scoped `/api/stacks/{id}/backups` endpoints and stack-detail backup/
+  restore controls expose the workflow without weakening 404 scoping.
 - **v2/M4 — blueprint engine + Stacks API/UI (ADR-013)**: typed blueprint
   registry (`orchestration/blueprints/`) where each blueprint declares a
   pydantic inputs model (drives the create wizard as JSON Schema — zero

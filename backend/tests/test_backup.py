@@ -8,6 +8,7 @@ import pytest
 from app.core.errors import NotFoundError
 from app.services import backup
 from app.system import runner
+from app.system.tenants import InvalidTenantUserError
 
 # --- ids ---------------------------------------------------------------------------
 
@@ -22,6 +23,17 @@ def test_backup_id_roundtrip():
 def test_backup_id_rejects_garbage(bad):
     with pytest.raises(NotFoundError):
         backup.validate_backup_id(bad)
+
+
+def test_managed_directory_rejects_symlink_escape(tmp_path):
+    managed = tmp_path / "managed"
+    managed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (managed / "volumes").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(backup.BackupError, match="symlink"):
+        backup.validate_managed_directory(str(managed / "volumes"), allowed_root=str(managed))
 
 
 # --- argv builders -------------------------------------------------------------------
@@ -235,6 +247,37 @@ async def test_restore_runs_extract_and_mysql(tmp_path, monkeypatch):
     assert calls[3][0] == "mariadb"  # create restricted restore user
     assert calls[4][0] == "mysql" and calls[4][-1] == "shop_db"
     assert calls[5][0] == "mariadb"  # drop restricted restore user
+
+
+async def test_restore_tree_is_scoped_and_chowns_to_tenant(tmp_path, monkeypatch):
+    directory = tmp_path / "stack--blog" / "20260611T030000Z"
+    _make_backup_dir(directory)
+    stack_root = tmp_path / "home" / "hosty-t-7" / "stacks" / "blog"
+    volumes = stack_root / "volumes"
+    volumes.mkdir(parents=True)
+    calls: list[list[str]] = []
+    monkeypatch.setattr("app.system.runner.run", make_fake_runner(calls))
+
+    await backup.restore_tree(
+        directory,
+        str(volumes),
+        allowed_root=str(stack_root),
+        staging_root=str(tmp_path / "restore-staging"),
+        owner="hosty-t-7",
+    )
+
+    rsync = next(argv for argv in calls if argv[0] == "rsync")
+    assert "--delete" in rsync
+    assert "--chown=hosty-t-7:hosty-t-7" in rsync
+
+    with pytest.raises(InvalidTenantUserError):
+        await backup.restore_tree(
+            directory,
+            str(volumes),
+            allowed_root=str(stack_root),
+            staging_root=str(tmp_path / "restore-staging"),
+            owner="--owner",
+        )
 
 
 async def test_restore_missing_dump_fails(tmp_path):

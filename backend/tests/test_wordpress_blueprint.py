@@ -22,7 +22,12 @@ from __future__ import annotations
 import pytest
 
 from app.orchestration.blueprints import get_blueprint
-from app.orchestration.blueprints.wordpress import SALT_ENV_KEYS, derive_salts, php_series_of
+from app.orchestration.blueprints.wordpress import (
+    SALT_ENV_KEYS,
+    derive_salts,
+    php_series_of,
+)
+from app.services import backup
 from app.services import stacks as stacks_service
 from app.system import podman
 from app.system.runner import CommandResult
@@ -350,7 +355,9 @@ def test_php_series_of():
 # --- backup hooks ----------------------------------------------------------------------
 
 
-async def test_backup_hooks_dump_and_import(admin_client, stack_host, wp_cli, app, settings, tmp_path):
+async def test_backup_hooks_dump_and_import(
+    admin_client, stack_host, wp_cli, app, settings, tmp_path
+):
     stack_id = await create_wp_stack(admin_client)
     bp = get_blueprint("wordpress")
     hooks = bp.backup_hooks()
@@ -366,8 +373,9 @@ async def test_backup_hooks_dump_and_import(admin_client, stack_host, wp_cli, ap
         assert dump["command"][0] == "mariadb-dump"
         # Credentials travel via env, never argv.
         assert "MYSQL_PWD" in dump["env"]
-        assert not any("MYSQL_PWD" in part or dump["env"]["MYSQL_PWD"] in part
-                       for part in dump["command"])
+        assert not any(
+            "MYSQL_PWD" in part or dump["env"]["MYSQL_PWD"] in part for part in dump["command"]
+        )
         assert (tmp_path / "wordpress.sql").read_text(encoding="utf-8") == "-- fake dump\n"
 
         await hooks.post_restore(db=db, settings=settings, stack=stack, directory=tmp_path)
@@ -381,3 +389,71 @@ async def test_backup_hooks_dump_and_import(admin_client, stack_host, wp_cli, ap
             db=db, settings=settings, stack=stack, directory=tmp_path / "empty"
         )
         assert len(wp_cli.execs) == count
+
+
+async def test_stack_backup_restore_api(
+    admin_client, stack_host, wp_cli, settings, tmp_path, monkeypatch
+):
+    settings.backups_root = str(tmp_path / "backups")
+    settings.restore_staging_root = str(tmp_path / "restore")
+    restored: list[tuple[str, str]] = []
+
+    async def archive_files(source, destination):
+        assert source == "/home/hosty-t-1/stacks/blog/volumes"
+        (destination / backup.FILES_ARCHIVE).write_bytes(b"volume archive")
+
+    async def restore_tree(directory, destination, *, allowed_root, staging_root, owner):
+        assert (directory / backup.FILES_ARCHIVE).read_bytes() == b"volume archive"
+        restored.append((destination, allowed_root))
+        assert staging_root == settings.restore_staging_root
+        assert owner == "hosty-t-1"
+
+    monkeypatch.setattr(backup, "archive_files", archive_files)
+    monkeypatch.setattr(backup, "restore_tree", restore_tree)
+    monkeypatch.setattr(
+        backup,
+        "validate_managed_directory",
+        lambda path, *, allowed_root: path,
+    )
+
+    stack_id = await create_wp_stack(admin_client)
+    response = await admin_client.post(f"/api/stacks/{stack_id}/backups")
+    assert response.status_code == 202, response.text
+    operation_url = f"/api/operations/{response.json()['operation_id']}"
+    operation = (await admin_client.get(operation_url)).json()
+    assert operation["status"] == "succeeded", operation
+    assert ("hosty-t-1", "blog-web.service") in stack_host.active
+    assert ("hosty-t-1", "blog-db.service") in stack_host.active
+
+    listed = (await admin_client.get(f"/api/stacks/{stack_id}/backups")).json()
+    assert len(listed) == 1
+    backup_id = listed[0]["backup_id"]
+    assert listed[0]["wordpress"] is True
+
+    wrong = await admin_client.post(
+        f"/api/stacks/{stack_id}/backups/{backup_id}/restore",
+        json={"scope": "full", "confirm_domain": "wrong"},
+    )
+    assert wrong.status_code == 409
+
+    wp_cli.execs.clear()
+    response = await admin_client.post(
+        f"/api/stacks/{stack_id}/backups/{backup_id}/restore",
+        json={"scope": "full", "confirm_domain": "blog"},
+    )
+    assert response.status_code == 202, response.text
+    operation_url = f"/api/operations/{response.json()['operation_id']}"
+    operation = (await admin_client.get(operation_url)).json()
+    assert operation["status"] == "succeeded", operation
+    assert restored == [("/home/hosty-t-1/stacks/blog/volumes", "/home/hosty-t-1/stacks/blog")]
+    assert wp_cli.execs[-1]["command"][0] == "mariadb"
+    assert ("hosty-t-1", "blog-web.service") in stack_host.active
+    assert ("hosty-t-1", "blog-db.service") in stack_host.active
+
+    response = await admin_client.request(
+        "DELETE",
+        f"/api/stacks/{stack_id}/backups/{backup_id}",
+        json={"confirm_id": backup_id},
+    )
+    assert response.status_code == 204
+    assert (await admin_client.get(f"/api/stacks/{stack_id}/backups")).json() == []

@@ -32,16 +32,23 @@ else
   echo "OK:   SQL built only in app/services/mariadb.py"
 fi
 
-# 4. WP-CLI argv is built only in the wordpress service, always via runuser.
-if grep -rln --include="*.py" '"wp",' app/ | grep -v "app/services/wordpress.py"; then
-  echo "FAIL: wp argv built outside app/services/wordpress.py"; fail=1
+# 4. WP-CLI argv has exactly two owners during the v1 -> v2 transition:
+# legacy sites use runuser; the v2 blueprint uses the rootless Podman seam.
+if grep -rln --include="*.py" '"wp",' app/ \
+  | grep -v -E "app/(services/wordpress|orchestration/blueprints/wordpress)\.py"; then
+  echo "FAIL: wp argv built outside the approved WordPress modules"; fail=1
 else
-  echo "OK:   wp argv only in app/services/wordpress.py"
+  echo "OK:   wp argv only in approved WordPress modules"
 fi
 if ! grep -q '"runuser"' app/services/wordpress.py; then
   echo "FAIL: wordpress.py no longer runs wp via runuser"; fail=1
 else
-  echo "OK:   WP-CLI runs via runuser (never root)"
+  echo "OK:   legacy WP-CLI runs via runuser (never root)"
+fi
+if ! grep -q "podman.run_transient" app/orchestration/blueprints/wordpress.py; then
+  echo "FAIL: v2 WordPress no longer runs WP-CLI through rootless Podman"; fail=1
+else
+  echo "OK:   v2 WP-CLI runs through rootless Podman"
 fi
 
 # 5. Request bodies must never be stored in the audit log.

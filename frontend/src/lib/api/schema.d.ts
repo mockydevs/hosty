@@ -1739,6 +1739,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{stack_id}/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Stack Backups */
+        get: operations["list_stack_backups_api_stacks__stack_id__backups_get"];
+        put?: never;
+        /** Start Stack Backup */
+        post: operations["start_stack_backup_api_stacks__stack_id__backups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/backups/{backup_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Stack Restore */
+        post: operations["start_stack_restore_api_stacks__stack_id__backups__backup_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/backups/{backup_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Stack Backup */
+        delete: operations["delete_stack_backup_api_stacks__stack_id__backups__backup_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2630,6 +2682,13 @@ export interface components {
             db_bytes: number;
             /** Bandwidth Bytes */
             bandwidth_bytes: number;
+        };
+        /** StackActionRequest */
+        StackActionRequest: {
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
         };
         /** StackActionResponse */
         StackActionResponse: {
@@ -5000,7 +5059,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StackActionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6667,6 +6730,138 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ScheduleResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stack_backups_api_stacks__stack_id__backups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_stack_backup_api_stacks__stack_id__backups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationStartedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_stack_restore_api_stacks__stack_id__backups__backup_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationStartedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_stack_backup_api_stacks__stack_id__backups__backup_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteBackupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

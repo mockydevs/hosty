@@ -13,12 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin, require_admin
 from app.core.errors import ConflictError, NotFoundError
-from app.db.models import Operation, Site, User
-from app.services import backup, backup_ops, s3_config
+from app.db.models import Operation, Site, Stack, User
+from app.services import backup, backup_ops, s3_config, stack_backup_ops
 from app.services.sites import initial_steps
 
 router = APIRouter(dependencies=[Depends(get_current_user)])  # /api/backups
 site_router = APIRouter(dependencies=[Depends(get_current_user)])  # /api/sites
+stack_router = APIRouter(dependencies=[Depends(get_current_user)])  # /api/stacks
 
 
 class BackupResponse(BaseModel):
@@ -122,7 +123,19 @@ async def list_all_backups(
             await db.execute(select(Site.domain).where(Site.owner_id == user.id))
         ).all()
     }
+    stack_names = {
+        name
+        for (name,) in (await db.execute(select(Stack.name).where(Stack.owner_id == user.id))).all()
+    }
+    owned.update(stack_backup_ops.backup_key(name) for name in stack_names)
     return [b for b in backups if b.domain in owned]
+
+
+async def _owned_stack(db: AsyncSession, user: User, stack_id: int) -> Stack:
+    stack = await db.get(Stack, stack_id)
+    if stack is None or (not is_admin(user) and stack.owner_id != user.id):
+        raise NotFoundError("Stack not found")
+    return stack
 
 
 @router.get("/meta", response_model=BackupsMetaResponse)
@@ -401,3 +414,123 @@ async def update_schedule(
     site.backup_s3_mirror = body.s3_mirror
     await db.commit()
     return _schedule_response(site)
+
+
+# --- v2 stack backups ---------------------------------------------------------------
+
+
+@stack_router.get("/{stack_id}/backups", response_model=list[BackupResponse])
+async def list_stack_backups(
+    request: Request,
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    stack = await _owned_stack(db, user, stack_id)
+    return backup.list_backups(
+        _settings(request).backups_root, stack_backup_ops.backup_key(stack.name)
+    )
+
+
+@stack_router.post(
+    "/{stack_id}/backups",
+    response_model=OperationStartedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_stack_backup(
+    request: Request,
+    stack_id: int,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> OperationStartedResponse:
+    stack = await _owned_stack(db, user, stack_id)
+    if stack.status != "ready":
+        raise ConflictError(f"Stack is {stack.status}; only ready stacks can be backed up")
+    op = Operation(
+        kind="backup_stack",
+        stack_id=stack.id,
+        domain=stack.name,
+        status="pending",
+        steps_json=stack_backup_ops.initial_steps(stack_backup_ops.BACKUP_STEPS),
+    )
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+    background.add_task(
+        stack_backup_ops.run_backup_stack,
+        request.app.state.sessionmaker,
+        _settings(request),
+        stack_id=stack.id,
+        operation_id=op.id,
+        s3=_s3_override(request),
+    )
+    return OperationStartedResponse(operation_id=op.id)
+
+
+@stack_router.post(
+    "/{stack_id}/backups/{backup_id}/restore",
+    response_model=OperationStartedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_stack_restore(
+    request: Request,
+    stack_id: int,
+    backup_id: str,
+    body: RestoreRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> OperationStartedResponse:
+    stack = await _owned_stack(db, user, stack_id)
+    backup.validate_backup_id(backup_id)
+    if body.confirm_domain.strip().lower() != stack.name:
+        raise ConflictError("Confirmation does not match the stack name")
+    if stack.status != "ready":
+        raise ConflictError(f"Stack is {stack.status}; only ready stacks can be restored")
+    key = stack_backup_ops.backup_key(stack.name)
+    local = backup.read_manifest(backup.backup_dir(_settings(request).backups_root, key, backup_id))
+    if local is None and not await _s3_available(request, db):
+        raise NotFoundError(f"Backup {backup_id} not found for {stack.name}")
+    op = Operation(
+        kind="restore_stack",
+        stack_id=stack.id,
+        domain=stack.name,
+        status="pending",
+        steps_json=stack_backup_ops.initial_steps(stack_backup_ops.RESTORE_STEPS),
+    )
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+    background.add_task(
+        stack_backup_ops.run_restore_stack,
+        request.app.state.sessionmaker,
+        _settings(request),
+        stack_id=stack.id,
+        operation_id=op.id,
+        backup_id=backup_id,
+        scope=body.scope,
+        s3=_s3_override(request),
+    )
+    return OperationStartedResponse(operation_id=op.id)
+
+
+@stack_router.delete("/{stack_id}/backups/{backup_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_stack_backup(
+    request: Request,
+    stack_id: int,
+    backup_id: str,
+    body: DeleteBackupRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    stack = await _owned_stack(db, user, stack_id)
+    backup.validate_backup_id(backup_id)
+    if body.confirm_id.strip() != backup_id:
+        raise ConflictError("Confirmation does not match the backup id")
+    directory = backup.backup_dir(
+        _settings(request).backups_root, stack_backup_ops.backup_key(stack.name), backup_id
+    )
+    if not directory.is_dir():
+        raise NotFoundError(f"Backup {backup_id} not found for {stack.name}")
+    shutil.rmtree(directory)

@@ -35,6 +35,7 @@ from app.core.config import Settings
 from app.core.errors import AppError, NotFoundError
 from app.services import mariadb
 from app.system import fs, runner
+from app.system.tenants import validate_tenant_username
 
 log = structlog.get_logger("hosty.backup")
 
@@ -71,6 +72,31 @@ def validate_backup_id(raw: str) -> str:
 
 def backup_dir(root: str, domain: str, backup_id: str) -> Path:
     return Path(root) / domain / validate_backup_id(backup_id)
+
+
+def _real_directory_without_symlinks(raw: str) -> Path:
+    path = Path(raw)
+    if not path.is_absolute():
+        raise BackupError("Managed backup path must be absolute")
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise BackupError(f"Managed backup path contains a symlink: {current}")
+        if not current.is_dir():
+            raise BackupError(f"Managed backup path is not a directory: {current}")
+    return current.resolve(strict=True)
+
+
+def validate_managed_directory(path: str, *, allowed_root: str) -> str:
+    """Return a real directory path contained by a real managed root."""
+    managed_root = _real_directory_without_symlinks(allowed_root)
+    target = _real_directory_without_symlinks(path)
+    try:
+        target.relative_to(managed_root)
+    except ValueError as exc:
+        raise BackupError("Managed backup path escaped its root") from exc
+    return str(target)
 
 
 # --- command builders (exact-argv tested) -------------------------------------------
@@ -146,6 +172,9 @@ def write_manifest(
     php_version: str,
     wordpress: bool,
     databases: list[str],
+    workload_kind: str = "site",
+    workload_name: str | None = None,
+    blueprint_id: str | None = None,
 ) -> dict[str, Any]:
     files = []
     for path in sorted(p for p in directory.rglob("*") if p.is_file() and p.name != MANIFEST):
@@ -162,6 +191,9 @@ def write_manifest(
         "files": files,
         "panel_version": __version__,
         "s3": False,
+        "workload_kind": workload_kind,
+        "workload_name": workload_name or domain,
+        "blueprint_id": blueprint_id,
     }
     (directory / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
@@ -284,6 +316,60 @@ async def archive_files(site_dir: str, dest: Path) -> None:
     await _run_or_raise(
         build_tar_create_argv(dest / FILES_ARCHIVE, site_dir), "archiving files", timeout=3600
     )
+
+
+async def restore_tree(
+    directory: Path,
+    destination: str,
+    *,
+    allowed_root: str,
+    staging_root: str,
+    owner: str,
+) -> None:
+    """Restore a generic archived tree into a validated managed root."""
+    owner = validate_tenant_username(owner)
+    archive = directory / FILES_ARCHIVE
+    if not archive.is_file():
+        raise BackupError("Backup contains no volume archive")
+
+    root = Path(staging_root)
+    root.mkdir(parents=True, exist_ok=True, mode=0o711)
+    if root.is_symlink() or not root.is_dir():
+        raise BackupError("Restore staging root must be a real directory")
+    root.chmod(0o711)
+
+    target = Path(validate_managed_directory(destination, allowed_root=allowed_root))
+
+    staging = Path(tempfile.mkdtemp(prefix="restore-stack-", dir=root))
+    try:
+        chown = await runner.run(["chown", "hosty-restore:hosty-restore", str(staging)])
+        if not chown.ok:
+            raise BackupError("Could not prepare the isolated restore directory")
+        result = await runner.run(
+            build_tar_extract_argv(str(staging)),
+            timeout=3600,
+            stdin_path=str(archive),
+        )
+        if not result.ok:
+            raise BackupError(f"extracting volumes failed: {result.stderr.strip()}")
+        _validate_extracted_tree(staging)
+        result = await runner.run(
+            [
+                "rsync",
+                "-a",
+                "--safe-links",
+                "--delete",
+                f"--chown={owner}:{owner}",
+                "--",
+                f"{staging}/",
+                f"{target}/",
+            ],
+            timeout=3600,
+        )
+        if not result.ok:
+            raise BackupError(f"restoring volumes failed: {result.stderr.strip()}")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def _validate_extracted_tree(root: Path) -> None:

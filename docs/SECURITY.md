@@ -54,8 +54,10 @@ as rotation noise.
 1. No `shell=True` anywhere; subprocess confined to `app/system/runner.py`.
 2. SQL statement strings only in `app/services/mariadb.py` (validated
    identifiers + generated secrets; ADR-007 revisit condition documented).
-3. WP-CLI argv built only in `app/services/wordpress.py`, executed via
-   `runuser` as the site user.
+3. WP-CLI argv has two approved owners during the v1-to-v2 transition:
+   `app/services/wordpress.py` executes via `runuser` as the site user;
+   `app/orchestration/blueprints/wordpress.py` executes through the rootless
+   per-tenant Podman adapter. M6 removes the legacy owner.
 4. Audit middleware never reads request bodies.
 
 ## Known gaps / accepted risks (v1)

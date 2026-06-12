@@ -33,3 +33,9 @@ def test_service_trusts_proxy_headers_from_localhost_only():
     # headers are still only trusted from the local Caddy proxy.
     assert "--host 0.0.0.0" in unit
     assert "--forwarded-allow-ips=127.0.0.1" in unit
+
+
+def test_security_sweep_allows_only_legacy_and_v2_wordpress_argv_owners():
+    sweep = (ROOT / "scripts" / "forbidden_patterns.sh").read_text(encoding="utf-8")
+    assert "services/wordpress|orchestration/blueprints/wordpress" in sweep
+    assert "podman.run_transient" in sweep

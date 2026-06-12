@@ -29,13 +29,145 @@ import { StackStatusBadge, isSettling } from "@/pages/stacks";
  * type-to-confirm. Polls while the reconciler is converging.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Play, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Play, RefreshCw, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 
 type Stack = components["schemas"]["StackResponse"];
 type ActionResult = components["schemas"]["StackActionResponse"];
+type Backup = components["schemas"]["BackupResponse"];
+
+export function StackBackupsCard({
+  stack,
+  onOperation,
+}: {
+  stack: Stack;
+  onOperation: (operationId: number) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [restoring, setRestoring] = useState<Backup | null>(null);
+  const [confirm, setConfirm] = useState("");
+  const backups = useQuery({
+    queryKey: ["stacks", stack.id, "backups"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/stacks/{stack_id}/backups", {
+        params: { path: { stack_id: stack.id } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load backups"));
+      return data;
+    },
+  });
+
+  const runBackup = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/stacks/{stack_id}/backups", {
+        params: { path: { stack_id: stack.id } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Backup failed to start"));
+      return data;
+    },
+    onSuccess: async (data) => {
+      onOperation(data.operation_id);
+      toast.success("Stack backup started");
+      await queryClient.invalidateQueries({ queryKey: ["stacks", stack.id, "backups"] });
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const restore = useMutation({
+    mutationFn: async (item: Backup) => {
+      const { data, error } = await api.POST("/api/stacks/{stack_id}/backups/{backup_id}/restore", {
+        params: { path: { stack_id: stack.id, backup_id: item.backup_id } },
+        body: { scope: "full", confirm_domain: confirm },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Restore failed to start"));
+      return data;
+    },
+    onSuccess: (data) => {
+      onOperation(data.operation_id);
+      setRestoring(null);
+      setConfirm("");
+      toast.success("Stack restore started");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">Backups</CardTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={stack.status !== "ready"}
+          loading={runBackup.isPending}
+          onClick={() => runBackup.mutate()}
+        >
+          <Save className="h-3.5 w-3.5" aria-hidden /> Back up now
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {backups.isPending ? (
+          <LoadingState label="Loading backupsâ€¦" />
+        ) : backups.isError ? (
+          <ErrorState message={backups.error.message} onRetry={() => backups.refetch()} />
+        ) : backups.data.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No backups yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Created</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead className="text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {backups.data.map((item) => (
+                <TableRow key={item.backup_id}>
+                  <TableCell className="font-mono text-xs">{item.backup_id}</TableCell>
+                  <TableCell>{Math.max(1, Math.round(item.size_bytes / 1024))} KB</TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="outline" onClick={() => setRestoring(item)}>
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Restore
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+      <Dialog open={restoring !== null} onClose={() => setRestoring(null)}>
+        <DialogContent>
+          <DialogTitle>Restore this stack backup?</DialogTitle>
+          <DialogDescription>
+            Stops the stack, replaces its volumes, imports the database dump, then restarts it. Type{" "}
+            <strong>{stack.name}</strong> to confirm.
+          </DialogDescription>
+          <Input
+            aria-label="Confirm stack name for restore"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+          />
+          <DialogActions>
+            <Button variant="outline" onClick={() => setRestoring(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={confirm.trim().toLowerCase() !== stack.name}
+              loading={restore.isPending}
+              onClick={() => restoring && restore.mutate(restoring)}
+            >
+              Restore backup
+            </Button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
 
 function LogsCard({ stack }: { stack: Stack }) {
   const [service, setService] = useState(
@@ -375,6 +507,7 @@ export function StackDetailPage() {
       </div>
 
       <ActionsCard stack={data} actions={actions} />
+      <StackBackupsCard stack={data} onOperation={setOperationId} />
       <LogsCard stack={data} />
       <DeleteStackDialog stack={data} open={deleteOpen} onClose={() => setDeleteOpen(false)} />
     </div>

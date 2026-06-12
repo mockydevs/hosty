@@ -122,9 +122,7 @@ class WordPressInputs(BaseModel):
 def derive_salts(seed: str) -> dict[str, str]:
     """Deterministic full-entropy salts from one generated seed — render
     stays pure while each of the 8 keys gets a distinct value."""
-    return {
-        key: hashlib.sha256(f"{seed}:{key}".encode()).hexdigest() for key in SALT_ENV_KEYS
-    }
+    return {key: hashlib.sha256(f"{seed}:{key}".encode()).hexdigest() for key in SALT_ENV_KEYS}
 
 
 def php_series_of(web_image: str) -> str:
@@ -221,9 +219,7 @@ def _bump_generation(stack: Stack) -> None:
 async def _web_service(db: AsyncSession, stack: Stack) -> StackService:
     row = (
         await db.execute(
-            select(StackService).where(
-                StackService.stack_id == stack.id, StackService.name == WEB
-            )
+            select(StackService).where(StackService.stack_id == stack.id, StackService.name == WEB)
         )
     ).scalar_one_or_none()
     if row is None:
@@ -367,9 +363,7 @@ class WordPressBlueprint:
         await run_wp(rt, ["maintenance-mode", "activate"])
         return ActionResult(ok=True, message="Maintenance mode on")
 
-    async def _maintenance_off(
-        self, *, db, settings, stack: Stack, inputs, params
-    ) -> ActionResult:
+    async def _maintenance_off(self, *, db, settings, stack: Stack, inputs, params) -> ActionResult:
         rt = await _runtime(db, stack)
         await run_wp(rt, ["maintenance-mode", "deactivate"])
         return ActionResult(ok=True, message="Maintenance mode off")
