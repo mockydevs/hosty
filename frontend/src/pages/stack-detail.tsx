@@ -29,7 +29,17 @@ import { StackStatusBadge, isSettling } from "@/pages/stacks";
  * type-to-confirm. Polls while the reconciler is converging.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Play, RefreshCw, RotateCcw, Save, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Database,
+  ExternalLink,
+  FolderOpen,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
@@ -223,6 +233,71 @@ function LogsCard({ stack }: { stack: Stack }) {
           <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-relaxed">
             {logs.data.logs || "No log output yet."}
           </pre>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StackToolsCard({ stack }: { stack: Stack }) {
+  const hasAdminer = stack.services.some((service) => service.name === "adminer");
+  const hasFiles = stack.services.some((service) => service.name === "files");
+
+  const openAdminer = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/stacks/{stack_id}/adminer-session", {
+        params: { path: { stack_id: stack.id } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Could not open Adminer"));
+      return data.url;
+    },
+    onSuccess: (url) => window.open(url, "_blank", "noopener"),
+    onError: (error) => toast.error(error.message),
+  });
+
+  const openFiles = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/stacks/{stack_id}/files-session", {
+        params: { path: { stack_id: stack.id } },
+      });
+      if (error || !data) {
+        throw new Error(apiErrorMessage(error, "Could not open the file manager"));
+      }
+      return data.url;
+    },
+    onSuccess: (url) => window.open(url, "_blank", "noopener"),
+    onError: (error) => toast.error(error.message),
+  });
+
+  if (!hasAdminer && !hasFiles) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Tools</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        {hasAdminer && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={stack.status !== "ready"}
+            loading={openAdminer.isPending}
+            onClick={() => openAdminer.mutate()}
+          >
+            <Database className="h-3.5 w-3.5" aria-hidden /> Open Adminer
+          </Button>
+        )}
+        {hasFiles && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={stack.status !== "ready"}
+            loading={openFiles.isPending}
+            onClick={() => openFiles.mutate()}
+          >
+            <FolderOpen className="h-3.5 w-3.5" aria-hidden /> Open files
+          </Button>
         )}
       </CardContent>
     </Card>
@@ -507,6 +582,7 @@ export function StackDetailPage() {
       </div>
 
       <ActionsCard stack={data} actions={actions} />
+      <StackToolsCard stack={data} />
       <StackBackupsCard stack={data} onOperation={setOperationId} />
       <LogsCard stack={data} />
       <DeleteStackDialog stack={data} open={deleteOpen} onClose={() => setDeleteOpen(false)} />

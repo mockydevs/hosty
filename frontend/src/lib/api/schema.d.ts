@@ -1134,6 +1134,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{stack_id}/adminer-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stack Adminer Session
+         * @description Mint a stack-scoped Adminer ticket.
+         *
+         *     The database service stays stack-internal; the ticket proxy targets the
+         *     stack's private Adminer sidecar, which shares the Podman network with the DB.
+         */
+        post: operations["stack_adminer_session_api_stacks__stack_id__adminer_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sites/{site_id}/files-session": {
         parameters: {
             query?: never;
@@ -1145,6 +1168,23 @@ export interface paths {
         put?: never;
         /** Files Session */
         post: operations["files_session_api_sites__site_id__files_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/files-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stack Files Session */
+        post: operations["stack_files_session_api_stacks__stack_id__files_session_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5356,12 +5396,74 @@ export interface operations {
             };
         };
     };
+    stack_adminer_session_api_stacks__stack_id__adminer_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminerSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     files_session_api_sites__site_id__files_session_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilesSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stack_files_session_api_stacks__stack_id__files_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
             };
             cookie?: never;
         };

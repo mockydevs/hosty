@@ -1,4 +1,4 @@
-{
+﻿{
   "openapi": "3.1.0",
   "info": {
     "title": "HostyPanel API",
@@ -3203,6 +3203,54 @@
         ]
       }
     },
+    "/api/stacks/{stack_id}/adminer-session": {
+      "post": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Stack Adminer Session",
+        "description": "Mint a stack-scoped Adminer ticket.\n\nThe database service stays stack-internal; the ticket proxy targets the\nstack's private Adminer sidecar, which shares the Podman network with the DB.",
+        "operationId": "stack_adminer_session_api_stacks__stack_id__adminer_session_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminerSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sites/{site_id}/files-session": {
       "post": {
         "tags": [
@@ -3223,6 +3271,53 @@
             "schema": {
               "type": "integer",
               "title": "Site Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/files-session": {
+      "post": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Stack Files Session",
+        "operationId": "stack_files_session_api_stacks__stack_id__files_session_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
             }
           }
         ],
