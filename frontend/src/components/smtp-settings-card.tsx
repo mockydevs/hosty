@@ -84,6 +84,7 @@ export function SMTPSettingsCard() {
         body: { to: testTo.trim() },
       });
       if (apiError) throw new Error(apiErrorMessage(apiError, `Test failed (${response.status})`));
+      if (!response.ok) throw new Error(`Test failed (${response.status})`);
     },
     onSuccess: () => toast.success("Test email sent"),
     onError: (err) => toast.error(err.message),

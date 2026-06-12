@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_admin
 from app.core.clock import utcnow
-from app.core.errors import NotFoundError
+from app.core.errors import ConflictError, NotFoundError
 from app.db.models import Notification, PanelSetting
 from app.services import mail
 from app.services.notifications import WEBHOOK_SETTINGS_KEY
@@ -218,12 +218,15 @@ async def test_smtp(
     config = await mail.load(db, request.app.state.settings)
     if config is None:
         raise NotFoundError("No SMTP configuration stored")
-    await mail.send(
-        config,
-        to=body.to,
-        subject="Hosty SMTP test",
-        text="This is a test email from Hosty.",
-    )
+    try:
+        await mail.send(
+            config,
+            to=body.to,
+            subject="Hosty SMTP test",
+            text="This is a test email from Hosty.",
+        )
+    except Exception as exc:
+        raise ConflictError(f"SMTP Error: {exc}")
     return {"sent": True}
 
 
