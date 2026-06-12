@@ -1,7 +1,7 @@
 import { ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogActions,
@@ -18,13 +18,11 @@ import { formatBytes, formatUptime } from "@/lib/format";
  * Dashboard: live resource gauges, managed service status, and recent audited activity.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cpu, HardDrive, MemoryStick, RotateCcw, ScrollText } from "lucide-react";
+import { Cpu, HardDrive, MemoryStick, RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
 import { toast } from "sonner";
 
 type ServiceStatus = components["schemas"]["ServiceStatusResponse"];
-type AuditEntry = components["schemas"]["AuditEntryResponse"];
 
 const SERVICE_LABELS: Record<string, string> = {
   caddy: "Caddy",
@@ -35,20 +33,6 @@ const SERVICE_LABELS: Record<string, string> = {
 
 function serviceLabel(unit: string): string {
   return SERVICE_LABELS[unit] ?? unit;
-}
-
-function statusVariant(code: number): "success" | "secondary" | "destructive" {
-  if (code < 300) return "success";
-  if (code < 500) return "secondary";
-  return "destructive";
-}
-
-function activityActor(entry: AuditEntry): string {
-  return entry.username ?? "anonymous";
-}
-
-function activityLabel(entry: AuditEntry): string {
-  return `${entry.method} ${entry.path}`;
 }
 
 function Gauge({
@@ -146,72 +130,6 @@ function ServiceCard({ service }: { service: ServiceStatus }) {
           </DialogActions>
         </DialogContent>
       </Dialog>
-    </Card>
-  );
-}
-
-function RecentActivityCard() {
-  const audit = useQuery({
-    queryKey: ["audit", "recent"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/audit", {
-        params: { query: { limit: 5, offset: 0 } },
-      });
-      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load recent activity"));
-      return data;
-    },
-    refetchInterval: 15_000,
-  });
-
-  return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-        <div>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ScrollText className="h-4 w-4" aria-hidden /> Recent activity
-          </CardTitle>
-          <CardDescription>Latest audited panel changes.</CardDescription>
-        </div>
-        <Link
-          to="/settings"
-          className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          View audit log
-        </Link>
-      </CardHeader>
-      <CardContent>
-        {audit.isPending ? (
-          <div className="space-y-3">
-            {["a", "b", "c"].map((key) => (
-              <div key={key} className="flex items-center justify-between gap-3">
-                <Skeleton className="h-4 w-56" />
-                <Skeleton className="h-5 w-12" />
-              </div>
-            ))}
-          </div>
-        ) : audit.isError ? (
-          <ErrorState message={audit.error.message} onRetry={() => audit.refetch()} />
-        ) : audit.data.entries.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">No audited activity yet.</p>
-        ) : (
-          <div className="divide-y divide-border">
-            {audit.data.entries.map((entry) => (
-              <div
-                key={entry.id}
-                className="grid gap-2 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto]"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-xs">{activityLabel(entry)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {activityActor(entry)} / {new Date(entry.created_at).toLocaleString()}
-                  </p>
-                </div>
-                <Badge variant={statusVariant(entry.status_code)}>{entry.status_code}</Badge>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
     </Card>
   );
 }
@@ -323,8 +241,6 @@ export function DashboardPage() {
           </div>
         )}
       </section>
-
-      <RecentActivityCard />
     </div>
   );
 }
