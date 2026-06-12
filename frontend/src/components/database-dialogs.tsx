@@ -222,3 +222,65 @@ export function DeleteDatabaseDialog({
     </Dialog>
   );
 }
+
+export function DeleteOrphanDialog({
+  name,
+  onClose,
+}: {
+  name: string | null;
+  onClose: () => void;
+}) {
+  const [confirm, setConfirm] = useState("");
+  const queryClient = useQueryClient();
+
+  const del = useMutation({
+    mutationFn: async () => {
+      if (!name) return;
+      const { error, response } = await api.DELETE("/api/databases/orphans/{name}", {
+        params: { path: { name } },
+        body: { confirm_name: confirm },
+      });
+      if (error) throw new Error(apiErrorMessage(error, `Delete failed (${response.status})`));
+    },
+    onSuccess: async () => {
+      toast.success(`${name} deleted`);
+      await queryClient.invalidateQueries({ queryKey: ["databases"] });
+      setConfirm("");
+      onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  return (
+    <Dialog open={name !== null} onClose={onClose}>
+      <DialogContent>
+        <DialogTitle>Delete orphan database {name}?</DialogTitle>
+        <DialogDescription>
+          This database is not managed by HostyPanel, so the panel cannot know what uses it.
+          Dropping it permanently deletes all its data. Type the database name to confirm.
+        </DialogDescription>
+        <Input
+          aria-label="Type the database name to confirm"
+          placeholder={name ?? ""}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={confirm.trim() !== name}
+            loading={del.isPending}
+            onClick={() => del.mutate()}
+          >
+            Delete database
+          </Button>
+        </DialogActions>
+      </DialogContent>
+    </Dialog>
+  );
+}

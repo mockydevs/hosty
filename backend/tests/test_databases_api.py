@@ -126,6 +126,57 @@ async def test_orphan_detection(admin_client, fake_system, fake_mariadb):
     assert known["missing"] is True
 
 
+async def test_delete_orphan_database(admin_client, fake_system, fake_mariadb, monkeypatch):
+    dropped: list[str] = []
+
+    async def drop_orphan(database: str) -> None:
+        dropped.append(database)
+
+    monkeypatch.setattr(mariadb, "drop_orphan_database", drop_orphan)
+    site_id = await _active_site(admin_client)
+    resp = await admin_client.post(f"/api/databases/sites/{site_id}", json={"name": "managed_db"})
+    assert resp.status_code in (200, 201), resp.text
+    fake_mariadb["physical"] = ["managed_db", "stray_db"]
+
+    # Wrong confirmation rejected.
+    resp = await admin_client.request(
+        "DELETE", "/api/databases/orphans/stray_db", json={"confirm_name": "nope"}
+    )
+    assert resp.status_code == 409
+    assert dropped == []
+
+    # Managed databases are off limits here.
+    resp = await admin_client.request(
+        "DELETE", "/api/databases/orphans/managed_db", json={"confirm_name": "managed_db"}
+    )
+    assert resp.status_code == 409
+    assert "managed by the panel" in resp.json()["error"]["message"]
+
+    # System schemas and unknown names are rejected.
+    resp = await admin_client.request(
+        "DELETE", "/api/databases/orphans/mysql", json={"confirm_name": "mysql"}
+    )
+    assert resp.status_code == 409
+    resp = await admin_client.request(
+        "DELETE", "/api/databases/orphans/ghost_db", json={"confirm_name": "ghost_db"}
+    )
+    assert resp.status_code == 404
+
+    # Happy path.
+    resp = await admin_client.request(
+        "DELETE", "/api/databases/orphans/stray_db", json={"confirm_name": "stray_db"}
+    )
+    assert resp.status_code == 204, resp.text
+    assert dropped == ["stray_db"]
+
+
+def test_drop_database_only_sql_is_scoped():
+    sql = mariadb.build_drop_database_only_sql("stray_db")
+    assert sql == "DROP DATABASE IF EXISTS `stray_db`;"
+    with pytest.raises(mariadb.InvalidIdentifierError):
+        mariadb.build_drop_database_only_sql("bad-name; DROP TABLE x")
+
+
 async def test_databases_require_auth(client):
     assert (await client.get("/api/databases")).status_code == 401
 

@@ -2321,6 +2321,57 @@
         ]
       }
     },
+    "/api/databases/orphans/{name}": {
+      "delete": {
+        "description": "Drop a physical database that has no panel record (shown as 'orphan').\n\nGuards: never a system schema, never a panel-managed database (those go\nthrough their own delete, which also removes the DB user), must actually\nexist, and the name must be typed back to confirm.",
+        "operationId": "delete_orphan_database_api_databases_orphans__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Orphan Database",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/api/databases/sites/{site_id}": {
       "post": {
         "operationId": "create_database_api_databases_sites__site_id__post",

@@ -3,6 +3,7 @@ import {
   type Credentials,
   CredentialsDialog,
   DeleteDatabaseDialog,
+  DeleteOrphanDialog,
 } from "@/components/database-dialogs";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +88,7 @@ export function DatabasesPage() {
   const [createFor, setCreateFor] = useState<number | null>(null);
   const [creds, setCreds] = useState<Credentials | null>(null);
   const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
+  const [deletingOrphan, setDeletingOrphan] = useState<string | null>(null);
 
   const sites = useQuery({
     queryKey: ["sites"],
@@ -206,7 +208,16 @@ export function DatabasesPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">—</TableCell>
                   <TableCell className="text-muted-foreground">—</TableCell>
-                  <TableCell />
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${entry.orphan_name}`}
+                      onClick={() => setDeletingOrphan(entry.orphan_name ?? null)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ),
             )}
@@ -224,6 +235,7 @@ export function DatabasesPage() {
       )}
       <CredentialsDialog creds={creds} onClose={() => setCreds(null)} />
       <DeleteDatabaseDialog target={deleting} onClose={() => setDeleting(null)} />
+      <DeleteOrphanDialog name={deletingOrphan} onClose={() => setDeletingOrphan(null)} />
     </div>
   );
 }

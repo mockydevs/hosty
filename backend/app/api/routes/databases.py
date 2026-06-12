@@ -139,6 +139,39 @@ async def delete_database(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.delete("/orphans/{name}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_orphan_database(
+    name: str, body: DeleteDatabaseRequest, db: AsyncSession = Depends(get_db)
+) -> Response:
+    """Drop a physical database that has no panel record (shown as 'orphan').
+
+    Guards: never a system schema, never a panel-managed database (those go
+    through their own delete, which also removes the DB user), must actually
+    exist, and the name must be typed back to confirm.
+    """
+    try:
+        mariadb.validate_identifier(name)
+    except mariadb.InvalidIdentifierError as exc:
+        raise ConflictError(str(exc)) from exc
+    if name in mariadb.SYSTEM_SCHEMAS:
+        raise ConflictError("System schemas cannot be deleted")
+
+    managed = (
+        await db.execute(select(Database).where(Database.name == name))
+    ).scalar_one_or_none()
+    if managed is not None:
+        raise ConflictError(
+            "This database is managed by the panel — delete it from its own entry instead"
+        )
+    if name not in set(await mariadb.list_physical_databases()):
+        raise NotFoundError(f"No database named {name} on the server")
+    if body.confirm_name.strip() != name:
+        raise ConflictError("Confirmation does not match the database name")
+
+    await mariadb.drop_orphan_database(name)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/{database_id}/reset-password", response_model=CredentialsResponse)
 async def reset_password(database_id: int, db: AsyncSession = Depends(get_db)) -> Any:
     row = await db.get(Database, database_id)

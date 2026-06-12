@@ -244,6 +244,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/databases/orphans/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Orphan Database
+         * @description Drop a physical database that has no panel record (shown as 'orphan').
+         *
+         *     Guards: never a system schema, never a panel-managed database (those go
+         *     through their own delete, which also removes the DB user), must actually
+         *     exist, and the name must be typed back to confirm.
+         */
+        delete: operations["delete_orphan_database_api_databases_orphans__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/databases/sites/{site_id}": {
         parameters: {
             query?: never;
@@ -1922,6 +1946,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminerSessionResponse"];
+                };
+            };
+        };
+    };
+    delete_orphan_database_api_databases_orphans__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteDatabaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

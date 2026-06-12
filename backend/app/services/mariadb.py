@@ -104,6 +104,17 @@ async def drop_database(database: str, user: str) -> None:
     log.info("mariadb_database_dropped", database=database, user=user)
 
 
+def build_drop_database_only_sql(database: str) -> str:
+    """Pure. Drops just the schema — for orphans, where no panel user exists."""
+    database = validate_identifier(database)
+    return f"DROP DATABASE IF EXISTS `{database}`;"
+
+
+async def drop_orphan_database(database: str) -> None:
+    await _execute(build_drop_database_only_sql(database), f"drop orphan database {database}")
+    log.info("mariadb_orphan_database_dropped", database=database)
+
+
 # --- Phase 5: user-managed databases, reset password, orphan detection -----------
 
 SYSTEM_SCHEMAS = frozenset({"information_schema", "performance_schema", "mysql", "sys"})
