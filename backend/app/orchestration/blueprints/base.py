@@ -52,7 +52,25 @@ class StackHealth:
     detail: str = ""
 
 
+# Handlers are invoked with keyword arguments: db (AsyncSession), settings,
+# stack (the ORM row), inputs (decrypted blueprint inputs dict) and params
+# (the request's optional JSON body, validated by the blueprint).
 ActionHandler = Callable[..., Awaitable[ActionResult]]
+
+# Backup hooks are invoked with keyword arguments: db, settings, stack and
+# directory (the staging dir during backup / the verified backup dir during
+# restore). `pre_backup` runs BEFORE volume archiving (write DB dumps into
+# the staging dir); `post_restore` runs AFTER volumes are restored and the
+# stack's services are running again (re-import the dumps).
+BackupHook = Callable[..., Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class BackupHooks:
+    pre_backup: BackupHook
+    post_restore: BackupHook
+    # Database names recorded in the ADR-010 manifest (informational).
+    databases: tuple[str, ...] = ()
 
 
 @runtime_checkable
@@ -81,6 +99,10 @@ class Blueprint(Protocol):
 
     def actions(self) -> dict[str, ActionHandler]:
         """Day-2 operations exposed at POST /stacks/{id}/actions/{name}."""
+        ...
+
+    def backup_hooks(self) -> BackupHooks | None:
+        """Blueprint participation in stack backups (None = volumes only)."""
         ...
 
     def health(self, observed_active: dict[str, bool]) -> StackHealth:

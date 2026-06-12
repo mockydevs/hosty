@@ -11,10 +11,17 @@ async wrappers over runner.run.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 from app.core.errors import AppError
-from app.domain.validate import validate_image_ref, validate_object_name
+from app.domain.validate import (
+    validate_env_key,
+    validate_env_value,
+    validate_image_ref,
+    validate_mount_path,
+    validate_object_name,
+)
 from app.system import runner
 
 MANAGED_LABEL = "hosty.managed=1"
@@ -90,13 +97,81 @@ def build_image_digest_argv(uid: int, image: str) -> list[str]:
     ]
 
 
-def build_exec_argv(uid: int, container: str, command: list[str]) -> list[str]:
+def _validate_env_pairs(env: dict[str, str] | None) -> list[str]:
+    if not env:
+        return []
+    flags: list[str] = []
+    for key, value in sorted(env.items()):
+        validate_env_key(key)
+        validate_env_value(key, value)
+        flags += ["--env", f"{key}={value}"]
+    return flags
+
+
+def build_exec_argv(
+    uid: int,
+    container: str,
+    command: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    interactive: bool = False,
+) -> list[str]:
     """Run a blueprint action inside a stack container (M5: WP-CLI etc.).
     `command` comes from blueprint CODE, never from users — but it still
-    must be NUL-free strings, enforced by runner.validate_argv."""
+    must be NUL-free strings, enforced by runner.validate_argv.
+    `interactive` attaches stdin (dump imports via runner's stdin_path)."""
     if not command:
         raise InvalidPodmanArgError("exec command must be non-empty")
-    return [*_base(uid), "exec", validate_object_name(container), *command]
+    argv = [*_base(uid), "exec"]
+    if interactive:
+        argv.append("--interactive")
+    argv += _validate_env_pairs(env)
+    return [*argv, validate_object_name(container), *command]
+
+
+def build_run_argv(
+    uid: int,
+    image: str,
+    command: list[str],
+    *,
+    network: str,
+    volumes: list[tuple[str, str]] | None = None,
+    env_file: str | None = None,
+    user: str | None = None,
+    workdir: str | None = None,
+) -> list[str]:
+    """Transient helper container (`run --rm`) inside a stack's network,
+    sharing its bind-mounted volumes — how blueprints run sidecar tooling
+    (M5: WP-CLI from the `wordpress:cli` image). Host paths are panel-built
+    (quadlet layout), container paths come from blueprint code; both still
+    pass the mount grammar so `:` or a leading `-` can never split or
+    inject an option."""
+    if not command:
+        raise InvalidPodmanArgError("run command must be non-empty")
+    argv = [
+        *_base(uid),
+        "run",
+        "--rm",
+        "--network",
+        validate_object_name(network),
+        "--label",
+        MANAGED_LABEL,
+    ]
+    for host_dir, mount_path in volumes or []:
+        if not isinstance(host_dir, str) or not host_dir.startswith("/") or ":" in host_dir:
+            raise InvalidPodmanArgError(f"Invalid host volume dir: {host_dir!r}")
+        argv += ["--volume", f"{host_dir}:{validate_mount_path(mount_path)}"]
+    if env_file is not None:
+        if not env_file.startswith("/"):
+            raise InvalidPodmanArgError(f"Invalid env file path: {env_file!r}")
+        argv += ["--env-file", env_file]
+    if user is not None:
+        if not re.fullmatch(r"[0-9]{1,5}(:[0-9]{1,5})?", user):
+            raise InvalidPodmanArgError(f"Invalid container user: {user!r}")
+        argv += ["--user", user]
+    if workdir is not None:
+        argv += ["--workdir", validate_mount_path(workdir)]
+    return [*argv, validate_image_ref(image), *command]
 
 
 # --- parsers (total — never raise) -------------------------------------------------
@@ -174,11 +249,55 @@ async def resolve_digest(uid: int, image: str) -> str | None:
 
 
 async def exec_in(
-    uid: int, container: str, command: list[str], *, timeout: float = 120
+    uid: int,
+    container: str,
+    command: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    timeout: float = 120,
+    stdin_path: str | None = None,
+    stdout_path: str | None = None,
 ) -> runner.CommandResult:
     """Blueprint action escape hatch — the result (incl. non-zero exit) is
     the blueprint's to interpret, so no _run_or_raise here."""
     try:
-        return await runner.run(build_exec_argv(uid, container, command), timeout=timeout)
+        return await runner.run(
+            build_exec_argv(uid, container, command, env=env, interactive=stdin_path is not None),
+            timeout=timeout,
+            stdin_path=stdin_path,
+            stdout_path=stdout_path,
+        )
+    except runner.CommandNotFoundError as exc:
+        raise PodmanUnavailableError("Podman is not installed on this host") from exc
+
+
+async def run_transient(
+    uid: int,
+    image: str,
+    command: list[str],
+    *,
+    network: str,
+    volumes: list[tuple[str, str]] | None = None,
+    env_file: str | None = None,
+    user: str | None = None,
+    workdir: str | None = None,
+    timeout: float = 300,
+) -> runner.CommandResult:
+    """`podman run --rm` of a helper image in a stack's network (M5: WP-CLI).
+    Non-zero exit is the blueprint's to interpret."""
+    try:
+        return await runner.run(
+            build_run_argv(
+                uid,
+                image,
+                command,
+                network=network,
+                volumes=volumes,
+                env_file=env_file,
+                user=user,
+                workdir=workdir,
+            ),
+            timeout=timeout,
+        )
     except runner.CommandNotFoundError as exc:
         raise PodmanUnavailableError("Podman is not installed on this host") from exc

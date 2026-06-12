@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func, select
@@ -23,11 +24,13 @@ from app.core.errors import ConflictError, NotFoundError
 from app.db.models import App, Operation, Site, Stack, StackEndpoint, User
 from app.domain.validate import SpecValidationError, validate_slug
 from app.orchestration.blueprints import list_blueprints
-from app.orchestration.blueprints.base import Blueprint
+from app.orchestration.blueprints.base import ActionResult, Blueprint
 from app.services import quotas
 from app.services import stacks as stacks_service
 from app.services.stacks import StackValidationError
 from app.system import quadlet, systemd_user
+
+log = structlog.get_logger("hosty.api.stacks")
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -99,6 +102,12 @@ class StackOperationAccepted(BaseModel):
     # Secrets generated at create time, shown exactly once (never returned
     # again; persisted only encrypted).
     show_once: dict[str, str] = Field(default_factory=dict)
+
+
+class StackActionRequest(BaseModel):
+    # Free-form action parameters; the blueprint's handler validates them
+    # (e.g. switch_php's target version).
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class StackActionResponse(BaseModel):
@@ -307,6 +316,8 @@ async def run_stack_action(
     request: Request,
     stack_id: int,
     action_name: str,
+    background: BackgroundTasks,
+    body: StackActionRequest | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -326,15 +337,26 @@ async def run_stack_action(
     )
     db.add(op)
     await db.commit()
-    result = await handler(
-        db=db,
-        settings=settings,
-        stack=stack,
-        inputs=stacks_service.decrypt_inputs(stack, settings),
-    )
+    try:
+        result = await handler(
+            db=db,
+            settings=settings,
+            stack=stack,
+            inputs=stacks_service.decrypt_inputs(stack, settings),
+            params=body.params if body is not None else {},
+        )
+    except Exception as exc:
+        # Undo-free, like the reconciler: the action reports and the caller
+        # retries — a host fault must never surface as a bare 500.
+        log.error("stack_action_failed", stack=stack.name, action=action_name, error=str(exc))
+        result = ActionResult(ok=False, message=str(exc)[:500])
     op.status = "succeeded" if result.ok else "failed"
     op.error = None if result.ok else (result.message[:500] or "action failed")
     await db.commit()
+    # An action that edited desired state (rotate_salts, switch_php, ...)
+    # bumped the generation — converge it without waiting for the interval.
+    if result.ok and stack.generation > stack.observed_generation:
+        background.add_task(request.app.state.reconciler.converge_stack, stack.name)
     return StackActionResponse(
         ok=result.ok, message=result.message, data=result.data, show_once=result.show_once
     )

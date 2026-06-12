@@ -87,6 +87,9 @@ class RawImageBlueprint:
     def actions(self) -> dict[str, ActionHandler]:
         return {}
 
+    def backup_hooks(self) -> None:
+        return None  # volumes-only backups
+
     def health(self, observed_active: dict[str, bool]) -> StackHealth:
         if observed_active.get(WEB_SERVICE):
             return StackHealth(healthy=True)

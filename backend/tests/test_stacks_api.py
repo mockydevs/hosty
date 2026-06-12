@@ -303,7 +303,7 @@ class EchoBlueprint:
         return StackSpec(name=name, tenant=alloc.tenant, services=(service,))
 
     def actions(self):
-        async def ping(*, db, settings, stack: Stack, inputs) -> ActionResult:
+        async def ping(*, db, settings, stack: Stack, inputs, params) -> ActionResult:
             return ActionResult(
                 ok=True,
                 message=f"pong from {stack.name}",
@@ -311,10 +311,13 @@ class EchoBlueprint:
                 show_once={"token": "one-time-token"},
             )
 
-        async def explode(*, db, settings, stack: Stack, inputs) -> ActionResult:
+        async def explode(*, db, settings, stack: Stack, inputs, params) -> ActionResult:
             return ActionResult(ok=False, message="boom")
 
         return {"ping": ping, "explode": explode}
+
+    def backup_hooks(self) -> None:
+        return None
 
     def health(self, observed_active: dict[str, bool]) -> StackHealth:
         return StackHealth(healthy=bool(observed_active.get("web")))
