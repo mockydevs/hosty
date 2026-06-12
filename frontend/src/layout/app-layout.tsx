@@ -13,6 +13,7 @@ import {
   ScrollText,
   Server,
   Settings,
+  UsersRound,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -25,6 +26,7 @@ const NAV = [
   { to: "/dns", label: "DNS", icon: Network },
   { to: "/backups", label: "Backups", icon: Archive },
   { to: "/audit", label: "Audit log", icon: ScrollText },
+  { to: "/users", label: "Users", icon: UsersRound },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

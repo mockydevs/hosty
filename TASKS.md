@@ -305,12 +305,23 @@ Each client sees and manages ONLY their own services; the admin sees everything.
 - [ ] Zone ownership table (PowerDNS zones are external — map zone name → owner); clients create and manage their own zones + records, admin sees all
 - [ ] Per-client Cloudflare tokens: stored encrypted per user (`panel_settings` key `cloudflare:{user_id}` or a `user_settings` table); the Settings Cloudflare card works for every user against their own account
 - [ ] Cloudflare zones/records/push endpoints resolve the CURRENT USER's token — each client sees only their own Cloudflare account's zones (natural isolation); env-var token remains an admin-only fallback
-- [ ] Push-to-Cloudflare for a PowerDNS zone uses the zone owner's token
+- [ ] Push-to-Cloudflare for a PowerDNS zone uses the zone owner's token; ADMIN OVERRIDE: the admin can always use their own Cloudflare token to set up or push DNS for ANY zone on the server (e.g. onboarding a client whose domain sits in the admin's CF account)
 
 ### Phase 11c: Resource scoping
 - [ ] systemd slices per site user: CPUQuota + MemoryMax set from per-client limits
 - [ ] Disk quotas per site user (filesystem quota or du-based soft limits with warnings)
 - [ ] Per-client usage view (their sites' CPU/mem/disk), admin keeps whole-server stats
+
+### Phase 11d: Hosting-business features (expert backlog)
+- [ ] Impersonation: admin "log in as client" for support — loudly audited, visible banner in the UI while impersonating
+- [ ] Suspension semantics: suspending a client takes their sites offline with a 503 "account suspended" Caddy page (not just a login block) — required for non-payment handling
+- [ ] Admin notifications: disk nearly full, managed service down, backup failed, repeated cert-issuance failures (email/webhook)
+- [ ] Usage metering per client: disk (du per site user), DB size, bandwidth from Caddy access logs per vhost; exportable monthly summary (billing groundwork)
+- [ ] Plans: named quota bundles (e.g. Starter 1 site/1 DB, Pro 5/10) assignable to clients instead of raw numbers
+- [ ] 2FA (TOTP) for all accounts; active-sessions view with revoke; admin view of failed-login attempts
+- [ ] Site migration/import: rsync files in, import SQL dump, wp-cli search-replace for the domain
+- [ ] Staging clones: copy site + DB to staging.<domain>, push back to production
+- [ ] Per-site PHP error log viewer for clients
 
 ---
 

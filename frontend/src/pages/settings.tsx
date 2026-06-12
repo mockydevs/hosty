@@ -2,17 +2,15 @@ import { CloudflareSettingsCard } from "@/components/cloudflare-settings-card";
 import { FormField } from "@/components/form-field";
 import { PanelDomainCard } from "@/components/panel-domain-card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
 import { ApiError, useAuth } from "@/lib/auth";
 /**
- * Settings: change password (revokes all sessions server-side, so we log
- * the user out and send them back to the login page on success).
+ * Settings: server-level configuration (panel domain/HTTPS, Cloudflare).
+ * ChangePasswordForm is defined here but rendered on the Users page.
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -96,8 +94,7 @@ export function ChangePasswordForm({ onChanged }: { onChanged?: () => void }) {
 }
 
 export function SettingsPage() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="space-y-6">
@@ -109,24 +106,7 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Change password</CardTitle>
-            <CardDescription>
-              Changing your password signs you out everywhere, including this session.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChangePasswordForm
-              onChanged={async () => {
-                await logout();
-                navigate("/login");
-              }}
-            />
-          </CardContent>
-        </Card>
-
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <PanelDomainCard />
 
         <CloudflareSettingsCard />
