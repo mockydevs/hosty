@@ -91,6 +91,12 @@ class Settings(BaseSettings):
     app_port_min: int = 20100
     app_port_max: int = 29999
 
+    # v2 (ADR-013): stack reconciler
+    reconcile_enabled: bool = True
+    reconcile_interval_seconds: int = 60
+    reconcile_concurrency: int = 4  # stacks converged in parallel, host-wide
+    reconcile_drift_cycles: int = 3  # consecutive diverged cycles before notifying
+
     # Phase 8: backups
     backups_root: str = "/var/lib/hosty/backups"
     restore_staging_root: str = "/var/lib/hosty/restore-staging"

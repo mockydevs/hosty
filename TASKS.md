@@ -346,29 +346,29 @@ The Phase 12a Apps MVP is superseded and gets deleted in M6 (its validation
 grammar and test patterns are salvaged).
 
 ### M0 — Host foundation (VM-verified before anything else)
-- [ ] Provisioner: podman + uidmap + passt + crun (Ubuntu 24.04 packages), no PHP/MariaDB/WP-CLI on fresh installs yet (they leave in M6)
-- [ ] Tenant user manager: client account → dedicated Linux user, subuid/subgid range, lingering enabled, home layout `~/stacks/<stack>/volumes/<name>`
-- [ ] Spike (throwaway, VM): panel-written Quadlet file → `systemctl --machine <user>@.host --user` start → rootless container publishes 127.0.0.1:<port> → Caddy proxies it; journald logs readable; slice caps apply. This validates EVERY risky mechanism before the core is built
+- [x] Provisioner: podman + uidmap + passt + crun (Ubuntu 24.04 packages), no PHP/MariaDB/WP-CLI on fresh installs yet (they leave in M6)
+- [x] Tenant user manager: client account → dedicated Linux user, subuid/subgid range, lingering enabled, home layout `~/stacks/<stack>/volumes/<name>` (`system/tenants.py` + `services/tenancy.py` ledger + migration 0014)
+- [ ] Spike (throwaway, VM): panel-written Quadlet file → `systemctl --machine <user>@.host --user` start → rootless container publishes 127.0.0.1:<port> → Caddy proxies it; journald logs readable; slice caps apply. This validates EVERY risky mechanism before the core is built — `installer/dev-vm/spike-quadlet.sh` is written; BLOCKED on dev-VM access (local Multipass daemon unresponsive), run it before M2's VM round-trip
 - [ ] **Milestone: a hand-written nginx Quadlet serves through Caddy on the dev VM, rootless, slice-capped**
 
 ### M1 — Domain core (pure, zero I/O)
-- [ ] Specs: StackSpec / ServiceSpec / VolumeSpec / EndpointSpec — ORM-free, frozen dataclasses
-- [ ] Pure planner: `plan(desired, observed) → [Action]` covering create, delete, image change, env change, scale-to-zero (suspension), drift repair; exhaustive unit tests INCLUDING property-based convergence (`apply(plan) ⇒ observed == desired`)
-- [ ] Validation grammar (salvaged from 12a): image refs, env keys, mount paths, names — option-injection rejected by construction
-- [ ] **Milestone: planner handles every lifecycle as data, 100% branch-covered, no adapter exists yet**
+- [x] Specs: StackSpec / ServiceSpec / VolumeSpec / EndpointSpec — ORM-free, frozen dataclasses
+- [x] Pure planner: `plan(desired, observed) → [Action]` covering create, delete, image change, env change, scale-to-zero (suspension), drift repair; exhaustive unit tests INCLUDING property-based convergence (`apply(plan) ⇒ observed == desired`)
+- [x] Validation grammar (salvaged from 12a): image refs, env keys, mount paths, names — option-injection rejected by construction
+- [x] **Milestone: planner handles every lifecycle as data, 100% branch-covered, no adapter exists yet** (CI enforces `--cov=app.domain --cov-branch --cov-fail-under=100`)
 
 ### M2 — Adapters (thin, contract-tested)
-- [ ] Quadlet writer: ServiceSpec → `.container`/`.network`/`.volume` unit text (pure builders, snapshot-tested) + root-managed placement per tenant
-- [ ] systemd-user control + observe: start/stop/daemon-reload/show via `--machine <user>@.host --user`; observed state primarily from systemd, container detail via per-user podman socket
-- [ ] Loopback port allocator (DB-ledger, UNIQUE-constraint race-safe — pattern from 12a)
-- [ ] Caddy: EndpointSpec joins `build_config` (replaces SiteSpec/AppSpec route building)
-- [ ] **Milestone: adapters round-trip a StackSpec on the VM end-to-end, driven only by tests**
+- [x] Quadlet writer: ServiceSpec → `.container`/`.network`/`.volume` unit text (pure builders, snapshot-tested) + root-managed placement per tenant (`system/quadlet.py`)
+- [x] systemd-user control + observe: start/stop/daemon-reload/show via `--machine <user>@.host --user`; observed state primarily from systemd, container detail via per-user podman socket (`system/systemd_user.py`, `system/podman.py`)
+- [x] Loopback port allocator (DB-ledger, UNIQUE-constraint race-safe — pattern from 12a; `services/ports.py`, apps allocator delegates)
+- [x] Caddy: EndpointSpec joins `build_config` (`StackRoute` + `routes_for_stack`; Site/App specs remain until M6)
+- [ ] **Milestone: adapters round-trip a StackSpec on the VM end-to-end, driven only by tests** — `tests/test_vm_stack_roundtrip.py` written; run `dev-vm.ps1 test` once the dev VM is back (with the M0 spike)
 
 ### M3 — Orchestration
-- [ ] Reconciler loop: on-startup + interval converge, per-stack serialization, planner actions recorded as operation steps (existing operations UI contract)
-- [ ] Drift notifications (reuse dedupe_key) when divergence persists across N cycles
-- [ ] Suspension = desired state scale-to-zero + Caddy 503 (one mechanism, no special case)
-- [ ] **Milestone: kill a container by hand on the VM; the panel converges and notifies within one cycle**
+- [x] Reconciler loop: on-startup + interval converge, per-stack serialization, planner actions recorded as operation steps (existing operations UI contract) — `orchestration/{reconciler,executor,observer,operations}.py` + `system/stackhost.py`; wired into the app lifespan (`reconcile_*` settings)
+- [x] Drift notifications (reuse dedupe_key) when divergence persists across N cycles (`stack:<name>:drift`, default 3, resolves on convergence)
+- [x] Suspension = desired state scale-to-zero + Caddy 503 (one mechanism, no special case)
+- [ ] **Milestone: kill a container by hand on the VM; the panel converges and notifies within one cycle** — FakeHost suite green; `tests/test_vm_reconcile.py` written, run with the other VM gates once the dev VM is back
 
 ### M4 — Blueprint engine + Stacks API/UI
 - [ ] Blueprint contract: typed Python registry — services, volumes, env contract (generated secrets / user inputs), web service, health, backup hooks, day-2 Actions

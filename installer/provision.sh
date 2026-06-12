@@ -221,6 +221,22 @@ DOCKERD
 fi
 systemctl enable --now docker
 
+log "Podman (rootless tenant runtime — v2/M0, ADR-013)"
+# Ubuntu 24.04 archive versions are sufficient (podman 4.9 ships Quadlet
+# with /etc/containers/systemd/users support). Components:
+#   uidmap            newuidmap/newgidmap setuid helpers for rootless userns
+#   passt             modern rootless networking (pasta); slirp4netns kept
+#                     as the fallback the M0 spike compares against
+#   crun              fast OCI runtime, cgroups v2 native
+#   dbus-user-session per-user session bus (systemd --user needs it)
+#   systemd-container machined: lets root drive tenant user managers via
+#                     `systemctl --machine <user>@.host --user ...`
+apt-get install -qy podman uidmap passt slirp4netns crun \
+  dbus-user-session systemd-container
+# Quadlet user-unit directory root: the panel writes tenant unit files under
+# /etc/containers/systemd/users/<uid>/ (root-owned, tenant-executed).
+install -d -m 0755 /etc/containers/systemd/users
+
 log "Site directories"
 install -d -o root -g root -m 0711 /var/www
 # Upgrade existing sites to the same tenant boundary used for new sites.

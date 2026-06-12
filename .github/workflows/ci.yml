@@ -24,6 +24,10 @@ jobs:
         run: uv run ruff format --check .
       - name: Tests (coverage floor 85% on system/ + services/)
         run: uv run pytest -q --cov=app/system --cov=app/services --cov-fail-under=85
+      - name: Domain core coverage (v2 planner — 100% branch, ADR-013)
+        run: >-
+          uv run pytest -q tests/test_domain_validate.py tests/test_domain_specs.py
+          tests/test_domain_planner.py --cov=app.domain --cov-branch --cov-fail-under=100
       - name: Forbidden patterns guard
         run: bash ../scripts/forbidden_patterns.sh
 

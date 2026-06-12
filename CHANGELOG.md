@@ -3,6 +3,41 @@
 ## Unreleased
 
 ### Added
+- **v2/M0 — tenant foundation (ADR-013)**: per-client Linux users
+  (`hosty-t-<id>`) with panel-allocated subuid/subgid ranges (ledger in the
+  new `tenants` table, migration 0014), lingering user managers, and a
+  hardened argv seam (`system/tenants.py`). Provisioner installs the
+  rootless Podman runtime (podman, uidmap, passt, crun, systemd-container).
+  The Quadlet spike script (`installer/dev-vm/spike-quadlet.sh`) documents
+  and verifies every risky host mechanism on the dev VM.
+- **v2/M1 — pure domain core (ADR-013)**: frozen ORM-free specs
+  (`domain/specs.py`), a single-source validation grammar rejecting argv/
+  unit-file injection by construction (`domain/validate.py`), the Action
+  union (`domain/actions.py`), and the pure reconciliation planner
+  (`domain/planner.py`) covering create, delete, spec change, suspension
+  (scale-to-zero), resume, drift repair, and tenant migration. Property
+  tests (hypothesis) prove convergence and idempotency over a model host;
+  CI enforces 100% branch coverage on `app/domain`.
+- **v2/M2 — host adapters (ADR-013)**: pure Quadlet renderers with
+  always-on hardening (NoNewPrivileges, loopback-only PublishPort,
+  journald logging, spec-hash markers, env via 0600 EnvironmentFile —
+  `system/quadlet.py`), tenant user-manager control via
+  `systemctl --machine <user>@.host --user` with the same graceful-
+  degradation contract as host systemd (`system/systemd_user.py`),
+  rootless Podman observe/exec through per-tenant sockets with total
+  parsers (`system/podman.py`), a shared loopback port-ledger allocator
+  (`services/ports.py` — the 12a apps allocator now delegates), and stack
+  endpoint routes joining the Caddy config builder (suspension 503,
+  Cloudflare internal TLS). VM round-trip test added (`-m vm`).
+- **v2/M3 — orchestration (ADR-013)**: the reconciler is now the only
+  writer to the host — converge on startup, on an interval
+  (`reconcile_interval_seconds`), and on demand after API writes; per-stack
+  locks with a global concurrency cap; planner actions recorded as
+  operation steps (UI contract unchanged); undo-free failure semantics
+  (a failed action degrades the stack and the next cycle replans);
+  persistent-drift notifications (`stack:<name>:drift` after N cycles,
+  auto-resolved on convergence). Unit-file ownership is attributed by
+  content markers, making hyphenated stack/service names unambiguous.
 - **Email delivery**: outgoing SMTP account in Settings, used for temporary
   passwords, panel alert emails (configurable recipients) and a send-test
   button. Credentials are encrypted at rest; saving verifies the connection

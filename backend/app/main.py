@@ -114,11 +114,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from app.services import scheduler
 
             scheduler_task = asyncio.create_task(scheduler.loop(app))
+
+        # v2 (ADR-013): the stack reconciler — converge on startup (heals
+        # drift from downtime/reboots), then the interval loop. M4 wires the
+        # DB-backed desired-state loader and ingress sync; until then the
+        # desired set is empty and cycles are no-ops on stack-less hosts.
+        from app.orchestration.reconciler import Reconciler
+
+        reconciler = Reconciler(factory, settings)
+        app.state.reconciler = reconciler
+        reconciler_task: asyncio.Task | None = None
+        if settings.reconcile_enabled and settings.env != "test":
+            try:
+                await reconciler.converge_all()
+            except Exception as exc:
+                structlog.get_logger("hosty.startup").warning(
+                    "startup_converge_failed", error=str(exc)
+                )
+            reconciler_task = asyncio.create_task(reconciler.run_loop())
         yield
-        if scheduler_task is not None:
-            scheduler_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await scheduler_task
+        for task in (scheduler_task, reconciler_task):
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
         await engine.dispose()
 
     app = FastAPI(
