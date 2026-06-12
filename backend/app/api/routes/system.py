@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_admin
 from app.core.errors import AppError, ConflictError, NotFoundError
+from app.services import dns as dns_service
 from app.services import panel_config, stats
 from app.services import sites as sites_service
 from app.services.sites import DomainValidationError, validate_domain
@@ -181,3 +182,81 @@ async def clear_panel_domain(request: Request, db: AsyncSession = Depends(get_db
         {"HOSTY_PANEL_DOMAIN": None, "HOSTY_COOKIE_SECURE": "false"},
     )
     return _panel_response(settings)
+
+
+# --- one-click panel-domain DNS record --------------------------------------------------
+
+
+class PanelDnsRecordRequest(BaseModel):
+    domain: str = Field(min_length=1, max_length=253)
+
+
+class PanelDnsRecordResponse(BaseModel):
+    zone: str
+    name: str
+    type: str
+    content: str
+    ttl: int
+
+
+def _pdns_client(request: Request) -> dns_service.PowerDNSClient:
+    settings = request.app.state.settings
+    injected = getattr(request.app.state, "pdns_client", None)
+    if injected is not None:
+        return injected
+    return dns_service.PowerDNSClient(
+        settings.pdns_api_url, settings.pdns_api_key, settings.pdns_server_id
+    )
+
+
+@router.post(
+    "/panel-domain/dns-record", response_model=PanelDnsRecordResponse, dependencies=[_admin]
+)
+async def create_panel_domain_dns_record(
+    request: Request, body: PanelDnsRecordRequest
+) -> PanelDnsRecordResponse:
+    """One-click A record for the panel domain, published to the panel's own DNS page.
+
+    Finds the most specific hosted zone containing the domain and upserts
+    <domain> -> this server's public IP, so "Enable HTTPS" can succeed without
+    leaving Settings. The record is only live on the internet if the zone is
+    actually delegated to this server (see the zone's delegation status on the
+    DNS page) — otherwise it still needs the same record wherever DNS is hosted.
+    """
+    settings = request.app.state.settings
+    try:
+        domain = validate_domain(body.domain)
+    except DomainValidationError as exc:
+        raise ConflictError(str(exc)) from exc
+    if not settings.dns_enabled:
+        raise ConflictError("DNS management is disabled on this panel")
+    if not settings.public_ip:
+        raise ConflictError(
+            "The panel does not know this server's public address — set HOSTY_PUBLIC_IP first"
+        )
+
+    client = _pdns_client(request)
+    name = domain.rstrip(".").lower()
+    best: dns_service.ZoneSummary | None = None
+    for zone in await client.list_zones():
+        zone_name = zone.name.rstrip(".").lower()
+        contains = name == zone_name or name.endswith("." + zone_name)
+        if contains and (best is None or len(zone_name) > len(best.name.rstrip("."))):
+            best = zone
+    if best is None:
+        raise ConflictError(
+            f"No zone on the DNS page contains {domain}. Create the zone there first, "
+            "or add the A record wherever this domain's DNS is hosted."
+        )
+
+    ttl = settings.dns_default_ttl
+    # Trailing dot: an absolute name, not relative to the zone.
+    rrset = dns_service.make_rrset(best.name, f"{domain}.", "A", ttl, [settings.public_ip])
+    await client.patch_rrsets(best.id, [dns_service.replace_patch(rrset)])
+    return PanelDnsRecordResponse(
+        zone=best.name.rstrip("."),
+        name=domain,
+        type="A",
+        content=settings.public_ip,
+        ttl=ttl,
+    )

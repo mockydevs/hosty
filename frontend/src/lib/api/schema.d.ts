@@ -486,6 +486,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/panel-domain/dns-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Panel Domain Dns Record
+         * @description One-click A record for the panel domain, published to the panel's own DNS page.
+         *
+         *     Finds the most specific hosted zone containing the domain and upserts
+         *     <domain> -> this server's public IP, so "Enable HTTPS" can succeed without
+         *     leaving Settings. The record is only live on the internet if the zone is
+         *     actually delegated to this server (see the zone's delegation status on the
+         *     DNS page) — otherwise it still needs the same record wherever DNS is hosted.
+         */
+        post: operations["create_panel_domain_dns_record_api_system_panel_domain_dns_record_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sites": {
         parameters: {
             query?: never;
@@ -2018,6 +2044,24 @@ export interface components {
             /** Finished At */
             finished_at: string | null;
         };
+        /** PanelDnsRecordRequest */
+        PanelDnsRecordRequest: {
+            /** Domain */
+            domain: string;
+        };
+        /** PanelDnsRecordResponse */
+        PanelDnsRecordResponse: {
+            /** Zone */
+            zone: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Content */
+            content: string;
+            /** Ttl */
+            ttl: number;
+        };
         /** PanelDomainResponse */
         PanelDomainResponse: {
             /** Domain */
@@ -3543,6 +3587,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PanelDomainResponse"];
+                };
+            };
+        };
+    };
+    create_panel_domain_dns_record_api_system_panel_domain_dns_record_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PanelDnsRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelDnsRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

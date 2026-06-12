@@ -157,3 +157,57 @@ async def test_set_panel_domain_caddy_failure_rolls_back(
 async def test_set_panel_domain_rejects_invalid_domain(panel_client):
     resp = await panel_client.put("/api/system/panel-domain", json={"domain": "not a domain"})
     assert resp.status_code == 409
+
+
+# --- one-click DNS record ---------------------------------------------------------------
+
+
+async def test_panel_domain_one_click_dns_record(panel_client, panel_app, panel_settings):
+    from tests.test_dns_api import FakePDNS
+
+    fake = FakePDNS()
+    await fake.create_zone("mailer.co.ke.", ["ns1.mailer.co.ke."])
+    await fake.create_zone("co.ke.", ["ns1.co.ke."])  # shorter match must lose
+    panel_app.state.pdns_client = fake
+
+    resp = await panel_client.post(
+        "/api/system/panel-domain/dns-record", json={"domain": "panel.mailer.co.ke"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "zone": "mailer.co.ke",
+        "name": "panel.mailer.co.ke",
+        "type": "A",
+        "content": "203.0.113.7",
+        "ttl": panel_settings.dns_default_ttl,
+    }
+    # The record landed in the most specific hosted zone.
+    zone = await fake.get_zone("mailer.co.ke.")
+    records = {
+        (r["name"], r["type"]): r["records"]
+        for r in zone["rrsets"]
+    }
+    assert records[("panel.mailer.co.ke.", "A")] == [{"content": "203.0.113.7", "disabled": False}]
+
+
+async def test_panel_domain_dns_record_requires_matching_zone(panel_client, panel_app):
+    from tests.test_dns_api import FakePDNS
+
+    panel_app.state.pdns_client = FakePDNS()
+    resp = await panel_client.post(
+        "/api/system/panel-domain/dns-record", json={"domain": "panel.example.com"}
+    )
+    assert resp.status_code == 409
+    assert "No zone on the DNS page" in resp.json()["error"]["message"]
+
+
+async def test_panel_domain_dns_record_is_admin_only(panel_app):
+    from tests.test_dns_api import FakePDNS
+
+    panel_app.state.pdns_client = FakePDNS()
+    transport = ASGITransport(app=panel_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as anon:
+        resp = await anon.post(
+            "/api/system/panel-domain/dns-record", json={"domain": "panel.example.com"}
+        )
+        assert resp.status_code == 401

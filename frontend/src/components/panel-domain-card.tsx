@@ -54,6 +54,27 @@ export function PanelDomainCard() {
     },
   });
 
+  // One-click: publish the A record in a zone hosted on the panel's own DNS
+  // page, then retry enabling HTTPS right away.
+  const createRecord = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/system/panel-domain/dns-record", {
+        body: { domain: domain.trim() },
+      });
+      if (error || !data) {
+        throw new Error(apiErrorMessage(error, "Could not create the DNS record"));
+      }
+      return data;
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["dns"] });
+      toast.success(`A record published in ${data.zone}: ${data.name} → ${data.content}`);
+      setDnsError(null);
+      save.mutate(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const remove = useMutation({
     mutationFn: async () => {
       const { error } = await api.DELETE("/api/system/panel-domain");
@@ -123,15 +144,25 @@ export function PanelDomainCard() {
             {dnsError && (
               <div className="space-y-2 rounded-md border border-border p-3 text-xs">
                 <p className="text-muted-foreground">{dnsError}</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  loading={save.isPending}
-                  onClick={() => save.mutate(true)}
-                >
-                  Enable anyway (DNS still propagating)
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    loading={createRecord.isPending}
+                    onClick={() => createRecord.mutate()}
+                  >
+                    Create the A record on the DNS page
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    loading={save.isPending}
+                    onClick={() => save.mutate(true)}
+                  >
+                    Enable anyway (DNS still propagating)
+                  </Button>
+                </div>
               </div>
             )}
             <Button type="submit" disabled={!domain.trim()} loading={save.isPending}>

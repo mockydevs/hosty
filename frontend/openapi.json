@@ -1123,6 +1123,53 @@
         ]
       }
     },
+    "/api/system/panel-domain/dns-record": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Create Panel Domain Dns Record",
+        "description": "One-click A record for the panel domain, published to the panel's own DNS page.\n\nFinds the most specific hosted zone containing the domain and upserts\n<domain> -> this server's public IP, so \"Enable HTTPS\" can succeed without\nleaving Settings. The record is only live on the internet if the zone is\nactually delegated to this server (see the zone's delegation status on the\nDNS page) \u2014 otherwise it still needs the same record wherever DNS is hosted.",
+        "operationId": "create_panel_domain_dns_record_api_system_panel_domain_dns_record_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PanelDnsRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelDnsRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/sites": {
       "get": {
         "tags": [
@@ -5942,6 +5989,54 @@
         ],
         "title": "OperationSummaryResponse",
         "description": "Listing entry (Week 21 dashboard notifications): no step detail."
+      },
+      "PanelDnsRecordRequest": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Domain"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain"
+        ],
+        "title": "PanelDnsRecordRequest"
+      },
+      "PanelDnsRecordResponse": {
+        "properties": {
+          "zone": {
+            "type": "string",
+            "title": "Zone"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "ttl": {
+            "type": "integer",
+            "title": "Ttl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "zone",
+          "name",
+          "type",
+          "content",
+          "ttl"
+        ],
+        "title": "PanelDnsRecordResponse"
       },
       "PanelDomainResponse": {
         "properties": {
