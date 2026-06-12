@@ -233,6 +233,8 @@ async def run_install_wordpress(
 @dataclass(frozen=True)
 class WpStatus:
     installed: bool
+    healthy: bool = True
+    detail: str | None = None
     version: str | None = None
     update_available: str | None = None
     plugin_count: int | None = None
@@ -240,7 +242,21 @@ class WpStatus:
 
 
 async def status(site: Site) -> WpStatus:
-    if not await is_installed(site):
+    check = await run_wp(
+        site.site_user, site.doc_root, ["core", "is-installed"], timeout=30, check=False
+    )
+    if not check.ok:
+        # `wp core is-installed` fails BOTH when WordPress is absent and when
+        # something is broken (database down, PHP/WP-CLI fault). If the panel
+        # installed WordPress here (site.wordpress), absence is impossible —
+        # report "installed but unhealthy" instead of inviting a re-install.
+        if site.wordpress:
+            stderr = (check.stderr or check.stdout or "").strip()
+            return WpStatus(
+                installed=True,
+                healthy=False,
+                detail=stderr[-500:] or "wp core is-installed failed without output",
+            )
         return WpStatus(installed=False)
 
     async def out(args: list[str], timeout: float = 60) -> str | None:

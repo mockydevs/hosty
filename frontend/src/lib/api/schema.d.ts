@@ -2546,6 +2546,13 @@ export interface components {
         WpStatusResponse: {
             /** Installed */
             installed: boolean;
+            /**
+             * Healthy
+             * @default true
+             */
+            healthy: boolean;
+            /** Detail */
+            detail?: string | null;
             /** Version */
             version: string | null;
             /** Update Available */

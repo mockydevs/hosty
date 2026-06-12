@@ -230,7 +230,12 @@ export function WordPressTab({ site }: { site: Site }) {
           operationId={operationId}
           onFinished={async (op) => {
             if (op.status === "succeeded") toast.success("WordPress installed");
-            await queryClient.invalidateQueries({ queryKey: ["sites", site.id, "wordpress"] });
+            // The status query is DISABLED while the operation runs, so
+            // invalidate would NOT refetch it — its stale "not installed"
+            // cache would flash the install wizard for a moment when the
+            // query re-enables. Drop the cache entirely instead: re-enabling
+            // then starts from a clean loading state.
+            queryClient.removeQueries({ queryKey: ["sites", site.id, "wordpress"] });
             await queryClient.invalidateQueries({ queryKey: ["sites"] });
             setOperationId(null);
           }}
@@ -244,6 +249,19 @@ export function WordPressTab({ site }: { site: Site }) {
 
   if (!wp.data.installed) {
     return <InstallWizard site={site} onStarted={setOperationId} />;
+  }
+
+  if (wp.data.healthy === false) {
+    // WordPress IS here (the panel installed it) but the live check failed —
+    // database down, PHP fault, … Show the error, never the install wizard.
+    return (
+      <ErrorState
+        message={`WordPress is installed, but its status check failed: ${
+          wp.data.detail ?? "unknown error"
+        }`}
+        onRetry={() => wp.refetch()}
+      />
+    );
   }
 
   const status = wp.data;

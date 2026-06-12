@@ -475,6 +475,8 @@ class WpInstallRequest(BaseModel):
 
 class WpStatusResponse(BaseModel):
     installed: bool
+    healthy: bool = True
+    detail: str | None = None
     version: str | None
     update_available: str | None
     plugin_count: int | None
@@ -500,6 +502,8 @@ async def wordpress_status(
     result = await wordpress_service.status(site)
     return WpStatusResponse(
         installed=result.installed,
+        healthy=result.healthy,
+        detail=result.detail,
         version=result.version,
         update_available=result.update_available,
         plugin_count=result.plugin_count,

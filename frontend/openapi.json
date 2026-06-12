@@ -7330,6 +7330,22 @@
             "type": "boolean",
             "title": "Installed"
           },
+          "healthy": {
+            "type": "boolean",
+            "title": "Healthy",
+            "default": true
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
           "version": {
             "anyOf": [
               {

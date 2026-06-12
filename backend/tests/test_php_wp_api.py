@@ -238,3 +238,28 @@ async def test_wp_actions_run(admin_client, fake_system, fake_wp):
 
     resp = await admin_client.post(f"/api/sites/{site_id}/wordpress/actions/nonsense")
     assert resp.status_code == 404
+
+
+async def test_wp_status_unhealthy_when_panel_installed_but_check_fails(
+    admin_client, fake_system, fake_wp
+):
+    """A failing `wp core is-installed` on a panel-installed site must report
+    "installed but unhealthy" — never "not installed" (which would offer the
+    destructive install wizard for a live site)."""
+    site_id = await _create_site(admin_client)
+    fake_wp.installed = True
+    resp = await admin_client.post(f"/api/sites/{site_id}/wordpress", json=WP_BODY)
+    # Install rejected (already installed per the live check) — flip the flag
+    # directly instead: simulate a panel-installed site whose check now fails.
+    from app.db.models import Site
+    from sqlalchemy import update as sa_update
+
+    async with admin_client._transport.app.state.sessionmaker() as db:  # type: ignore[attr-defined]
+        await db.execute(sa_update(Site).where(Site.id == site_id).values(wordpress=True))
+        await db.commit()
+
+    fake_wp.installed = False  # the live check now fails (e.g. DB down)
+    body = (await admin_client.get(f"/api/sites/{site_id}/wordpress")).json()
+    assert body["installed"] is True
+    assert body["healthy"] is False
+    assert body["detail"]  # carries the wp-cli error for diagnosis

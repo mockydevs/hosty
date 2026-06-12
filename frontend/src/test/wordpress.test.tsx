@@ -91,4 +91,23 @@ describe("WordPress tab", () => {
     expect(screen.getByRole("button", { name: /update core/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /admin login link/i })).toBeInTheDocument();
   });
+
+  it("shows an error — never the install wizard — when installed but unhealthy", async () => {
+    renderDetail({
+      "GET /api/sites/1/wordpress": () =>
+        jsonResponse({
+          installed: true,
+          healthy: false,
+          detail: "Error establishing a database connection",
+          version: null,
+          update_available: null,
+          plugin_count: null,
+          theme_count: null,
+        }),
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "WordPress" }));
+    expect(await screen.findByText(/status check failed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Install WordPress/i)).not.toBeInTheDocument();
+  });
 });
