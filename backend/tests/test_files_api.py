@@ -229,6 +229,9 @@ async def test_files_session_and_proxy_flow(
     # Embedded in an iframe: must allow same-origin framing despite the
     # panel-wide X-Frame-Options: DENY default.
     assert resp.headers["x-frame-options"] == "SAMEORIGIN"
+    # Filebrowser bootstraps from an inline <script>; the strict panel-wide
+    # CSP (default-src 'self') would block it and leave a blank iframe.
+    assert "'unsafe-inline'" in resp.headers["content-security-policy"]
 
 
 async def test_files_proxy_strips_spoofed_identity_header(

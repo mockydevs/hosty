@@ -67,6 +67,22 @@ HOP_BY_HOP = {
     "content-encoding",
 }
 
+# Proxied apps (Filebrowser here, Adminer in routes/databases.py) bootstrap
+# from inline <script>/<style> tags in their HTML. The panel-wide CSP
+# (default-src 'self', no unsafe-inline) blocks those, leaving a blank page.
+# This relaxed policy is set ONLY on the proxied responses — the panel itself
+# keeps the strict default (the middleware uses setdefault).
+PROXY_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; "
+    "font-src 'self' data:; "
+    "connect-src 'self'; "
+    "worker-src 'self' blob:; "
+    "frame-ancestors 'self'"
+)
+
 
 def _session_site_user(request: Request) -> tuple[str, bool]:
     """(site_user, needs_cookie) from a valid ticket or session cookie."""
@@ -127,8 +143,11 @@ async def files_proxy(request: Request, path: str) -> Response:
         k: v for k, v in upstream_resp.headers.items() if k.lower() not in HOP_BY_HOP
     }
     # The panel embeds the file manager in an iframe on the site detail page;
-    # SAMEORIGIN here pre-empts the global X-Frame-Options: DENY (setdefault).
+    # SAMEORIGIN here pre-empts the global X-Frame-Options: DENY (setdefault),
+    # and PROXY_CSP pre-empts the strict global CSP that would otherwise block
+    # Filebrowser's inline bootstrap script (blank iframe).
     response_headers["X-Frame-Options"] = "SAMEORIGIN"
+    response_headers["Content-Security-Policy"] = PROXY_CSP
     response = Response(
         content=upstream_resp.content,
         status_code=upstream_resp.status_code,

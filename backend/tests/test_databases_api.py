@@ -231,6 +231,9 @@ async def test_adminer_session_flow(admin_client, fake_adminer_upstream):
     resp = await admin_client.get("/adminer/?server=localhost")
     assert resp.status_code == 200
     assert all("hosty_ticket" not in str(r.url) for r in fake_adminer_upstream)
+    # Adminer uses inline scripts/styles; the strict panel-wide CSP would
+    # render it blank — the proxy must relax it.
+    assert "'unsafe-inline'" in resp.headers["content-security-policy"]
 
 
 async def test_adminer_proxy_rejects_garbage_ticket(client, fake_adminer_upstream):

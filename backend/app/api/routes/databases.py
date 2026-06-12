@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin, require_admin
+from app.api.routes.files import PROXY_CSP
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import hash_token
 from app.db.models import Database, Site, User
@@ -303,10 +304,16 @@ async def adminer_proxy(request: Request, path: str) -> Response:
         if own_client:
             await client.aclose()
 
+    response_headers = {
+        k: v for k, v in upstream_resp.headers.items() if k.lower() not in HOP_BY_HOP
+    }
+    # Adminer's UI relies on inline scripts/styles, which the strict panel-wide
+    # CSP would block (blank page) — see PROXY_CSP in routes/files.py.
+    response_headers["Content-Security-Policy"] = PROXY_CSP
     response = Response(
         content=upstream_resp.content,
         status_code=upstream_resp.status_code,
-        headers={k: v for k, v in upstream_resp.headers.items() if k.lower() not in HOP_BY_HOP},
+        headers=response_headers,
     )
     if set_session_cookie:
         response.set_cookie(
