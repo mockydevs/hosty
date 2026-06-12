@@ -160,8 +160,8 @@ export function CreateSiteDialog({
                 {...form.register("create_dns_zone")}
               />
               <span className="text-muted-foreground">
-                Also create a DNS zone (SOA, NS and, when the server IP is configured, A/www
-                records pointing here)
+                Also create a DNS zone (SOA, NS and, when the server IP is configured, A/www records
+                pointing here)
               </span>
             </label>
           )}

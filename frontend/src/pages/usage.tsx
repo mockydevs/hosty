@@ -198,8 +198,8 @@ export function UsagePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Usage</h1>
           <p className="text-sm text-muted-foreground">
-            Disk and database sizes are measured live; bandwidth comes from the web server's
-            access log for the selected month.
+            Disk and database sizes are measured live; bandwidth comes from the web server's access
+            log for the selected month.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm" htmlFor="usage-month">

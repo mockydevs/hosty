@@ -293,35 +293,40 @@ Goal: a developer/admin installs Hosty once and hosts multiple client users.
 Each client sees and manages ONLY their own services; the admin sees everything.
 
 ### Phase 11a: Ownership & scoping (core)
-- [ ] Migration: `sites.owner_id` (FK users, existing sites → admin); `users.must_change_password`, `users.suspended`, `users.max_sites`, `users.max_databases`
-- [ ] AuthZ layer: `require_owner_or_admin` dependency; every sites/databases/backups/operations route scoped to owner (admin unrestricted); 404 (not 403) for other tenants' resources to avoid existence leaks
-- [ ] Users API (admin-only): create client with temp password (forced change on first login), suspend/unsuspend, delete (choose: delete sites too, or reassign to admin), set quotas
-- [ ] Quota enforcement on site/database create (max_sites, max_databases per client)
-- [ ] Audit log scoping: clients see only their own entries; admin sees all
-- [ ] Users page in sidebar (admin-only): list, create, suspend, quotas, delete
-- [ ] Client UX: dashboard/site list/databases/backups filtered to own resources; Settings shows only change-password for clients (panel domain + Cloudflare token remain admin-only)
+- [x] Migration: `sites.owner_id` (FK users, existing sites → admin); `users.must_change_password`, `users.suspended`, `users.max_sites`, `users.max_databases`
+- [x] AuthZ layer: `require_owner_or_admin` dependency; every sites/databases/backups/operations route scoped to owner (admin unrestricted); 404 (not 403) for other tenants' resources to avoid existence leaks
+- [x] Users API (admin-only): create client with temp password (forced change on first login), suspend/unsuspend, delete (choose: delete sites too, or reassign to admin), set quotas
+- [x] Quota enforcement on site/database create (max_sites, max_databases per client)
+- [x] Audit log scoping: clients see only their own entries; admin sees all
+- [x] Users page in sidebar (admin-only): list, create, suspend, quotas, delete
+- [x] Client UX: dashboard/site list/databases/backups filtered to own resources; Settings shows only change-password for clients (panel domain + Cloudflare token remain admin-only)
 
 ### Phase 11b: DNS & Cloudflare for clients
-- [ ] Zone ownership table (PowerDNS zones are external — map zone name → owner); clients create and manage their own zones + records, admin sees all
-- [ ] Per-client Cloudflare tokens: stored encrypted per user (`panel_settings` key `cloudflare:{user_id}` or a `user_settings` table); the Settings Cloudflare card works for every user against their own account
-- [ ] Cloudflare zones/records/push endpoints resolve the CURRENT USER's token — each client sees only their own Cloudflare account's zones (natural isolation); env-var token remains an admin-only fallback
-- [ ] Push-to-Cloudflare for a PowerDNS zone uses the zone owner's token; ADMIN OVERRIDE: the admin can always use their own Cloudflare token to set up or push DNS for ANY zone on the server (e.g. onboarding a client whose domain sits in the admin's CF account)
+- [x] Zone ownership table (PowerDNS zones are external — map zone name → owner); clients create and manage their own zones + records, admin sees all
+- [x] Per-client Cloudflare tokens: stored encrypted per user (`panel_settings` key `cloudflare:{user_id}` or a `user_settings` table); the Settings Cloudflare card works for every user against their own account
+- [x] Cloudflare zones/records/push endpoints resolve the CURRENT USER's token — each client sees only their own Cloudflare account's zones (natural isolation); env-var token remains an admin-only fallback
+- [x] Push-to-Cloudflare for a PowerDNS zone uses the zone owner's token; ADMIN OVERRIDE: the admin can always use their own Cloudflare token to set up or push DNS for ANY zone on the server (e.g. onboarding a client whose domain sits in the admin's CF account)
 
 ### Phase 11c: Resource scoping
-- [ ] systemd slices per site user: CPUQuota + MemoryMax set from per-client limits
-- [ ] Disk quotas per site user (filesystem quota or du-based soft limits with warnings)
-- [ ] Per-client usage view (their sites' CPU/mem/disk), admin keeps whole-server stats
+- [x] systemd slices per site user: CPUQuota + MemoryMax set from per-client limits
+- [x] Disk quotas per site user (filesystem quota or du-based soft limits with warnings)
+- [x] Per-client usage view (their sites' CPU/mem/disk), admin keeps whole-server stats
 
 ### Phase 11d: Hosting-business features (expert backlog)
-- [ ] Impersonation: admin "log in as client" for support — loudly audited, visible banner in the UI while impersonating
-- [ ] Suspension semantics: suspending a client takes their sites offline with a 503 "account suspended" Caddy page (not just a login block) — required for non-payment handling
-- [ ] Admin notifications: disk nearly full, managed service down, backup failed, repeated cert-issuance failures (email/webhook)
-- [ ] Usage metering per client: disk (du per site user), DB size, bandwidth from Caddy access logs per vhost; exportable monthly summary (billing groundwork)
-- [ ] Plans: named quota bundles (e.g. Starter 1 site/1 DB, Pro 5/10) assignable to clients instead of raw numbers
-- [ ] 2FA (TOTP) for all accounts; active-sessions view with revoke; admin view of failed-login attempts
-- [ ] Site migration/import: rsync files in, import SQL dump, wp-cli search-replace for the domain
-- [ ] Staging clones: copy site + DB to staging.<domain>, push back to production
-- [ ] Per-site PHP error log viewer for clients
+- [x] Impersonation: admin "log in as client" for support — loudly audited, visible banner in the UI while impersonating (`POST /api/users/{id}/impersonate`; `ImpersonationBanner` in app-layout; auth context `impersonate`/`stopImpersonating`)
+- [x] Suspension semantics: suspending a client takes their sites offline with a 503 "account suspended" Caddy page (not just a login block) — republishes the owner's vhosts on suspend/unsuspend
+- [x] Admin notifications: disk nearly full, managed service down, backup failed, repeated cert-issuance failures (dashboard `NotificationsCard` + best-effort webhook via Settings `NotificationWebhookCard`)
+- [x] Usage metering per client: disk (du per site user), DB size, bandwidth from Caddy access logs per vhost; exportable monthly summary (Usage page: own usage + admin per-client table + CSV export)
+- [x] Plans: named quota bundles (e.g. Starter 1 site/1 DB, Pro 5/10) assignable to clients instead of raw numbers (`PlansSection` in Users page; `plan_id` on quota editor)
+- [x] 2FA (TOTP) for all accounts; active-sessions view with revoke; admin view of failed-login attempts (login TOTP step + `TwoFactorCard`/`SessionsCard`; admin reset-2FA on users page)
+- [x] Site migration/import: rsync files in, import SQL dump, wp-cli search-replace for the domain (site detail → Tools → `ImportCard`)
+- [x] Staging clones: copy site + DB to staging.<domain>, push back to production (site detail → Tools → `StagingCard`)
+- [x] Per-site PHP error log viewer for clients (site detail → Tools → `PhpLogCard`)
+
+> Phase 11 status: backend committed (`feat(backend): multi-tenancy phase 11b/c/d`,
+> 517 tests green); frontend wired and verified locally — `tsc --noEmit`, `vite build`,
+> `biome check`, and the 48-test Vitest suite all pass. Live VM verification of the new
+> flows still pending (same VM round the rest of the project is waiting on).
 
 ---
 

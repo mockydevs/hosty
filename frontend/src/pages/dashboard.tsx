@@ -1,3 +1,4 @@
+import { NotificationsCard } from "@/components/notifications-card";
 import { ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NotificationsCard } from "@/components/notifications-card";
 import { api, apiErrorMessage } from "@/lib/api/client";
-import { useAuth } from "@/lib/auth";
 import type { components } from "@/lib/api/schema";
+import { useAuth } from "@/lib/auth";
 import { formatBytes, formatUptime } from "@/lib/format";
 /**
  * Dashboard: live resource gauges, managed service status, and backup failure

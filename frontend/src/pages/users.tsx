@@ -1,4 +1,5 @@
 import { FormField } from "@/components/form-field";
+import { PlansSection } from "@/components/plans-section";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,11 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PlansSection } from "@/components/plans-section";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { useAuth } from "@/lib/auth";
-import { useNavigate } from "react-router";
 /**
  * Users (Phase 11a, admin-only): create client accounts with a temporary
  * password (shown once), suspend/unsuspend, set quotas, reset passwords and
@@ -31,6 +30,7 @@ import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Trash2, UserRound, VenetianMask } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type AdminUser = components["schemas"]["UserAdminResponse"];
@@ -52,8 +52,7 @@ function TempPasswordDialog({
       <DialogContent>
         <DialogTitle>Temporary password for {created?.user.username}</DialogTitle>
         <DialogDescription>
-          Share it over a secure channel. It is shown only once and must be changed on first
-          login.
+          Share it over a secure channel. It is shown only once and must be changed on first login.
         </DialogDescription>
         <div className="flex items-center gap-2">
           <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-sm">
@@ -96,7 +95,11 @@ function CreateUserDialog({
 
   const create = useMutation({
     mutationFn: async () => {
-      const { data, error: apiError, response } = await api.POST("/api/users", {
+      const {
+        data,
+        error: apiError,
+        response,
+      } = await api.POST("/api/users", {
         body: {
           username: username.trim(),
           max_sites: maxSites === "" ? null : Number(maxSites),
@@ -272,8 +275,8 @@ function EditQuotasDialog({
       <DialogContent>
         <DialogTitle>Limits for {user?.username}</DialogTitle>
         <DialogDescription>
-          A plan supplies defaults; explicit values below override it. Leave blank for
-          unlimited / plan default.
+          A plan supplies defaults; explicit values below override it. Leave blank for unlimited /
+          plan default.
         </DialogDescription>
         <FormField label="Plan" htmlFor="edit-plan">
           <select
@@ -573,12 +576,7 @@ function UserRowActions({
       >
         <KeyRound className="h-4 w-4" />
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`Delete ${user.username}`}
-        onClick={onDelete}
-      >
+      <Button variant="ghost" size="icon" aria-label={`Delete ${user.username}`} onClick={onDelete}>
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>
     </div>

@@ -123,12 +123,7 @@ function PlanDialog({
           noValidate
         >
           <FormField label="Name" htmlFor="plan-name" error={error ?? undefined}>
-            <Input
-              id="plan-name"
-              placeholder="Starter"
-              value={form.name}
-              onChange={set("name")}
-            />
+            <Input id="plan-name" placeholder="Starter" value={form.name} onChange={set("name")} />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Max sites" htmlFor="plan-max-sites">

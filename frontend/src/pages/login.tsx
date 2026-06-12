@@ -11,8 +11,8 @@ import { ApiError, useAuth } from "@/lib/auth";
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { Server } from "lucide-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";

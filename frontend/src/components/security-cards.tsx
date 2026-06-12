@@ -82,8 +82,8 @@ function EnrollDialog({
       <DialogContent>
         <DialogTitle>Set up two-factor authentication</DialogTitle>
         <DialogDescription>
-          Add this secret to your authenticator app (Google Authenticator, Aegis, 1Password…),
-          then confirm with the 6-digit code it shows.
+          Add this secret to your authenticator app (Google Authenticator, Aegis, 1Password…), then
+          confirm with the 6-digit code it shows.
         </DialogDescription>
         {setup.isPending || !secret ? (
           <LoadingState label="Generating secret…" />
@@ -151,7 +151,11 @@ function EnrollDialog({
   );
 }
 
-function DisableDialog({ open, onClose, onDisabled }: {
+function DisableDialog({
+  open,
+  onClose,
+  onDisabled,
+}: {
   open: boolean;
   onClose: () => void;
   onDisabled: () => void;
