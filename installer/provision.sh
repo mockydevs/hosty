@@ -61,6 +61,16 @@ if [[ ! -f /etc/apt/sources.list.d/caddy-stable.list ]]; then
   apt-get update -q
 fi
 apt-get install -qy caddy
+# The stock Caddyfile serves a "Congratulations" page on :80 for EVERY domain
+# and resurrects on each caddy restart, masking panel-managed sites until the
+# panel's next sync. Replace it once with an empty config: the panel publishes
+# the real config through the admin API (and re-publishes at panel startup).
+if ! grep -q "Managed by Hosty" /etc/caddy/Caddyfile 2>/dev/null; then
+  cat > /etc/caddy/Caddyfile <<'CADDYFILE'
+# Managed by Hosty — do not edit. Site configuration is published at runtime
+# through the Caddy admin API by the Hosty panel.
+CADDYFILE
+fi
 systemctl enable --now caddy
 
 log "MariaDB"

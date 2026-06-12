@@ -68,8 +68,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await conn.run_sync(Base.metadata.create_all)
         app.state.engine = engine
         app.state.sessionmaker = factory
-        if settings.panel_domain:
-            # Fresh installs: publish the panel vhost before any site exists.
+        if settings.env != "test":
+            # Publish the FULL desired state (sites + panel vhost) on every
+            # startup: Caddy restarts/reboots boot from the stock Caddyfile and
+            # lose everything applied via the admin API — without this sync,
+            # all sites stay down until the next site mutation.
             # Best-effort — Caddy may not be up yet; the next sync repairs it.
             try:
                 from app.services import sites as sites_service
