@@ -36,8 +36,23 @@ Screenshots are tracked under `docs/screenshots/` during VM verification.
 Target: a fresh Ubuntu 24.04 server with at least 2 GB RAM and ports 80/443
 available.
 
-Choose a full 40-character commit SHA from a signed Hosty release, then clone
-and install that immutable revision:
+Choose a full 40-character commit SHA from a signed Hosty release, then
+install that immutable revision with one command:
+
+```bash
+HOSTY_REF=<FULL_40_CHARACTER_COMMIT_SHA>
+curl --proto '=https' --tlsv1.2 -fsSL \
+  "https://raw.githubusercontent.com/mockydevs/hosty/$HOSTY_REF/installer/get.sh" \
+  | sudo env HOSTY_REF="$HOSTY_REF" bash
+```
+
+The bootstrap URL is pinned to the same commit SHA that gets installed, so
+the script and the installed tree come from one immutable revision — never a
+mutable branch. The bootstrap only clones and verifies that revision
+(`git rev-parse HEAD` must equal `HOSTY_REF`); the full installer then runs
+from the verified checkout and re-validates the SHA itself.
+
+If you prefer not to pipe curl into a shell, the equivalent manual flow:
 
 ```bash
 HOSTY_REF=<FULL_40_CHARACTER_COMMIT_SHA>
@@ -55,8 +70,9 @@ before running the installer:
 
 ```bash
 export HOSTY_PANEL_DOMAIN=panel.example.com
-sudo env HOSTY_REF="$HOSTY_REF" HOSTY_PANEL_DOMAIN="$HOSTY_PANEL_DOMAIN" \
-  bash hosty/installer/install.sh
+curl --proto '=https' --tlsv1.2 -fsSL \
+  "https://raw.githubusercontent.com/mockydevs/hosty/$HOSTY_REF/installer/get.sh" \
+  | sudo env HOSTY_REF="$HOSTY_REF" HOSTY_PANEL_DOMAIN="$HOSTY_PANEL_DOMAIN" bash
 ```
 
 Optional install-time settings:

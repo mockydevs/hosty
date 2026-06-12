@@ -16,7 +16,8 @@ it first; corrupted downloads abort before touching the site.
 
 ## B. Disaster: rebuild a site on a FRESH server
 
-1. Install Hosty: `curl -fsSL .../installer/install.sh | sudo bash`.
+1. Install Hosty with the SHA-pinned one-liner from the README
+   (`curl ... /$HOSTY_REF/installer/get.sh | sudo env HOSTY_REF=... bash`).
 2. Recreate the site (same domain) in the panel; wait until `active`.
 3. Configure the S3 target in Backups → S3 settings (same bucket/prefix).
 4. The site's old backups appear under Backups (S3 badge) → Restore → full.
