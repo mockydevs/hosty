@@ -15,8 +15,9 @@ def test_installer_uses_local_checksum_verified_tools():
     assert "curl |" not in install
 
 
-def test_service_is_loopback_only_and_proxy_headers_are_trusted_locally():
+def test_service_trusts_proxy_headers_from_localhost_only():
     unit = (ROOT / "installer" / "systemd" / "hosty.service").read_text(encoding="utf-8")
-    assert "--host 127.0.0.1" in unit
+    # Panel binds all interfaces for direct http://IP:8800 access; forwarded
+    # headers are still only trusted from the local Caddy proxy.
+    assert "--host 0.0.0.0" in unit
     assert "--forwarded-allow-ips=127.0.0.1" in unit
-    assert "--host 0.0.0.0" not in unit

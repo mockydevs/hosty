@@ -120,11 +120,8 @@ cat <<MSG
 
   Hosty is running.
 
-  Panel:     ${PANEL_DOMAIN:+https://$PANEL_DOMAIN}
-  ${PANEL_DOMAIN:+Caddy is the only public panel ingress.}
-  ${PANEL_DOMAIN:-No panel domain was configured. Use an SSH tunnel:}
-  ${PANEL_DOMAIN:-  ssh -L 8800:127.0.0.1:8800 root@$IP}
-  ${PANEL_DOMAIN:-Then open http://127.0.0.1:8800.}
+  Panel:     http://${PANEL_DOMAIN:-$IP:8800}  (HTTPS via Caddy once HOSTY_PANEL_DOMAIN
+             is set and the domain points at this server)
   First run: open the panel and create the admin account (first-boot setup).
   Update:    sudo bash $APP_DIR/installer/update.sh
   Uninstall: sudo bash $APP_DIR/installer/uninstall.sh
