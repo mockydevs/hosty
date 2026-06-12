@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.domain.specs import StackSpec
 
 import httpx
 import structlog
@@ -142,6 +145,49 @@ def _app_route(app: AppSpec) -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
+class StackRoute:
+    """v2 (ADR-013): one stack endpoint — domain proxied to a service's
+    loopback-published host port. Suspension renders the 503 page (the
+    planner has already scaled the stack to zero)."""
+
+    domain: str
+    upstream: str  # 127.0.0.1:<host_port>
+    internal_tls: bool = False  # behind the Cloudflare proxy (origin cert)
+    suspended: bool = False
+
+
+def routes_for_stack(spec: StackSpec, *, suspended: bool) -> list[StackRoute]:
+    """Map a domain StackSpec's endpoints to Caddy routes. Endpoint cross-
+    references (service exists, publishes a port) are guaranteed by StackSpec
+    construction."""
+    services_by_name = {service.name: service for service in spec.services}
+    return [
+        StackRoute(
+            domain=endpoint.domain,
+            upstream=f"127.0.0.1:{services_by_name[endpoint.service].host_port}",
+            internal_tls=endpoint.behind_cloudflare,
+            suspended=suspended,
+        )
+        for endpoint in spec.endpoints
+    ]
+
+
+def _stack_route(route: StackRoute) -> dict[str, Any]:
+    if route.suspended:
+        return _suspended_route(route.domain)
+    return {
+        "match": [{"host": [route.domain]}],
+        "handle": [
+            {
+                "handler": "reverse_proxy",
+                "upstreams": [{"dial": route.upstream}],
+            }
+        ],
+        "terminal": True,
+    }
+
+
+@dataclass(frozen=True)
 class AdminerSpec:
     """Internal-only Adminer server: reached solely via the panel's proxy."""
 
@@ -211,6 +257,7 @@ def build_config(
     sites: Sequence[SiteSpec],
     *,
     apps: Sequence[AppSpec] = (),
+    stacks: Sequence[StackRoute] = (),
     adminer: AdminerSpec | None = None,
     tls_internal: bool = False,
     panel: PanelSpec | None = None,
@@ -227,12 +274,14 @@ def build_config(
     """
     ordered = sorted(sites, key=lambda s: s.domain)
     ordered_apps = sorted(apps, key=lambda a: a.domain)
+    ordered_stacks = sorted(stacks, key=lambda r: r.domain)
     servers: dict[str, Any] = {
         SERVER_NAME: {
             "listen": [":80", ":443"],
             "routes": ([_panel_route(panel)] if panel else [])
             + [_site_route(s) for s in ordered]
-            + [_app_route(a) for a in ordered_apps],
+            + [_app_route(a) for a in ordered_apps]
+            + [_stack_route(r) for r in ordered_stacks],
         }
     }
     if access_log_path:
@@ -253,12 +302,14 @@ def build_config(
                 }
             }
         }
-    if tls_internal and (ordered or ordered_apps):
+    if tls_internal and (ordered or ordered_apps or ordered_stacks):
         config["apps"]["tls"] = {
             "automation": {
                 "policies": [
                     {
-                        "subjects": [s.domain for s in ordered] + [a.domain for a in ordered_apps],
+                        "subjects": [s.domain for s in ordered]
+                        + [a.domain for a in ordered_apps]
+                        + [r.domain for r in ordered_stacks],
                         "issuers": [{"module": "internal"}],
                     }
                 ]
@@ -267,9 +318,11 @@ def build_config(
     else:
         # Sites behind the Cloudflare proxy get internal origin certificates
         # (Cloudflare terminates public TLS at the edge; SSL mode "Full").
-        proxied = [s.domain for s in ordered if s.internal_tls] + [
-            a.domain for a in ordered_apps if a.internal_tls
-        ]
+        proxied = (
+            [s.domain for s in ordered if s.internal_tls]
+            + [a.domain for a in ordered_apps if a.internal_tls]
+            + [r.domain for r in ordered_stacks if r.internal_tls]
+        )
         if proxied:
             config["apps"]["tls"] = {
                 "automation": {

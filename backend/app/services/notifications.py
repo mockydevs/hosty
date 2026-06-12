@@ -25,7 +25,9 @@ log = structlog.get_logger("hosty.notifications")
 
 WEBHOOK_SETTINGS_KEY = "notify_webhook_url"
 
-KINDS = frozenset({"backup_failed", "service_down", "disk_full", "cert_failed", "quota_exceeded"})
+KINDS = frozenset(
+    {"backup_failed", "service_down", "disk_full", "cert_failed", "quota_exceeded", "stack_drift"}
+)
 SEVERITIES = frozenset({"info", "warning", "error"})
 
 

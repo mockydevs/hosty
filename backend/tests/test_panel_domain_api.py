@@ -183,10 +183,7 @@ async def test_panel_domain_one_click_dns_record(panel_client, panel_app, panel_
     }
     # The record landed in the most specific hosted zone.
     zone = await fake.get_zone("mailer.co.ke.")
-    records = {
-        (r["name"], r["type"]): r["records"]
-        for r in zone["rrsets"]
-    }
+    records = {(r["name"], r["type"]): r["records"] for r in zone["rrsets"]}
     assert records[("panel.mailer.co.ke.", "A")] == [{"content": "203.0.113.7", "disabled": False}]
 
 

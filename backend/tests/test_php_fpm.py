@@ -68,9 +68,12 @@ php_value[memory_limit] = 256M
 php_value[upload_max_filesize] = 64M
 php_value[post_max_size] = 64M
 """
-    assert render_pool_config(
-        "site-a-abc123",
-        "8.3",
-        settings,
-        doc_root="/var/www/a.example/public_html",
-    ) == expected
+    assert (
+        render_pool_config(
+            "site-a-abc123",
+            "8.3",
+            settings,
+            doc_root="/var/www/a.example/public_html",
+        )
+        == expected
+    )

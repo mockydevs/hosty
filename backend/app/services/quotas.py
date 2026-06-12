@@ -19,6 +19,7 @@ class EffectiveLimits:
     max_sites: int | None = None
     max_databases: int | None = None
     max_apps: int | None = None
+    max_stacks: int | None = None
     max_disk_mb: int | None = None
     cpu_quota_percent: int | None = None
     memory_max_mb: int | None = None
@@ -39,6 +40,7 @@ def resolve(user: User, plan: Plan | None) -> EffectiveLimits:
         max_sites=pick(user.max_sites, plan.max_sites if plan else None),
         max_databases=pick(user.max_databases, plan.max_databases if plan else None),
         max_apps=pick(user.max_apps, plan.max_apps if plan else None),
+        max_stacks=pick(user.max_stacks, plan.max_stacks if plan else None),
         max_disk_mb=pick(user.max_disk_mb, plan.max_disk_mb if plan else None),
         cpu_quota_percent=pick(user.cpu_quota_percent, plan.cpu_quota_percent if plan else None),
         memory_max_mb=pick(user.memory_max_mb, plan.memory_max_mb if plan else None),

@@ -119,9 +119,7 @@ async def _session_site_user(request: Request, db: AsyncSession) -> tuple[str, b
         raise UnauthorizedError("File manager session expired — reopen it from the panel") from None
 
     user = await db.get(User, user_id)
-    site = (
-        await db.execute(select(Site).where(Site.site_user == site_user))
-    ).scalar_one_or_none()
+    site = (await db.execute(select(Site).where(Site.site_user == site_user))).scalar_one_or_none()
     if (
         user is None
         or user.suspended
@@ -139,9 +137,7 @@ async def _session_site_user(request: Request, db: AsyncSession) -> tuple[str, b
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     include_in_schema=False,
 )
-async def files_proxy(
-    request: Request, path: str, db: AsyncSession = Depends(get_db)
-) -> Response:
+async def files_proxy(request: Request, path: str, db: AsyncSession = Depends(get_db)) -> Response:
     settings = request.app.state.settings
     if not settings.filebrowser_enabled:
         raise NotFoundError("File manager is disabled")
@@ -204,6 +200,7 @@ async def files_proxy(
     # Filebrowser's inline bootstrap script (blank iframe).
     response_headers["X-Frame-Options"] = "SAMEORIGIN"
     response_headers["Content-Security-Policy"] = PROXY_CSP
+
     # Mock transports and response hooks may buffer the body even when send()
     # was asked to stream it. Real network responses retain the streaming path.
     async def response_body():

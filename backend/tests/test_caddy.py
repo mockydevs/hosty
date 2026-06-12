@@ -212,3 +212,85 @@ def test_adminer_pool_render_snapshot():
     assert "user = www-data" in pool
     assert "listen = /run/php/hosty-adminer.sock" in pool
     assert "open_basedir] = /var/lib/hosty/adminer:/tmp" in pool
+
+
+# --- v2 stack routes (ADR-013, M2) --------------------------------------------------
+
+
+def _stack_spec():
+    from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec
+
+    return StackSpec(
+        name="blog",
+        tenant="hosty-t-7",
+        services=(
+            ServiceSpec(name="web", image="nginx:1.27", internal_port=80, host_port=20001),
+            ServiceSpec(name="db", image="mariadb:11"),
+        ),
+        endpoints=(
+            EndpointSpec(domain="blog.example.com", service="web"),
+            EndpointSpec(domain="www.blog.example.com", service="web", behind_cloudflare=True),
+        ),
+    )
+
+
+def test_routes_for_stack_maps_endpoints_to_host_ports():
+    from app.services.caddy import StackRoute, routes_for_stack
+
+    assert routes_for_stack(_stack_spec(), suspended=False) == [
+        StackRoute(domain="blog.example.com", upstream="127.0.0.1:20001"),
+        StackRoute(domain="www.blog.example.com", upstream="127.0.0.1:20001", internal_tls=True),
+    ]
+
+
+def test_stack_route_renders_reverse_proxy():
+    from app.services.caddy import StackRoute
+
+    config = build_config([], stacks=[StackRoute("blog.example.com", "127.0.0.1:20001")])
+    routes = config["apps"]["http"]["servers"]["hosty"]["routes"]
+    assert routes == [
+        {
+            "match": [{"host": ["blog.example.com"]}],
+            "handle": [{"handler": "reverse_proxy", "upstreams": [{"dial": "127.0.0.1:20001"}]}],
+            "terminal": True,
+        }
+    ]
+
+
+def test_suspended_stack_route_answers_503():
+    from app.services.caddy import StackRoute
+
+    config = build_config(
+        [], stacks=[StackRoute("blog.example.com", "127.0.0.1:20001", suspended=True)]
+    )
+    route = config["apps"]["http"]["servers"]["hosty"]["routes"][0]
+    assert route["handle"][0]["handler"] == "static_response"
+    assert route["handle"][0]["status_code"] == 503
+
+
+def test_stack_domains_join_tls_automation():
+    from app.services.caddy import StackRoute
+
+    cloudflared = StackRoute("cf.example.com", "127.0.0.1:20002", internal_tls=True)
+    config = build_config([], stacks=[cloudflared])
+    assert config["apps"]["tls"]["automation"]["policies"][0]["subjects"] == ["cf.example.com"]
+
+    config = build_config(
+        [], stacks=[StackRoute("a.example.com", "127.0.0.1:20001")], tls_internal=True
+    )
+    assert config["apps"]["tls"]["automation"]["policies"][0]["subjects"] == ["a.example.com"]
+
+
+def test_stack_routes_sorted_after_apps():
+    from app.services.caddy import AppSpec, StackRoute
+
+    config = build_config(
+        [],
+        apps=[AppSpec(domain="z-app.example.com", upstream="127.0.0.1:20009")],
+        stacks=[
+            StackRoute("b.example.com", "127.0.0.1:20002"),
+            StackRoute("a.example.com", "127.0.0.1:20001"),
+        ],
+    )
+    hosts = [r["match"][0]["host"][0] for r in config["apps"]["http"]["servers"]["hosty"]["routes"]]
+    assert hosts == ["z-app.example.com", "a.example.com", "b.example.com"]
