@@ -12,7 +12,11 @@
   retain the checksum-verified ADR-010 manifest/S3 format, and restore with
   deterministic stop/volume restore/start/database-import ordering. New
   owner-scoped `/api/stacks/{id}/backups` endpoints and stack-detail backup/
-  restore controls expose the workflow without weakening 404 scoping.
+  restore controls expose the workflow without weakening 404 scoping. The
+  WordPress composition now pins every runtime image by digest and carries
+  private Adminer/Filebrowser sidecars; the existing `/adminer` and `/files`
+  ticket proxies dynamically target those sidecars for owner-scoped stack DB
+  and volume access while the database remains unpublished.
 - **v2/M4 — blueprint engine + Stacks API/UI (ADR-013)**: typed blueprint
   registry (`orchestration/blueprints/`) where each blueprint declares a
   pydantic inputs model (drives the create wizard as JSON Schema — zero

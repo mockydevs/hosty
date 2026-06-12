@@ -39,6 +39,12 @@ Afterwards the tab shows version/update status and plugin/theme counts, with
 actions for core updates, maintenance mode, salt rotation and a one-time
 admin login link.
 
+Stacks → WordPress creates the v2 container-native WordPress blueprint: a
+digest-pinned WordPress service, stack-internal MariaDB, and private Adminer
+and Filebrowser sidecars. Use the stack detail **Tools** card to open database
+admin or files; both go through the same signed panel proxies and are scoped
+to that stack.
+
 ## Databases
 
 Databases page (or site → Databases tab). Credentials are displayed exactly

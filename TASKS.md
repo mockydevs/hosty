@@ -378,10 +378,10 @@ grammar and test patterns are salvaged).
 - [ ] **Milestone: a client deploys a Next.js image with custom domain + HTTPS from the UI** — FakeHost API suite + Vitest green; run the e2e on the dev VM with the other queued VM gates (M0 spike, M2 round-trip, M3 reconcile)
 
 ### M5 — WordPress blueprint (the moat, at full parity)
-- [ ] Composition: `wordpress:<php>-apache` (pinned digest) + per-stack MariaDB service + wp-content volume
+- [x] Composition: `wordpress:<php>-apache` (pinned digest) + per-stack MariaDB service + wp-content volume
 - [x] Actions at v1 parity: install, core/plugin/theme updates, maintenance mode, salt rotation, one-time admin login link — via Podman-backed WP-CLI behind the adapter seam
 - [x] Backup hooks: mysqldump-before-snapshot + stack volume archive → ADR-010 format unchanged; owner-scoped backup/restore API + stack-detail UI, checksum verification, S3 fetch/mirror, stop/restore/start ordering covered by FakeHost tests
-- [ ] Per-stack Adminer/Filebrowser access re-pointed at stack volumes/DBs via the existing ticket proxy
+- [x] Per-stack Adminer/Filebrowser access re-pointed at stack volumes/DBs via the existing ticket proxy
 - [ ] **Milestone: one-click WordPress, fully containerized, with every v1 convenience**
 
 ### M6 — The purge

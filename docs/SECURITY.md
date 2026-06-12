@@ -46,8 +46,8 @@ as rotation noise.
 | `/api/dns*` | admin | per-record-type Pydantic models | audited |
 | `/api/backups*`, `/api/sites/{id}/backups` | admin | site ownership checked; S3 creds encrypted at rest | audited |
 | `/api/operations/{id}`, `/api/audit` | admin | paging bounds | read-only |
-| `/adminer/*` proxy | HMAC ticket (60s) → cookie (30m, Path=/adminer) | scope signature-bound | identity decided by panel, not client |
-| `/files/*` proxy | HMAC ticket → cookie (Path=/files), scope carries site user | spoofed `X-Hosty-Fb-User` stripped; Filebrowser enforces directory scope |
+| `/adminer/*` proxy | HMAC ticket (60s) → cookie (30m, Path=/adminer) | scope signature-bound | legacy tickets target host Adminer; stack tickets target the stack's private Adminer sidecar |
+| `/files/*` proxy | HMAC ticket → cookie (Path=/files), scope carries site user or stack id | spoofed `X-Hosty-Fb-User` stripped; site sessions inject the signed Filebrowser user; stack sessions target the private Filebrowser sidecar with no client-chosen identity |
 
 ## Standing invariants (CI-enforced, `scripts/forbidden_patterns.sh`)
 
