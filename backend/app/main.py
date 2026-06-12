@@ -15,6 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.api.routes import (
+    apps,
     audit,
     auth,
     backups,
@@ -154,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users.router, prefix="/api/users", tags=["users"])
     app.include_router(system.router, prefix="/api/system", tags=["system"])
     app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
+    app.include_router(apps.router, prefix="/api/apps", tags=["apps"])
     app.include_router(sites.operations_router, prefix="/api/operations", tags=["operations"])
     app.include_router(databases.router, prefix="/api/databases", tags=["databases"])
     app.include_router(databases.proxy_router)

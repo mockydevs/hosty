@@ -26,6 +26,8 @@ class User(Base):
     suspended: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_sites: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Phase 12a: containerized apps quota.
+    max_apps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Phase 11d: a plan supplies default quotas; explicit per-user values above
     # always win (see services/quotas.py).
     plan_id: Mapped[int | None] = mapped_column(
@@ -66,6 +68,7 @@ class Plan(Base):
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     max_sites: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_apps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_disk_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cpu_quota_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
     memory_max_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -122,6 +125,40 @@ class Site(Base):
     backup_include_files: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     backup_include_databases: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     backup_s3_mirror: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class App(Base):
+    """Phase 12a: a containerized app — ONE container, routed through Caddy.
+
+    The container itself is reconstructable from this row (image digest, env,
+    ports, volumes); the panel owns the runtime objects via `hosty.*` labels.
+    `env_encrypted` is a Fernet-encrypted JSON object (app.core.secrets).
+    """
+
+    __tablename__ = "apps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    domain: Mapped[str] = mapped_column(String(253), unique=True, nullable=False)
+    image: Mapped[str] = mapped_column(String(512), nullable=False)  # ref as given
+    image_digest: Mapped[str | None] = mapped_column(String(512), nullable=True)  # resolved
+    internal_port: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Panel-allocated; the container publishes 127.0.0.1:host_port only.
+    host_port: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    env_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    volumes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    memory_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cpu_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # provisioning | running | stopped | error | deleting
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="provisioning")
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, onupdate=utcnow

@@ -188,7 +188,9 @@ Phase 10).
 
 ### ADR-011: Containerized apps are a new SITE TYPE, not a pivot to a general PaaS
 
-**Status:** proposed (Phase 12)
+**Status:** accepted — 12a runtime decisions locked (2026-06-12); compose
+deferred to 12c (single-container apps + managed data services cover the
+common Django/Next.js shapes without a compose policy engine)
 
 Hosty will host containerized apps (Django, Next.js, Postgres, …) alongside
 PHP/WordPress sites — as an **extension of the existing model, explicitly not
@@ -211,11 +213,28 @@ Decisions:
   reached via `reverse_proxy` to `127.0.0.1:<published_port>` or a Docker
   network address — same vhost pipeline, TLS, and suspension semantics as
   PHP sites. A second proxy (Traefik et al.) is rejected outright.
-- **Docker via the system layer.** All engine calls go through one module
-  (`system/docker.py` or the Docker SDK behind the same seam), with the same
-  argv/audit/test discipline as every other mutation (ADR-005). The Docker
+- **Docker via the system layer, argv only.** All engine calls go through
+  `system/docker.py` as pure, unit-tested argv builders executed by
+  `runner.run` — the Docker SDK is rejected (new socket-client dependency,
+  bypasses the one-seam audit, and the runner already exists). The Docker
   socket is root-equivalent: it is never exposed to tenants, and tenant
   workloads run with user namespaces / no privileged containers.
+- **12a runtime invariants** (encoded in the argv builders, not left to
+  callers): ports publish to `127.0.0.1:<panel-allocated high port>` only —
+  a bare `-p` DNATs around ufw and re-creates the observed 80/443 hijack;
+  every app gets its own bridge network (default-bridge cross-tenant traffic
+  is the quiet lateral-movement path); `--security-opt no-new-privileges`
+  always; container logs are json-file with hard `max-size`/`max-file` caps
+  (a crash-looping tenant container must not fill the host disk); env vars
+  travel via a root-only `--env-file` under `/var/lib/hosty/apps/<id>/`,
+  never `-e` argv (visible in /proc and process listings); images are
+  resolved tag→digest at deploy and the digest is what runs (a registry
+  re-tag cannot silently change a tenant's running code); everything the
+  panel creates carries `hosty.managed` + `hosty.app-id` labels, and
+  reconciliation/GC only ever touches labeled objects.
+- **Volumes are bind directories** under `/var/lib/hosty/apps/<id>/volumes/`,
+  not named Docker volumes — the existing backup engine (ADR-010) and
+  per-client disk metering already understand directories.
 - **Deploy modes in cost order.** 12a: prebuilt image (registry pull) and
   `compose.yaml` (one app = one compose project, validated against a safety
   policy — no privileged/host-network/host-mounts/80-443 publishing; the
@@ -232,7 +251,154 @@ Decisions:
   the existing backup directory format (ADR-010) rather than a parallel
   system.
 
-Rejected: pivoting the whole panel to containers (WordPress-on-PHP-FPM with
-per-site Linux users is simpler, denser, and already battle-tested here);
-exposing raw Docker/compose to clients (admin-curated at first); Kubernetes
-(wrong weight class for single-VPS hosting businesses).
+Rejected: pivoting the whole panel to containers in one step — superseded in
+DIRECTION by ADR-012 (container-first, WordPress included), but the rejection
+of a big-bang rewrite stands; exposing raw Docker/compose to clients
+(admin-curated at first); Kubernetes (wrong weight class for single-VPS
+hosting businesses).
+
+### ADR-012: Container-first — everything converges on the container runtime, including WordPress
+
+**Status:** accepted (2026-06-12)
+
+The product direction is that the container runtime built in Phase 12a is the
+ONE way Hosty runs workloads long-term: Django, Next.js, databases — and
+WordPress. What ADR-011 rejected was a big-bang rewrite; what this ADR
+commits to is the same destination reached incrementally, with the working
+native pipeline kept alive until containerized WordPress has feature parity
+and a tested migration path.
+
+Decisions:
+
+- **The Sites API/UI is the stable contract; the runtime is an
+  implementation detail.** `sites` gains a `runtime` column
+  (`native | container`). Clients never choose a runtime — admins (and
+  eventually the default) do. Every existing feature (WordPress install,
+  updates, salts, login links, staging, import, backups, Filebrowser, usage,
+  suspension) keeps its API shape regardless of runtime.
+- **Containerized WordPress composition (Phase 13a):** official
+  `wordpress:<php>-apache` image per supported PHP version (the apache
+  variant first — one container, plain `reverse_proxy`, boring and
+  debuggable; the fpm-variant optimization can come later), `wp-content` as
+  a bind volume under the app directory layout, the EXISTING shared host
+  MariaDB reached via the Docker host gateway (per-site database containers
+  are rejected for density: ~30 WP sites on a 4 GB VPS cannot carry 30
+  MariaDB processes), WP-CLI via `docker exec` behind the same
+  `system/docker.py` seam.
+- **Migration, not flag day (13b/13c):** a per-site native→container
+  migration command (wp-content rsync into the volume, same database, vhost
+  swap, rollback by swapping back), batch tooling, THEN the default flips
+  for new sites. Native provisioning code is removed only after the last
+  native site migrates — in a major release.
+- **Density is the honest cost.** Native FPM pools with `pm=ondemand` idle
+  near zero RAM; a per-site apache container idles at ~50-120 MB. The
+  per-site Linux-user + slice model is denser today. Container-first is
+  still right because: one mental model and one hardening surface instead
+  of two; per-site PHP version freedom without ondrej-PPA coupling; true
+  filesystem isolation (a WP RCE no longer shares a kernel-visible /var/www
+  with every neighbor); portability of a site = image digest + volume + DB
+  dump. The density gap is priced into plans, not hidden.
+
+Rejected: rewriting `services/sites.py` in place (parallel runtime, then
+migrate); per-site database containers (density); the `wordpress:fpm` image
+for v1 (Caddy fastcgi into a container whose document root differs from the
+host path is a debugging trap; apache variant first).
+
+> **Superseded by ADR-013.** ADR-011's runtime decisions (root Docker, argv
+> seam) and ADR-012's phased-parity plan were written under production
+> constraints (cost, density, migration safety) that the owner has since
+> lifted: this is a quality-first build with no legacy obligation. ADR-013
+> replaces both with a clean container-native core. The 80/443 lesson, the
+> one-proxy rule, loopback-only publishing, and the labels/digest/env-file
+> invariants all carry forward unchanged.
+
+### ADR-013: v2 — container-native core: Stacks, Blueprints, a pure-planner reconciler, rootless Podman per tenant
+
+**Status:** accepted (2026-06-12). Supersedes ADR-011/012 runtime decisions;
+preserves their security invariants.
+
+**The diagnosis.** Hosty was limited to WordPress because WordPress is a
+hard-coded pipeline (`sites.py` + `wordpress.py` + `php_fpm.py`), not data.
+The Phase 12a Apps MVP repeated the mistake by adding a SECOND parallel
+model. v2 replaces both with one abstraction.
+
+**The model.**
+
+- **Stack** — one deployable unit a client owns. Composed of **Services**
+  (containers), **Volumes** (persistent dirs), **Endpoints** (domain →
+  service:port routes through Caddy), and a reference to the **Blueprint**
+  that stamped it out.
+- **Blueprint** — a typed, versioned recipe living in the repo as Python
+  (not YAML string-templating — type-checked, unit-tested, no injection
+  surface): services + pinned images, volume layout, env contract
+  (generated secrets vs user inputs), the web service, health semantics,
+  backup hooks (e.g. dump-before-snapshot), and **typed day-2 Actions**
+  (`wordpress.login_link`, `wordpress.rotate_salts`, …). Blueprints stay
+  attached for the stack's life — they are the product moat, generalizing
+  the WordPress advantage. Blueprint #1 is WordPress (full action parity
+  with v1); blueprint #0 is `raw-image` (bring-your-own-container).
+- **Per-stack databases.** Every stack that needs a DB carries its own
+  MariaDB/Postgres service. Host MariaDB, PHP-FPM, WP-CLI, host Adminer and
+  host Filebrowser all leave the provisioner; the host stack shrinks to
+  Caddy + PowerDNS + the panel + the container runtime. Adminer/Filebrowser
+  return as panel-owned stacks (the system hosts its own tooling).
+
+**Orchestration: desired state + reconciler.** The DB stores the desired
+spec. A **pure planner** — zero I/O, the most-tested code in the system —
+computes `diff(desired, observed) → ordered Actions`; a thin executor maps
+Actions onto adapters; a periodic reconciler (and panel startup, like the
+existing Caddy republish) heals drift and raises notifications when
+divergence persists. Create/delete become spec edits plus convergence; the
+operation UI shows the planner's actions as steps. Compensating-undo
+pipelines disappear — a failed create is just desired≠observed, retried by
+the loop. This extends the proven `build_config()` pattern from Caddy to
+the entire runtime.
+
+**Runtime: rootless Podman, one instance per tenant, driven by systemd
+(Quadlet).** Each client account maps to a dedicated Linux user with a
+subuid/subgid range and lingering enabled. Their containers run rootless
+under their own uid as systemd user units generated from panel-written
+Quadlet files. Consequences:
+
+- Tenant isolation is enforced by the KERNEL (user namespaces), not by
+  panel code being correct. There is no root-equivalent daemon socket on
+  the host at all.
+- Per-tenant quotas land on the user's systemd slice — the existing slice
+  machinery now caps a tenant's ENTIRE container fleet.
+- Lifecycle, restarts, and logs ride systemd/journald through the existing
+  systemd seam; the engine being daemonless removes the
+  one-restart-kills-every-tenant failure mode.
+- Networking: rootless pasta; services publish to panel-allocated loopback
+  ports only; Caddy remains the single public ingress (ADR-011's one-proxy
+  rule). Per-stack podman networks give service-to-service DNS inside a
+  stack.
+- Volumes live under the tenant's home (`…/stacks/<stack>/volumes/<name>`),
+  owned by the tenant's mapped uids; root-run backups read them directly in
+  the ADR-010 format via blueprint backup hooks.
+
+**What survives untouched** (the business layer is the other moat): auth /
+2FA / sessions / impersonation, users / plans / quotas, suspension-503
+semantics, audit, notifications, DNS + Cloudflare, SMTP, the backup engine
+(sources change, format does not), the Caddy desired-state module, the
+`runner` argv discipline, and SQLite as the panel store (boring tech, the
+panel must boot before any runtime exists).
+
+**Module shape** (hexagonal, the existing discipline made explicit):
+`domain/` — specs and the pure planner, importing nothing with I/O;
+`adapters/` — quadlet writer, systemd-user control, podman observe, fs,
+caddy, pdns: thin, argv-built, contract-tested; `orchestration/` — the
+reconciler, operations, blueprint engine; `api/` — unchanged style.
+
+**The purge (no patching).** Deleted in one release: `services/sites.py`
+provisioning, `php_fpm.py`, native `wordpress.py` pipeline, `staging.py`,
+`site_import.py` in their current form, the Phase 12a Apps MVP
+(`system/docker.py`, `services/apps.py`, apps routes/model — salvaging its
+validation grammar and test patterns), and the provisioner's PHP / MariaDB
+/ WP-CLI / Adminer / Filebrowser sections. The Sites/Apps UI merges into
+one Stacks UI.
+
+Rejected alternatives: root Docker single daemon (ecosystem-maximal but
+tenancy enforced in software; userns-remap is global and the socket is
+root-equivalent); Kubernetes/k3s (wrong weight class, again); YAML
+blueprint DSL (stringly-typed, injection-prone, untestable); greenfield
+repo (re-porting the business layer buys nothing the in-repo cut doesn't).

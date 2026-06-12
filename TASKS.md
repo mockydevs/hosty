@@ -332,40 +332,65 @@ Each client sees and manages ONLY their own services; the admin sees everything.
 
 ---
 
-# Phase 12 — Containerized Apps (post-11; see ADR-011)
+# v2 — Container-native rearchitecture (ADR-013)
 
-Goal: host any containerized project (Django, Next.js, Postgres, …) NEXT TO
-PHP/WordPress sites — one Caddy on 80/443, one tenancy/quota/billing model.
-Explicitly NOT a Coolify rebuild: bring-an-image first, git builds last.
+**Detailed working plan: [docs/V2-PLAN.md](docs/V2-PLAN.md)** — exact
+modules, schemas, semantics, test plans, and per-milestone gates. Read it
+before working any milestone; milestones are strictly sequential.
 
-### Phase 12a: Container runtime + Apps MVP
-- [ ] Docker engine in the provisioner (official repo), daemon hardened: no TCP socket, userns-remap (or per-container user namespaces), default seccomp; `installer/provision.sh` port-check stays authoritative — Docker must never publish 80/443
-- [ ] `system/docker.py`: single seam for engine calls (create/start/stop/rm, networks, volumes, logs, stats, image pull with digest pinning) — argv/SDK behind the same audit + unit-test discipline as ADR-005
-- [ ] `App` model + migration: name, owner_id (FK users), image ref, env (secrets encrypted at rest), published internal port, volumes, memory/CPU limits, status; quota `max_apps` joins plans/limits
-- [ ] Create/delete app as an operations pipeline with compensating rollback (pull image → create volumes/network → run container → Caddy vhost → DB record), same progress UI as site provisioning
-- [ ] Caddy: app vhost route (domain → container), suspension 503s reuse Phase 11d semantics; app domains join the sites↔DNS bridge and delegation banner
-- [ ] Compose deploys: upload/paste a `compose.yaml` as ONE app — parsed and validated against a safety policy (reject privileged, host network/PID, host bind mounts outside the app dir, publishing 80/443; panel assigns the project network + volumes), one designated web service routed via Caddy; per-service status/logs/restart
-- [ ] Apps UI: list + create wizard (deploy mode: image OR compose; domain, port, env editor with show-once secrets, limits), detail page with live logs (follow), restart/stop/start, env edit + redeploy
-- [ ] Per-client metering: image + volume disk usage folded into the Usage page; bandwidth via the existing Caddy access-log pipeline
-- [ ] Tests: docker argv builders (no injection), pipeline rollback chaos cases, vhost snapshot, quota enforcement
-- [ ] **Milestone: a client deploys a prebuilt Next.js image with a custom domain + HTTPS from the UI, within their plan limits**
+Quality-first rebuild, no legacy obligation: ONE workload model (Stacks +
+Blueprints), a pure-planner reconciler, rootless Podman per tenant via
+systemd/Quadlet. The business layer (auth, tenancy, quotas, suspension,
+DNS, backups, audit) survives untouched; the workload half is replaced.
+The Phase 12a Apps MVP is superseded and gets deleted in M6 (its validation
+grammar and test patterns are salvaged).
 
-### Phase 12b: Managed data services
-- [ ] One-click Postgres / MySQL / Redis containers: pinned image, volume, panel-generated credentials (shown once, hash-stored), internal-network-only by default
-- [ ] Wire dumps into the existing backup engine (ADR-010 directory format: `pg_dump`/`mysqldump`/RDB alongside volume snapshots), restore paths verified
-- [ ] Connection info surfaced to the owning client; optional exposure on a high port with IP allowlist (off by default)
-- [ ] Adminer gains Postgres support for managed DBs (it already speaks it); per-tenant access via the existing ticket proxy
-- [ ] **Milestone: Django app container + managed Postgres, nightly backup restores cleanly**
+### M0 — Host foundation (VM-verified before anything else)
+- [ ] Provisioner: podman + uidmap + passt + crun (Ubuntu 24.04 packages), no PHP/MariaDB/WP-CLI on fresh installs yet (they leave in M6)
+- [ ] Tenant user manager: client account → dedicated Linux user, subuid/subgid range, lingering enabled, home layout `~/stacks/<stack>/volumes/<name>`
+- [ ] Spike (throwaway, VM): panel-written Quadlet file → `systemctl --machine <user>@.host --user` start → rootless container publishes 127.0.0.1:<port> → Caddy proxies it; journald logs readable; slice caps apply. This validates EVERY risky mechanism before the core is built
+- [ ] **Milestone: a hand-written nginx Quadlet serves through Caddy on the dev VM, rootless, slice-capped**
 
-### Phase 12c: Builds (decide AFTER 12a/b ship)
-- [ ] **Dockerfile builds first** — the project ships its own build recipe, so this is the cheap 80%: `docker build` from a git URL or uploaded tarball, build queue (one at a time, disk-quota-aware), build logs in the operation UI, image GC
-- [ ] Git integration: deploy keys for private repos + webhook receiver (push → rebuild → redeploy)
-- [ ] Rolling redeploys: health check → start new → repoint Caddy → drain old (zero-downtime, reuses the PHP-version-switch pattern)
-- [ ] Re-evaluate buildpacks/nixpacks (build WITHOUT a Dockerfile) honestly only after the above ships — that is the endless-maintenance half; skipping it is a valid outcome (ADR update either way)
-- [ ] **Milestone: `git push` on a repo with a Dockerfile → live deploy with build log, on a client account**
+### M1 — Domain core (pure, zero I/O)
+- [ ] Specs: StackSpec / ServiceSpec / VolumeSpec / EndpointSpec — ORM-free, frozen dataclasses
+- [ ] Pure planner: `plan(desired, observed) → [Action]` covering create, delete, image change, env change, scale-to-zero (suspension), drift repair; exhaustive unit tests INCLUDING property-based convergence (`apply(plan) ⇒ observed == desired`)
+- [ ] Validation grammar (salvaged from 12a): image refs, env keys, mount paths, names — option-injection rejected by construction
+- [ ] **Milestone: planner handles every lifecycle as data, 100% branch-covered, no adapter exists yet**
+
+### M2 — Adapters (thin, contract-tested)
+- [ ] Quadlet writer: ServiceSpec → `.container`/`.network`/`.volume` unit text (pure builders, snapshot-tested) + root-managed placement per tenant
+- [ ] systemd-user control + observe: start/stop/daemon-reload/show via `--machine <user>@.host --user`; observed state primarily from systemd, container detail via per-user podman socket
+- [ ] Loopback port allocator (DB-ledger, UNIQUE-constraint race-safe — pattern from 12a)
+- [ ] Caddy: EndpointSpec joins `build_config` (replaces SiteSpec/AppSpec route building)
+- [ ] **Milestone: adapters round-trip a StackSpec on the VM end-to-end, driven only by tests**
+
+### M3 — Orchestration
+- [ ] Reconciler loop: on-startup + interval converge, per-stack serialization, planner actions recorded as operation steps (existing operations UI contract)
+- [ ] Drift notifications (reuse dedupe_key) when divergence persists across N cycles
+- [ ] Suspension = desired state scale-to-zero + Caddy 503 (one mechanism, no special case)
+- [ ] **Milestone: kill a container by hand on the VM; the panel converges and notifies within one cycle**
+
+### M4 — Blueprint engine + Stacks API/UI
+- [ ] Blueprint contract: typed Python registry — services, volumes, env contract (generated secrets / user inputs), web service, health, backup hooks, day-2 Actions
+- [ ] Blueprint #0 `raw-image`: image + port + env + volumes (covers Django/Next.js/anything)
+- [ ] Stacks API: CRUD + actions + logs, owner-scoped (404-not-403), `max_stacks` quota replaces max_sites/max_apps
+- [ ] Stacks UI: one list replacing Sites + Apps, create wizard driven by the blueprint's declared inputs, detail page (services, logs, actions, endpoints)
+- [ ] **Milestone: a client deploys a Next.js image with custom domain + HTTPS from the UI**
+
+### M5 — WordPress blueprint (the moat, at full parity)
+- [ ] Composition: `wordpress:<php>-apache` (pinned digest) + per-stack MariaDB service + wp-content volume
+- [ ] Actions at v1 parity: install, core/plugin/theme updates, maintenance mode, salt rotation, one-time admin login link — via `podman exec` WP-CLI behind the adapter seam
+- [ ] Backup hooks: mysqldump-before-snapshot + wp-content volume → ADR-010 format unchanged; restore verified
+- [ ] Per-stack Adminer/Filebrowser access re-pointed at stack volumes/DBs via the existing ticket proxy
+- [ ] **Milestone: one-click WordPress, fully containerized, with every v1 convenience**
+
+### M6 — The purge
+- [ ] Delete: native sites provisioning, php_fpm, wordpress pipeline, staging, site_import (rebuilt later as blueprint features), Apps MVP (docker.py, apps service/routes/model), Sites/Apps UI
+- [ ] Provisioner drops PHP / host MariaDB / WP-CLI / host Adminer / host Filebrowser
+- [ ] Migrations: drop dead tables; docs + CHANGELOG; major version bump
+- [ ] **Milestone: `grep -r php_fpm backend/` returns nothing; fresh install hosts WordPress + Django side by side, all containers**
 
 ---
-
 ## Recurring (every week)
 
 - [ ] All CI checks green before merge — never bypass

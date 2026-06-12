@@ -50,10 +50,10 @@ SUSPENDED_BODY = """\
 """
 
 
-def _suspended_route(site: SiteSpec) -> dict[str, Any]:
+def _suspended_route(domain: str) -> dict[str, Any]:
     """Phase 11d: every request to a suspended owner's domain answers 503."""
     return {
-        "match": [{"host": [site.domain]}],
+        "match": [{"host": [domain]}],
         "handle": [
             {
                 "handler": "static_response",
@@ -69,7 +69,7 @@ def _suspended_route(site: SiteSpec) -> dict[str, Any]:
 def _site_route(site: SiteSpec) -> dict[str, Any]:
     """One terminal route per domain: try_files rewrite → PHP-FPM → static files."""
     if site.suspended:
-        return _suspended_route(site)
+        return _suspended_route(site.domain)
     return {
         "match": [{"host": [site.domain]}],
         "handle": [
@@ -108,6 +108,33 @@ def _site_route(site: SiteSpec) -> dict[str, Any]:
                     },
                     {"handle": [{"handler": "file_server", "root": site.doc_root}]},
                 ],
+            }
+        ],
+        "terminal": True,
+    }
+
+
+@dataclass(frozen=True)
+class AppSpec:
+    """Phase 12a: a containerized app vhost — domain proxied to the app's
+    loopback-published container port. ORM-free, like SiteSpec."""
+
+    domain: str
+    upstream: str  # e.g. 127.0.0.1:20100
+    internal_tls: bool = False  # behind the Cloudflare proxy (origin cert)
+    suspended: bool = False
+
+
+def _app_route(app: AppSpec) -> dict[str, Any]:
+    """One terminal route per app domain: plain reverse proxy to the container."""
+    if app.suspended:
+        return _suspended_route(app.domain)
+    return {
+        "match": [{"host": [app.domain]}],
+        "handle": [
+            {
+                "handler": "reverse_proxy",
+                "upstreams": [{"dial": app.upstream}],
             }
         ],
         "terminal": True,
@@ -183,6 +210,7 @@ def _panel_route(spec: PanelSpec) -> dict[str, Any]:
 def build_config(
     sites: Sequence[SiteSpec],
     *,
+    apps: Sequence[AppSpec] = (),
     adminer: AdminerSpec | None = None,
     tls_internal: bool = False,
     panel: PanelSpec | None = None,
@@ -198,10 +226,13 @@ def build_config(
     source for per-vhost bandwidth metering (Phase 11d).
     """
     ordered = sorted(sites, key=lambda s: s.domain)
+    ordered_apps = sorted(apps, key=lambda a: a.domain)
     servers: dict[str, Any] = {
         SERVER_NAME: {
             "listen": [":80", ":443"],
-            "routes": ([_panel_route(panel)] if panel else []) + [_site_route(s) for s in ordered],
+            "routes": ([_panel_route(panel)] if panel else [])
+            + [_site_route(s) for s in ordered]
+            + [_app_route(a) for a in ordered_apps],
         }
     }
     if access_log_path:
@@ -222,12 +253,12 @@ def build_config(
                 }
             }
         }
-    if tls_internal and ordered:
+    if tls_internal and (ordered or ordered_apps):
         config["apps"]["tls"] = {
             "automation": {
                 "policies": [
                     {
-                        "subjects": [s.domain for s in ordered],
+                        "subjects": [s.domain for s in ordered] + [a.domain for a in ordered_apps],
                         "issuers": [{"module": "internal"}],
                     }
                 ]
@@ -236,7 +267,9 @@ def build_config(
     else:
         # Sites behind the Cloudflare proxy get internal origin certificates
         # (Cloudflare terminates public TLS at the edge; SSL mode "Full").
-        proxied = [s.domain for s in ordered if s.internal_tls]
+        proxied = [s.domain for s in ordered if s.internal_tls] + [
+            a.domain for a in ordered_apps if a.internal_tls
+        ]
         if proxied:
             config["apps"]["tls"] = {
                 "automation": {

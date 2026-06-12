@@ -48,6 +48,7 @@ class UserAdminResponse(BaseModel):
     totp_enabled: bool = False
     max_sites: int | None
     max_databases: int | None
+    max_apps: int | None = None
     max_disk_mb: int | None = None
     cpu_quota_percent: int | None = None
     memory_max_mb: int | None = None
@@ -66,6 +67,7 @@ class CreateUserRequest(BaseModel):
     password: str | None = Field(default=None, min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
     max_sites: int | None = Field(default=None, ge=0, le=1000)
     max_databases: int | None = Field(default=None, ge=0, le=1000)
+    max_apps: int | None = Field(default=None, ge=0, le=1000)
     plan_id: int | None = None
 
     @field_validator("email")
@@ -93,12 +95,14 @@ class UpdateUserRequest(BaseModel):
     suspended: bool | None = None
     max_sites: int | None = Field(default=None, ge=0, le=1000)
     max_databases: int | None = Field(default=None, ge=0, le=1000)
+    max_apps: int | None = Field(default=None, ge=0, le=1000)
     max_disk_mb: int | None = Field(default=None, ge=1, le=1048576)
     cpu_quota_percent: int | None = Field(default=None, ge=1, le=1600)
     memory_max_mb: int | None = Field(default=None, ge=16, le=1048576)
     plan_id: int | None = None
     clear_max_sites: bool = False
     clear_max_databases: bool = False
+    clear_max_apps: bool = False
     clear_max_disk_mb: bool = False
     clear_cpu_quota_percent: bool = False
     clear_memory_max_mb: bool = False
@@ -146,6 +150,7 @@ def _response(user: User, counts: tuple[int, int], plan: Plan | None = None) -> 
         totp_enabled=user.totp_enabled,
         max_sites=user.max_sites,
         max_databases=user.max_databases,
+        max_apps=user.max_apps,
         max_disk_mb=user.max_disk_mb,
         cpu_quota_percent=user.cpu_quota_percent,
         memory_max_mb=user.memory_max_mb,
@@ -240,6 +245,7 @@ async def create_user(
         must_change_password=True,
         max_sites=body.max_sites,
         max_databases=body.max_databases,
+        max_apps=body.max_apps,
         plan_id=body.plan_id,
     )
     db.add(user)
@@ -279,6 +285,10 @@ async def update_user(
         user.max_databases = None
     elif body.max_databases is not None:
         user.max_databases = body.max_databases
+    if body.clear_max_apps:
+        user.max_apps = None
+    elif body.max_apps is not None:
+        user.max_apps = body.max_apps
     if body.clear_max_disk_mb:
         user.max_disk_mb = None
     elif body.max_disk_mb is not None:

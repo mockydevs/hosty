@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     usage_check_interval_seconds: int = 3600  # disk-quota & health sweep cadence
     disk_full_threshold_percent: int = 90  # server disk "nearly full" notification
 
+    # Phase 12a: containerized apps
+    apps_enabled: bool = True
+    apps_root: str = "/var/lib/hosty/apps"
+    # Loopback ports the panel allocates for container publishing.
+    app_port_min: int = 20100
+    app_port_max: int = 29999
+
     # Phase 8: backups
     backups_root: str = "/var/lib/hosty/backups"
     restore_staging_root: str = "/var/lib/hosty/restore-staging"

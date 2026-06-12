@@ -185,6 +185,42 @@ ADMIN_ADD_OUT=$(filebrowser -d "$FILEBROWSER_DB" users add admin \
 chown -R hosty-filebrowser:hosty-filebrowser /var/lib/hosty/filebrowser
 systemctl enable --now hosty-filebrowser
 
+log "Docker engine (Phase 12 / ADR-012: containerized apps)"
+if [[ ! -f /etc/apt/sources.list.d/docker.list ]]; then
+  install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -q
+fi
+apt-get install -qy docker-ce docker-ce-cli containerd.io
+# Hardened daemon (ADR-012). The lines that matter:
+#  - "ip": published ports bind 127.0.0.1 by default. Docker's iptables DNAT
+#    bypasses ufw — this is the production 80/443-hijack lesson applied to
+#    every tenant port. Caddy stays the only public ingress.
+#  - "userns-remap": container root is NOT host root. Day-one default on
+#    purpose: flipping it later re-chowns every existing volume.
+#  - "live-restore": dockerd restarts/upgrades must not kill tenant apps.
+#  - log caps: a crash-looping container must not fill the host disk.
+# No TCP socket is ever configured; the engine listens on the unix socket only.
+if [[ ! -f /etc/docker/daemon.json ]]; then
+  install -d -m 0755 /etc/docker
+  cat > /etc/docker/daemon.json <<'DOCKERD'
+{
+  "ip": "127.0.0.1",
+  "userns-remap": "default",
+  "live-restore": true,
+  "no-new-privileges": true,
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+DOCKERD
+  systemctl restart docker 2>/dev/null || true
+fi
+systemctl enable --now docker
+
 log "Site directories"
 install -d -o root -g root -m 0711 /var/www
 # Upgrade existing sites to the same tenant boundary used for new sites.
@@ -208,6 +244,7 @@ done
 
 log "Done. Versions:"
 caddy version
+docker --version
 mariadb --version
 wp --version --allow-root
 for v in "${PHP_VERSIONS[@]}"; do "php-fpm${v}" -v | head -1; done

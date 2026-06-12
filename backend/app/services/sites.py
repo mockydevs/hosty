@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import utcnow
 from app.core.config import Settings
-from app.db.models import Database, Operation, Site, User
+from app.db.models import App, Database, Operation, Site, User
 from app.services import caddy, filebrowser, mariadb, php_fpm
 from app.services import dns as dns_service
 from app.services.caddy import CaddyClient, SiteSpec
@@ -107,10 +107,13 @@ async def build_full_config(
 ) -> dict:
     """The complete desired-state Caddy config for the current panel state."""
     specs = await _served_specs(db, settings)
+    app_specs = await _served_app_specs(db)
     if exclude_domain is not None:
         specs = [s for s in specs if s.domain != exclude_domain]
+        app_specs = [a for a in app_specs if a.domain != exclude_domain]
     return caddy.build_config(
         specs,
+        apps=app_specs,
         adminer=_adminer_spec(settings),
         panel=_panel_spec(settings),
         tls_internal=settings.caddy_tls_internal,
@@ -144,6 +147,27 @@ async def _served_specs(db: AsyncSession, settings: Settings) -> list[SiteSpec]:
         )
     ).all()
     return [spec_for(site, settings, suspended=bool(suspended)) for site, suspended in rows]
+
+
+async def _served_app_specs(db: AsyncSession) -> list[caddy.AppSpec]:
+    """Phase 12a: vhosts for containerized apps. Stopped/errored apps keep
+    their route (Caddy answers 502, which is honest); suspension 503s exactly
+    like sites. Lives here so apps.py can depend on sites.py one-way."""
+    rows = (
+        await db.execute(
+            select(App, User.suspended)
+            .join(User, User.id == App.owner_id, isouter=True)
+            .where(App.status.in_(("provisioning", "running", "stopped", "error")))
+        )
+    ).all()
+    return [
+        caddy.AppSpec(
+            domain=app.domain,
+            upstream=f"127.0.0.1:{app.host_port}",
+            suspended=bool(suspended),
+        )
+        for app, suspended in rows
+    ]
 
 
 # --- operation step tracking -------------------------------------------------
