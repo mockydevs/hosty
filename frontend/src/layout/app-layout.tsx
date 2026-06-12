@@ -131,9 +131,9 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="min-h-dvh">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-background md:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-60 shrink-0 flex-col border-r border-border bg-background md:flex">
         <Brand />
         <NavItems />
         <SidebarFooter />
@@ -179,15 +179,12 @@ export function AppLayout() {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:pl-60">
         <div className="pt-14 md:pt-0">
           <ImpersonationBanner />
         </div>
         <main className="flex-1 px-4 pb-8 pt-6 md:px-8 md:pt-8">
-          {/* Cap content width on very wide screens so pages don't stretch edge to edge. */}
-          <div className="mx-auto w-full max-w-7xl">
-            <Outlet />
-          </div>
+          <Outlet />
         </main>
       </div>
     </div>
