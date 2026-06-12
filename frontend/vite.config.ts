@@ -18,6 +18,16 @@ export default defineConfig({
   build: {
     sourcemap: false,
     chunkSizeWarningLimit: 300,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router"],
+          query: ["@tanstack/react-query"],
+          icons: ["lucide-react"],
+          form: ["react-hook-form", "@hookform/resolvers", "zod"],
+        },
+      },
+    },
   },
   test: {
     environment: "jsdom",
