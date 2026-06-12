@@ -45,6 +45,20 @@ async def get_current_user(
     user = await db.get(User, int(payload["sub"]))
     if user is None:
         raise UnauthorizedError("User no longer exists")
+    # Phase 11d impersonation: the token was minted by an admin acting as this
+    # client. Surfaced on request.state for the audit log and /auth/me banner.
+    # Suspension does not block it: support needs to see a suspended account.
+    impersonator_id = payload.get("imp")
+    if impersonator_id is not None:
+        impersonator = await db.get(User, int(impersonator_id))
+        if impersonator is None or impersonator.role != "admin":
+            raise UnauthorizedError("Impersonation token is no longer valid")
+        request.state.impersonator = impersonator
+        # Skip the iat-vs-password-change check: the ADMIN minted this token;
+        # the client's own credential changes must not kill a support session.
+        if user.must_change_password and request.url.path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
+            raise PasswordChangeRequiredError("Change your temporary password to continue")
+        return user
     # Tokens issued before the last password change are invalid.
     if int(payload["iat"]) < utc_timestamp(user.password_changed_at):
         raise UnauthorizedError("Token is no longer valid")

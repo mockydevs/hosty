@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     public_ip: str = ""  # enables "point to this server" records and templates
     cloudflare_api_token: str = ""  # enables one-click push of zones to Cloudflare
 
+    # Phase 11c/11d: usage metering + uploads
+    caddy_access_log_path: str = "/var/log/caddy/hosty-access.log"
+    uploads_dir: str = "/var/lib/hosty/uploads"  # staging area for site imports
+    usage_check_interval_seconds: int = 3600  # disk-quota & health sweep cadence
+    disk_full_threshold_percent: int = 90  # server disk "nearly full" notification
+
     # Phase 8: backups
     backups_root: str = "/var/lib/hosty/backups"
     backup_scheduler_enabled: bool = True

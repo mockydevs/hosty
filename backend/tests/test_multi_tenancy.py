@@ -308,10 +308,16 @@ async def test_delete_user_with_site_teardown(admin_client, client, fake_system)
 # --- admin-only surfaces --------------------------------------------------------------
 
 
-async def test_admin_only_surfaces_are_forbidden_for_clients(admin_client, client):
+async def test_admin_only_surfaces_are_forbidden_for_clients(admin_client, client, app):
+    from tests.test_dns_api import FakePDNS
+
+    app.state.pdns_client = FakePDNS()
     headers = await make_active_client(admin_client, client)
-    assert (await client.get("/api/dns/zones", headers=headers)).status_code == 403
-    assert (await client.get("/api/dns/meta", headers=headers)).status_code == 403
+    # Phase 11b: DNS is tenant-scoped (no longer admin-only) — a fresh client
+    # gets an empty zone list, never other tenants' zones.
+    resp = await client.get("/api/dns/zones", headers=headers)
+    assert resp.status_code == 200 and resp.json() == []
+    assert (await client.get("/api/dns/meta", headers=headers)).status_code == 200
     assert (await client.get("/api/backups/s3-config", headers=headers)).status_code == 403
     assert (await client.post("/api/databases/adminer-session", headers=headers)).status_code == 403
     assert (

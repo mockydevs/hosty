@@ -102,11 +102,14 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         user_id: int | None = None
         username: str | None = None
+        impersonator_id: int | None = None
         auth = request.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):
             try:
                 payload = decode_access_token(auth[7:], secret=settings.secret_key)
                 user_id = int(payload["sub"])
+                if payload.get("imp") is not None:
+                    impersonator_id = int(payload["imp"])
             except Exception:  # invalid/expired token: record as anonymous
                 user_id = None
 
@@ -114,6 +117,13 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             if user_id is not None:
                 user = await db.get(User, user_id)
                 username = user.username if user else None
+                if impersonator_id is not None:
+                    # Phase 11d: impersonated actions are loudly attributed to
+                    # the admin, e.g. "root (as customer1)".
+                    impersonator = await db.get(User, impersonator_id)
+                    if impersonator is not None and username is not None:
+                        username = f"{impersonator.username} (as {username})"[:32]
+                        user_id = impersonator.id
             db.add(
                 AuditLog(
                     user_id=user_id,

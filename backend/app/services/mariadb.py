@@ -132,6 +132,39 @@ async def reset_password(user: str, password: str) -> None:
     log.info("mariadb_password_reset", user=user)
 
 
+def build_db_sizes_argv() -> list[str]:
+    """Pure. data+index bytes per schema (Phase 11c/11d usage metering)."""
+    return [
+        "mariadb",
+        "--protocol=socket",
+        "--user=root",
+        "--batch",
+        "--skip-column-names",
+        "--execute",
+        "SELECT table_schema, COALESCE(SUM(data_length + index_length), 0) "
+        "FROM information_schema.tables GROUP BY table_schema;",
+    ]
+
+
+async def database_sizes() -> dict[str, int]:
+    """schema -> bytes for every non-system schema. Empty dict on failure
+    (metering must never take the panel down with it)."""
+    result = await runner.run(build_db_sizes_argv(), timeout=30)
+    if not result.ok:
+        log.warning("mariadb_db_sizes_failed", stderr=result.stderr.strip()[:200])
+        return {}
+    sizes: dict[str, int] = {}
+    for line in result.stdout.splitlines():
+        parts = line.strip().split("\t")
+        if len(parts) != 2 or parts[0] in SYSTEM_SCHEMAS:
+            continue
+        try:
+            sizes[parts[0]] = int(float(parts[1]))
+        except ValueError:
+            continue
+    return sizes
+
+
 def build_show_databases_argv() -> list[str]:
     return [
         "mariadb",

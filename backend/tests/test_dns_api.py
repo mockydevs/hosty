@@ -242,7 +242,7 @@ async def test_cloudflare_push_requires_token(admin_client, pdns):
     await admin_client.post("/api/dns/zones", json={"name": "example.com"})
     resp = await admin_client.post("/api/dns/zones/example.com./push/cloudflare")
     assert resp.status_code == 409
-    assert "HOSTY_CLOUDFLARE_API_TOKEN" in resp.json()["error"]["message"]
+    assert "Cloudflare API token" in resp.json()["error"]["message"]
 
 
 async def test_cloudflare_push_full_flow(settings):

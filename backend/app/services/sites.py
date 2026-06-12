@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import utcnow
 from app.core.config import Settings
-from app.db.models import Database, Operation, Site
+from app.db.models import Database, Operation, Site, User
 from app.services import caddy, filebrowser, mariadb, php_fpm
 from app.services import dns as dns_service
 from app.services.caddy import CaddyClient, SiteSpec
-from app.system import fs, users
+from app.system import fs, slices, users
 
 log = structlog.get_logger("hosty.sites")
 
@@ -82,12 +82,13 @@ def doc_root_for(domain: str, settings: Settings) -> str:
     return f"{site_dir_for(domain, settings)}/public_html"
 
 
-def spec_for(site: Site, settings: Settings) -> SiteSpec:
+def spec_for(site: Site, settings: Settings, *, suspended: bool = False) -> SiteSpec:
     return SiteSpec(
         domain=site.domain,
         doc_root=site.doc_root,
         php_socket=php_fpm.socket_path(site.site_user, site.php_version, settings),
         internal_tls=site.behind_cloudflare,
+        suspended=suspended,
     )
 
 
@@ -98,6 +99,22 @@ def _panel_spec(settings: Settings) -> caddy.PanelSpec | None:
         domain=settings.panel_domain,
         upstream=settings.panel_upstream,
         allowed_ips=tuple(settings.panel_allowed_ips),
+    )
+
+
+async def build_full_config(
+    db: AsyncSession, settings: Settings, *, exclude_domain: str | None = None
+) -> dict:
+    """The complete desired-state Caddy config for the current panel state."""
+    specs = await _served_specs(db, settings)
+    if exclude_domain is not None:
+        specs = [s for s in specs if s.domain != exclude_domain]
+    return caddy.build_config(
+        specs,
+        adminer=_adminer_spec(settings),
+        panel=_panel_spec(settings),
+        tls_internal=settings.caddy_tls_internal,
+        access_log_path=settings.caddy_access_log_path or None,
     )
 
 
@@ -114,13 +131,19 @@ def _adminer_spec(settings: Settings) -> caddy.AdminerSpec | None:
 
 
 async def _served_specs(db: AsyncSession, settings: Settings) -> list[SiteSpec]:
-    """Specs for every site that should currently be served by Caddy."""
+    """Specs for every site that should currently be served by Caddy.
+
+    Sites whose owner is suspended stay in the config but answer 503 — taking
+    them offline with a clear page, not a connection error (Phase 11d).
+    """
     rows = (
-        (await db.execute(select(Site).where(Site.status.in_(("active", "provisioning")))))
-        .scalars()
-        .all()
-    )
-    return [spec_for(s, settings) for s in rows]
+        await db.execute(
+            select(Site, User.suspended)
+            .join(User, User.id == Site.owner_id, isouter=True)
+            .where(Site.status.in_(("active", "provisioning")))
+        )
+    ).all()
+    return [spec_for(site, settings, suspended=bool(suspended)) for site, suspended in rows]
 
 
 # --- operation step tracking -------------------------------------------------
@@ -247,8 +270,20 @@ async def run_create_site(
 
         async def do_user() -> None:
             await users.create(site.site_user)
+            # Phase 11c: outer cgroup cap from the owner's effective limits.
+            # Best-effort by design — never blocks provisioning.
+            from app.services import quotas
+
+            owner = await db.get(User, site.owner_id) if site.owner_id else None
+            limits = quotas.UNLIMITED if owner is None else await quotas.effective_limits(db, owner)
+            await slices.install_slice(
+                site.site_user,
+                cpu_quota_percent=limits.cpu_quota_percent,
+                memory_max_mb=limits.memory_max_mb,
+            )
 
         async def undo_user() -> None:
+            await slices.remove_slice(site.site_user)
             await users.delete(site.site_user)
 
         async def do_docroot() -> None:
@@ -276,25 +311,10 @@ async def run_create_site(
             await php_fpm.remove_pool(site.site_user, site.php_version, settings)
 
         async def do_caddy() -> None:
-            await client.apply(
-                caddy.build_config(
-                    await _served_specs(db, settings),
-                    adminer=_adminer_spec(settings),
-                    panel=_panel_spec(settings),
-                    tls_internal=settings.caddy_tls_internal,
-                )
-            )
+            await client.apply(await build_full_config(db, settings))
 
         async def undo_caddy() -> None:
-            specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
-            await client.apply(
-                caddy.build_config(
-                    specs,
-                    adminer=_adminer_spec(settings),
-                    panel=_panel_spec(settings),
-                    tls_internal=settings.caddy_tls_internal,
-                )
-            )
+            await client.apply(await build_full_config(db, settings, exclude_domain=site.domain))
 
         async def do_filebrowser() -> None:
             await filebrowser.ensure_site_user(site.site_user, site.domain, settings)
@@ -319,10 +339,30 @@ async def run_create_site(
                 public_ip=settings.public_ip,
                 ttl=settings.dns_default_ttl,
             )
+            if zone_created and site.owner_id is not None:
+                # Phase 11b: the auto-created zone belongs to the site's owner.
+                from app.db.models import DnsZoneOwner
+
+                db.add(
+                    DnsZoneOwner(zone=dns_service.canonical(site.domain), owner_id=site.owner_id)
+                )
+                await db.commit()
 
         async def undo_dns_zone() -> None:
             if zone_created:  # never delete a zone that existed before us
                 await _pdns().delete_zone(dns_service.canonical(site.domain))
+                from app.db.models import DnsZoneOwner
+
+                row = (
+                    await db.execute(
+                        select(DnsZoneOwner).where(
+                            DnsZoneOwner.zone == dns_service.canonical(site.domain)
+                        )
+                    )
+                ).scalar_one_or_none()
+                if row is not None:
+                    await db.delete(row)
+                    await db.commit()
 
         async def do_finalize() -> None:
             site.status = "active"
@@ -371,15 +411,7 @@ async def run_delete_site(
         site_dir = site_dir_for(site.domain, settings)
 
         async def do_caddy() -> None:
-            specs = [s for s in await _served_specs(db, settings) if s.domain != site.domain]
-            await client.apply(
-                caddy.build_config(
-                    specs,
-                    adminer=_adminer_spec(settings),
-                    panel=_panel_spec(settings),
-                    tls_internal=settings.caddy_tls_internal,
-                )
-            )
+            await client.apply(await build_full_config(db, settings, exclude_domain=site.domain))
 
         async def do_filebrowser() -> None:
             await filebrowser.remove_site_user(site.site_user, settings)
@@ -403,6 +435,7 @@ async def run_delete_site(
             await fs.remove_tree(site_dir, root=settings.sites_root)
 
         async def do_user() -> None:
+            await slices.remove_slice(site.site_user)
             await users.delete(site.site_user)
 
         async def do_finalize() -> None:
@@ -447,14 +480,7 @@ async def resync_caddy(
     for routine renewal.
     """
     client = _caddy_client(settings, caddy_client)
-    await client.apply(
-        caddy.build_config(
-            await _served_specs(db, settings),
-            adminer=_adminer_spec(settings),
-            panel=_panel_spec(settings),
-            tls_internal=settings.caddy_tls_internal,
-        )
-    )
+    await client.apply(await build_full_config(db, settings))
 
 
 async def change_php_version(
@@ -479,14 +505,7 @@ async def change_php_version(
     )
     site.php_version = new_version
     try:
-        await client.apply(
-            caddy.build_config(
-                await _served_specs(db, settings),
-                adminer=_adminer_spec(settings),
-                panel=_panel_spec(settings),
-                tls_internal=settings.caddy_tls_internal,
-            )
-        )
+        await client.apply(await build_full_config(db, settings))
     except Exception:
         # Caddy still points at the old socket; drop the new pool and bail.
         site.php_version = old_version

@@ -22,8 +22,11 @@ from app.api.routes import (
     dns,
     files,
     health,
+    notifications,
+    plans,
     sites,
     system,
+    usage,
     users,
 )
 from app.core import logging as app_logging
@@ -70,16 +73,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Best-effort — Caddy may not be up yet; the next sync repairs it.
             try:
                 from app.services import sites as sites_service
-                from app.services.caddy import CaddyClient, build_config
+                from app.services.caddy import CaddyClient
 
                 async with factory() as db:
                     await CaddyClient(settings.caddy_admin_url).apply(
-                        build_config(
-                            await sites_service._served_specs(db, settings),
-                            adminer=sites_service._adminer_spec(settings),
-                            tls_internal=settings.caddy_tls_internal,
-                            panel=sites_service._panel_spec(settings),
-                        )
+                        await sites_service.build_full_config(db, settings)
                     )
             except Exception as exc:
                 structlog.get_logger("hosty.startup").warning(
@@ -158,6 +156,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(files.router, prefix="/api/sites", tags=["files"])
     app.include_router(files.proxy_router)
     app.include_router(dns.router, prefix="/api/dns", tags=["dns"])
+    app.include_router(plans.router, prefix="/api/plans", tags=["plans"])
+    app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+    app.include_router(usage.router, prefix="/api/usage", tags=["usage"])
     app.include_router(backups.router, prefix="/api/backups", tags=["backups"])
     app.include_router(backups.site_router, prefix="/api/sites", tags=["backups"])
 

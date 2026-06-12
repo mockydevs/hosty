@@ -1,4 +1,4 @@
-"""ORM models. Schema changes always come with an Alembic migration."""
+"""ORM models. Every schema change always comes with an Alembic migration."""
 
 from __future__ import annotations
 
@@ -24,8 +24,38 @@ class User(Base):
     suspended: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_sites: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Phase 11d: a plan supplies default quotas; explicit per-user values above
+    # always win (see services/quotas.py).
+    plan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("plans.id", ondelete="SET NULL"), nullable=True
+    )
+    # Phase 11c: per-client resource limits (None = unlimited).
+    max_disk_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cpu_quota_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    memory_max_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Phase 11d: TOTP 2FA. The secret is Fernet-encrypted (app.core.secrets);
+    # it is stored at setup time but 2FA only takes effect once verified
+    # (totp_enabled flips to True after the first valid code).
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     password_changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
+class Plan(Base):
+    """Phase 11d: a named quota bundle (e.g. Starter 1 site / 1 DB) assignable
+    to client accounts instead of raw numbers. None = unlimited."""
+
+    __tablename__ = "plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    max_sites: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_disk_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cpu_quota_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    memory_max_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
 
 class RefreshToken(Base):
@@ -60,6 +90,10 @@ class Site(Base):
     php_memory_limit: Mapped[str] = mapped_column(String(8), nullable=False, default="256M")
     php_upload_max_filesize: Mapped[str] = mapped_column(String(8), nullable=False, default="64M")
     wordpress: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Phase 11d: set when this site is a staging clone of another site.
+    staging_of: Mapped[int | None] = mapped_column(
+        ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # Proxied through Cloudflare (orange cloud): serve an internal origin cert
     # instead of attempting ACME HTTP-01, which the proxy would break.
     behind_cloudflare: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -132,6 +166,44 @@ class PanelSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
+
+
+class DnsZoneOwner(Base):
+    """Phase 11b: maps a PowerDNS zone (external to the panel DB) to the user
+    who owns it. Zones without a row are treated as admin-owned (pre-11b)."""
+
+    __tablename__ = "dns_zone_owners"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Canonical zone name (trailing dot), unique — one owner per zone.
+    zone: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
+class Notification(Base):
+    """Phase 11d: admin-facing panel notifications (disk nearly full, managed
+    service down, backup failed, repeated cert-issuance failures...).
+
+    `dedupe_key` keeps recurring checks from flooding the list: an unresolved
+    notification with the same key swallows re-emissions until it's resolved
+    (condition cleared) or dismissed.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(8), nullable=False, default="warning")
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    dedupe_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, index=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class AuditLog(Base):

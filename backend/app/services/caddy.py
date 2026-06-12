@@ -34,10 +34,42 @@ class SiteSpec:
     # Behind the Cloudflare proxy: issue an internal origin certificate instead
     # of attempting ACME (HTTP-01 cannot complete through the proxy).
     internal_tls: bool = False
+    # Phase 11d: owner account suspended — serve a 503 page instead of the site
+    # (required for non-payment handling, not just a login block).
+    suspended: bool = False
+
+
+SUSPENDED_BODY = """\
+<!doctype html>
+<html lang="en">
+<title>503 — Account suspended</title>
+<style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;color:#333}</style>
+<body><div><h1>Account suspended</h1>
+<p>This site is temporarily unavailable. Please contact the hosting administrator.</p></div></body>
+</html>
+"""
+
+
+def _suspended_route(site: SiteSpec) -> dict[str, Any]:
+    """Phase 11d: every request to a suspended owner's domain answers 503."""
+    return {
+        "match": [{"host": [site.domain]}],
+        "handle": [
+            {
+                "handler": "static_response",
+                "status_code": 503,
+                "headers": {"Content-Type": ["text/html; charset=utf-8"]},
+                "body": SUSPENDED_BODY,
+            }
+        ],
+        "terminal": True,
+    }
 
 
 def _site_route(site: SiteSpec) -> dict[str, Any]:
     """One terminal route per domain: try_files rewrite → PHP-FPM → static files."""
+    if site.suspended:
+        return _suspended_route(site)
     return {
         "match": [{"host": [site.domain]}],
         "handle": [
@@ -154,12 +186,16 @@ def build_config(
     adminer: AdminerSpec | None = None,
     tls_internal: bool = False,
     panel: PanelSpec | None = None,
+    access_log_path: str | None = None,
 ) -> dict[str, Any]:
     """Full desired-state Caddy config. Deterministic: sites sorted by domain.
 
     `tls_internal` issues certificates from Caddy's internal CA instead of
     ACME — for dev VMs, where domains aren't publicly resolvable and Let's
     Encrypt would retry forever. Never enable it for production sites.
+
+    `access_log_path` enables a JSON access log for the sites server — the
+    source for per-vhost bandwidth metering (Phase 11d).
     """
     ordered = sorted(sites, key=lambda s: s.domain)
     servers: dict[str, Any] = {
@@ -168,12 +204,24 @@ def build_config(
             "routes": ([_panel_route(panel)] if panel else []) + [_site_route(s) for s in ordered],
         }
     }
+    if access_log_path:
+        servers[SERVER_NAME]["logs"] = {"default_logger_name": "hosty_access"}
     if adminer is not None:
         servers["hosty_adminer"] = _adminer_server(adminer)
     config: dict[str, Any] = {
         "admin": {"listen": "127.0.0.1:2019"},
         "apps": {"http": {"servers": servers}},
     }
+    if access_log_path:
+        config["logging"] = {
+            "logs": {
+                "hosty_access": {
+                    "writer": {"output": "file", "filename": access_log_path},
+                    "encoder": {"format": "json"},
+                    "include": ["http.log.access.hosty_access"],
+                }
+            }
+        }
     if tls_internal and ordered:
         config["apps"]["tls"] = {
             "automation": {

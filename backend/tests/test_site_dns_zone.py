@@ -146,8 +146,10 @@ async def test_dns_zone_toggle_requires_dns_enabled(admin_client, fake_system, a
         app.state.settings.dns_enabled = True
 
 
-@pytest.mark.usefixtures("fake_system", "pdns")
-async def test_dns_zone_toggle_is_admin_only(admin_client, client):
+@pytest.mark.usefixtures("fake_system")
+async def test_client_auto_created_zone_is_owned_by_client(admin_client, client, pdns):
+    """Phase 11b: clients may auto-create zones; the pipeline records ownership,
+    so the new zone shows up in (and only in) the owner's zone list."""
     from tests.test_multi_tenancy import make_active_client
 
     headers = await make_active_client(admin_client, client)
@@ -156,5 +158,19 @@ async def test_dns_zone_toggle_is_admin_only(admin_client, client):
         json={"domain": "clientdns.example", "create_dns_zone": True},
         headers=headers,
     )
-    assert resp.status_code == 409
-    assert "administrator" in resp.text.lower()
+    assert resp.status_code == 202, resp.text
+    op = (
+        await client.get(f"/api/operations/{resp.json()['operation_id']}", headers=headers)
+    ).json()
+    assert op["status"] == "succeeded"
+    assert "clientdns.example." in pdns.zones
+
+    # The owner sees their zone; a second client sees nothing.
+    names = [z["name"] for z in (await client.get("/api/dns/zones", headers=headers)).json()]
+    assert names == ["clientdns.example."]
+    other = await make_active_client(admin_client, client, username="mallory")
+    assert (await client.get("/api/dns/zones", headers=other)).json() == []
+
+    # The admin list carries ownership info.
+    zones = (await admin_client.get("/api/dns/zones")).json()
+    assert [(z["name"], z["owner_username"]) for z in zones] == [("clientdns.example.", "alice")]

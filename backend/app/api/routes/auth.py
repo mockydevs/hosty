@@ -5,7 +5,7 @@ See docs/ARCHITECTURE.md ADR-004 for the token design.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field
@@ -13,11 +13,15 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.core import totp as totp_lib
 from app.core.clock import utcnow
 from app.core.config import Settings
-from app.core.errors import ConflictError, RateLimitedError, UnauthorizedError
+from app.core.errors import ConflictError, NotFoundError, RateLimitedError, UnauthorizedError
+from app.core.secrets import SecretDecryptionError, decrypt_secret, encrypt_secret
 from app.core.security import (
     create_access_token,
+    create_totp_challenge,
+    decode_totp_challenge,
     generate_refresh_token,
     hash_password,
     hash_token,
@@ -55,6 +59,21 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class LoginResponse(BaseModel):
+    """Either tokens (no 2FA) or a short-lived challenge requiring a TOTP code."""
+
+    totp_required: bool = False
+    challenge_token: str | None = None
+    access_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int | None = None
+
+
+class TotpVerifyRequest(BaseModel):
+    challenge_token: str
+    code: str = Field(min_length=6, max_length=8)
+
+
 class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -62,6 +81,8 @@ class UserResponse(BaseModel):
     username: str
     role: str
     must_change_password: bool
+    totp_enabled: bool = False
+    impersonated_by: str | None = None
 
 
 class SetupStatusResponse(BaseModel):
@@ -123,13 +144,13 @@ async def setup(body: SetupRequest, db: AsyncSession = Depends(get_db)) -> User:
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=LoginResponse, response_model_exclude_none=True)
 async def login(
     request: Request,
     response: Response,
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
-) -> TokenResponse:
+) -> LoginResponse:
     limiter = request.app.state.login_limiter
     key = request.client.host if request.client else "unknown"
     if not limiter.allow(key):
@@ -141,6 +162,42 @@ async def login(
         raise UnauthorizedError("Invalid username or password")
     if user.suspended:
         raise UnauthorizedError("Account suspended — contact your administrator")
+    settings = _settings(request)
+    if user.totp_enabled:
+        # Password OK, but tokens are only issued after a valid TOTP code.
+        # The limiter is NOT reset: failed codes still count against the IP.
+        return LoginResponse(
+            totp_required=True,
+            challenge_token=create_totp_challenge(subject=str(user.id), secret=settings.secret_key),
+        )
+    limiter.reset(key)
+    tokens = await _issue_tokens(request, response, db, user)
+    return LoginResponse(access_token=tokens.access_token, expires_in=tokens.expires_in)
+
+
+@router.post("/login/totp", response_model=TokenResponse)
+async def login_totp(
+    request: Request,
+    response: Response,
+    body: TotpVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Second login step when 2FA is enabled: challenge token + TOTP code → tokens."""
+    limiter = request.app.state.login_limiter
+    key = request.client.host if request.client else "unknown"
+    if not limiter.allow(key):
+        raise RateLimitedError("Too many login attempts; try again later")
+    settings = _settings(request)
+    payload = decode_totp_challenge(body.challenge_token, secret=settings.secret_key)
+    user = await db.get(User, int(payload["sub"]))
+    if user is None or user.suspended or not user.totp_enabled or not user.totp_secret_encrypted:
+        raise UnauthorizedError("Invalid 2FA challenge")
+    try:
+        secret = decrypt_secret(user.totp_secret_encrypted, settings.secret_key)
+    except SecretDecryptionError as exc:
+        raise UnauthorizedError("2FA secret unreadable — contact your administrator") from exc
+    if not totp_lib.verify(secret, body.code):
+        raise UnauthorizedError("Invalid authentication code")
     limiter.reset(key)
     return await _issue_tokens(request, response, db, user)
 
@@ -213,5 +270,159 @@ async def change_password(
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user)) -> User:
-    return user
+async def me(request: Request, user: User = Depends(get_current_user)) -> UserResponse:
+    impersonator = getattr(request.state, "impersonator", None)
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        must_change_password=user.must_change_password,
+        totp_enabled=user.totp_enabled,
+        impersonated_by=impersonator.username if impersonator is not None else None,
+    )
+
+
+# --- 2FA (TOTP, Phase 11d) ---------------------------------------------------------
+
+
+class TotpSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class TotpEnableRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class TotpDisableRequest(BaseModel):
+    password: str
+
+
+@router.post("/2fa/setup", response_model=TotpSetupResponse)
+async def totp_setup(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> TotpSetupResponse:
+    """Generate (or regenerate) a TOTP secret. 2FA only takes effect after the
+    first valid code is submitted to /2fa/enable."""
+    if user.totp_enabled:
+        raise ConflictError("2FA is already enabled — disable it first to re-enroll")
+    secret = totp_lib.generate_secret()
+    user.totp_secret_encrypted = encrypt_secret(secret, _settings(request).secret_key)
+    await db.commit()
+    return TotpSetupResponse(
+        secret=secret, otpauth_uri=totp_lib.otpauth_uri(secret, username=user.username)
+    )
+
+
+@router.post("/2fa/enable", status_code=status.HTTP_204_NO_CONTENT)
+async def totp_enable(
+    request: Request,
+    body: TotpEnableRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    if user.totp_enabled:
+        raise ConflictError("2FA is already enabled")
+    if not user.totp_secret_encrypted:
+        raise ConflictError("Run 2FA setup first")
+    secret = decrypt_secret(user.totp_secret_encrypted, _settings(request).secret_key)
+    if not totp_lib.verify(secret, body.code):
+        raise UnauthorizedError("Invalid authentication code — check your authenticator app")
+    user.totp_enabled = True
+    await db.commit()
+
+
+@router.post("/2fa/disable", status_code=status.HTTP_204_NO_CONTENT)
+async def totp_disable(
+    body: TotpDisableRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    """Password-gated: a stolen session alone must not be able to remove 2FA."""
+    if not verify_password(user.password_hash, body.password):
+        raise UnauthorizedError("Password is incorrect")
+    user.totp_enabled = False
+    user.totp_secret_encrypted = None
+    await db.commit()
+
+
+# --- active sessions (Phase 11d) -----------------------------------------------------
+
+
+class SessionResponse(BaseModel):
+    id: int
+    created_at: datetime
+    expires_at: datetime
+    current: bool
+
+
+@router.get("/sessions", response_model=list[SessionResponse])
+async def list_sessions(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[SessionResponse]:
+    """The user's active (unexpired, unrevoked) refresh-token sessions."""
+    current_hash = None
+    raw = request.cookies.get(REFRESH_COOKIE)
+    if raw:
+        current_hash = hash_token(raw)
+    rows = (
+        (
+            await db.execute(
+                select(RefreshToken)
+                .where(
+                    RefreshToken.user_id == user.id,
+                    RefreshToken.revoked_at.is_(None),
+                    RefreshToken.expires_at > utcnow(),
+                )
+                .order_by(RefreshToken.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        SessionResponse(
+            id=row.id,
+            created_at=row.created_at,
+            expires_at=row.expires_at,
+            current=row.token_hash == current_hash,
+        )
+        for row in rows
+    ]
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    row = await db.get(RefreshToken, session_id)
+    if row is None or row.user_id != user.id or row.revoked_at is not None:
+        raise NotFoundError("Session not found")
+    row.revoked_at = utcnow()
+    await db.commit()
+
+
+@router.post("/sessions/revoke-others", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_other_sessions(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    """Revoke every session except the one backing this browser's cookie."""
+    current_hash = hash_token(request.cookies.get(REFRESH_COOKIE, ""))
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.token_hash != current_hash,
+        )
+        .values(revoked_at=utcnow())
+    )
+    await db.commit()

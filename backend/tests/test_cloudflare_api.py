@@ -62,9 +62,7 @@ async def test_token_save_verify_and_clear(admin_client, app):
 
     # Bad token: verification fails, nothing stored.
     app.state.cloudflare_client = FakeCFAccount(verify_ok=False)
-    resp = await admin_client.put(
-        "/api/dns/cloudflare/config", json={"api_token": "bad-token-123"}
-    )
+    resp = await admin_client.put("/api/dns/cloudflare/config", json={"api_token": "bad-token-123"})
     assert resp.status_code == 502
     assert resp.json()["error"]["code"] == "cloudflare_error"
     assert (await admin_client.get("/api/dns/cloudflare/config")).json()["configured"] is False

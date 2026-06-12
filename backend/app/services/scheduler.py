@@ -86,6 +86,11 @@ async def tick(app: FastAPI) -> int:
         await self_backup(app)
     except Exception as exc:  # never let self-backup break site backups
         log.error("panel_self_backup_failed", error=str(exc))
+
+    try:
+        await health_sweep(app)
+    except Exception as exc:  # the sweep must never break backups
+        log.error("health_sweep_failed", error=str(exc))
     return len(jobs)
 
 
@@ -99,6 +104,117 @@ async def loop(app: FastAPI) -> None:
             raise
         except Exception as exc:
             log.error("scheduler_tick_failed", error=str(exc))
+
+
+# --- health & quota sweep (Phase 11c/11d) -------------------------------------------
+
+_last_sweep_at: float | None = None
+
+
+async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
+    """Hourly: emit admin notifications for down services, a nearly-full server
+    disk, repeated cert-issuance failures, and clients over their disk quota
+    (du-based soft limits — warnings, never hard stops)."""
+    import time as _time
+
+    global _last_sweep_at
+    settings = app.state.settings
+    interval = settings.usage_check_interval_seconds
+    now_mono = _time.monotonic()
+    if not force and _last_sweep_at is not None and now_mono - _last_sweep_at < interval:
+        return
+    _last_sweep_at = now_mono
+
+    sessionmaker = app.state.sessionmaker
+    from app.services import notifications, ssl, usage
+    from app.system import systemd
+
+    async with sessionmaker() as db:
+        # 1. Managed services down?
+        for unit in settings.managed_units:
+            try:
+                status = await systemd.status(unit)
+            except Exception:
+                continue  # systemctl unavailable (dev container) — skip quietly
+            key = f"service_down:{unit}"
+            if status.available and status.active_state not in ("active", "activating"):
+                await notifications.emit(
+                    db,
+                    kind="service_down",
+                    severity="error",
+                    message=f"Managed service {unit} is {status.active_state}",
+                    dedupe_key=key,
+                )
+            else:
+                await notifications.resolve(db, key)
+
+        # 2. Server disk nearly full?
+        try:
+            import psutil
+
+            percent = psutil.disk_usage("/").percent
+            if percent >= settings.disk_full_threshold_percent:
+                await notifications.emit(
+                    db,
+                    kind="disk_full",
+                    severity="error",
+                    message=f"Server disk is {percent:.0f}% full",
+                    dedupe_key="disk_full:/",
+                )
+            else:
+                await notifications.resolve(db, "disk_full:/")
+        except Exception as exc:
+            log.warning("disk_check_failed", error=str(exc))
+
+        # 3. Cert issuance failures (active, non-proxied sites).
+        active_sites = (
+            (await db.execute(select(Site).where(Site.status == "active"))).scalars().all()
+        )
+        for site in active_sites:
+            if site.behind_cloudflare:
+                continue
+            try:
+                probe = await ssl.probe(site.domain)
+            except Exception:
+                continue
+            key = f"cert_failed:{site.domain}"
+            if probe.status in ("no_certificate", "dns_unresolved"):
+                await notifications.emit(
+                    db,
+                    kind="cert_failed",
+                    severity="warning",
+                    message=(
+                        f"HTTPS certificate problem for {site.domain}: {probe.status}"
+                        + (f" — {probe.detail}" if probe.detail else "")
+                    ),
+                    dedupe_key=key,
+                )
+            else:
+                await notifications.resolve(db, key)
+
+        # 4. Per-client disk quota (soft) — Phase 11c.
+        try:
+            for client in await usage.all_clients_usage(db, settings):
+                key = f"quota_exceeded:{client.username}"
+                if (
+                    client.max_disk_mb is not None
+                    and client.disk_bytes > client.max_disk_mb * 1024 * 1024
+                ):
+                    used_mb = client.disk_bytes // (1024 * 1024)
+                    await notifications.emit(
+                        db,
+                        kind="quota_exceeded",
+                        severity="warning",
+                        message=(
+                            f"{client.username} is over their disk quota: "
+                            f"{used_mb}MB used of {client.max_disk_mb}MB"
+                        ),
+                        dedupe_key=key,
+                    )
+                else:
+                    await notifications.resolve(db, key)
+        except Exception as exc:
+            log.warning("disk_quota_sweep_failed", error=str(exc))
 
 
 # --- panel self-backup (Week 23) ---------------------------------------------------

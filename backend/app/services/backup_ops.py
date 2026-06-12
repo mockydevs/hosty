@@ -155,6 +155,27 @@ async def run_backup_site(
         ok, error = await _run_pipeline(db, op, steps)
         await _finish(db, op, status="succeeded" if ok else "failed", error=error)
         log.info("backup_finished", domain=site.domain, backup_id=backup_id, ok=ok)
+        if not ok:
+            # Week 21 / Phase 11d: surface the failure on the dashboard.
+            from app.services import notifications
+
+            try:
+                await notifications.emit(
+                    db,
+                    kind="backup_failed",
+                    severity="error",
+                    message=f"Backup of {site.domain} failed: {error}",
+                    dedupe_key=f"backup_failed:{site.domain}",
+                )
+            except Exception as exc:  # notifying must never break the operation
+                log.warning("backup_failure_notification_failed", error=str(exc))
+        else:
+            import contextlib
+
+            from app.services import notifications
+
+            with contextlib.suppress(Exception):  # resolving must never break the operation
+                await notifications.resolve(db, f"backup_failed:{site.domain}")
 
 
 async def run_restore_site(

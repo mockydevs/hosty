@@ -19,6 +19,7 @@ from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin
 from app.core.clock import utcnow
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.db.models import Operation, Site, User
+from app.services import quotas
 from app.services import sites as sites_service
 from app.services import ssl as ssl_service
 from app.services import wordpress as wordpress_service
@@ -58,6 +59,7 @@ class SiteResponse(BaseModel):
     php_upload_max_filesize: str
     wordpress: bool
     behind_cloudflare: bool
+    staging_of: int | None = None
     created_at: datetime
 
 
@@ -131,16 +133,16 @@ async def create_site(
     create_dns_zone = body.create_dns_zone
     if create_dns_zone and not settings.dns_enabled:
         raise ConflictError("DNS management is disabled on this server")
-    if create_dns_zone and not is_admin(user):
-        # Zone management UI/ownership for clients is Phase 11b.
-        raise ConflictError("Only administrators can auto-create DNS zones")
+    # Phase 11b: clients may auto-create zones too — the pipeline records
+    # ownership in dns_zone_owners, so the zone is theirs to manage.
 
-    if not is_admin(user) and user.max_sites is not None:
+    limits = await quotas.effective_limits(db, user)
+    if not is_admin(user) and limits.max_sites is not None:
         owned = (
             await db.execute(select(func.count()).select_from(Site).where(Site.owner_id == user.id))
         ).scalar_one()
-        if owned >= user.max_sites:
-            raise ConflictError(f"Site quota reached ({user.max_sites})")
+        if owned >= limits.max_sites:
+            raise ConflictError(f"Site quota reached ({limits.max_sites})")
 
     existing = (
         await db.execute(select(Site).where(Site.domain == body.domain))
@@ -564,3 +566,283 @@ async def wordpress_action(
         raise NotFoundError(f"Unknown action: {action}")
     url = await wordpress_service.run_action(site, action)
     return WpActionResponse(action=action, url=url)
+
+
+# --- PHP error log viewer (Phase 11d) -------------------------------------------------
+
+
+class PhpLogResponse(BaseModel):
+    path: str
+    exists: bool
+    lines: list[str]
+
+
+@router.get("/{site_id}/logs/php", response_model=PhpLogResponse)
+async def php_error_log(
+    site_id: int,
+    lines: int = 200,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> PhpLogResponse:
+    """Tail the site's PHP error log (pool config: /home/<user>/php-error.log).
+    Owner-scoped: clients see only their own sites' logs."""
+    site = await fetch_owned_site(db, user, site_id)
+    log_path = f"/home/{site.site_user}/php-error.log"
+    count = min(max(lines, 1), 1000)
+    try:
+        with open(log_path, "rb") as fh:
+            # Tail without reading the whole file: read at most ~512KB from the end.
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - 512 * 1024))
+            tail = fh.read().decode("utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return PhpLogResponse(path=log_path, exists=False, lines=[])
+    except OSError as exc:
+        raise SiteOperationError(f"Cannot read PHP error log: {exc}") from exc
+    return PhpLogResponse(path=log_path, exists=True, lines=tail[-count:])
+
+
+# --- site import (Phase 11d) ----------------------------------------------------------
+
+
+class ImportUploadResponse(BaseModel):
+    upload_id: str
+    size_bytes: int
+
+
+class StartImportRequest(BaseModel):
+    files_upload_id: str | None = None
+    sql_upload_id: str | None = None
+    # Required with sql_upload_id: which panel-managed DB receives the dump.
+    target_db: str | None = None
+    # WordPress: rewrite this old domain to the site's domain after import.
+    old_domain: str | None = Field(default=None, max_length=253)
+
+
+UPLOAD_ID_RE = r"^[a-f0-9]{32}\.(files\.(tar\.gz|tgz|zip)|sql)$"
+
+
+def _upload_path(settings, upload_id: str) -> str:
+    import re as _re
+
+    if not _re.fullmatch(UPLOAD_ID_RE, upload_id):
+        raise NotFoundError("Upload not found")
+    return f"{settings.uploads_dir}/{upload_id}"
+
+
+@router.post(
+    "/{site_id}/import/upload",
+    response_model=ImportUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_import_file(
+    request: Request,
+    site_id: int,
+    kind: str,
+    filename: str = "",
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ImportUploadResponse:
+    """Raw-body upload (no multipart): ?kind=files&filename=site.tar.gz or ?kind=sql.
+    The body is streamed to disk, never held in memory."""
+    import os as _os
+    import uuid as _uuid
+
+    await fetch_owned_site(db, user, site_id)
+    settings = _settings(request)
+    if kind == "files":
+        lowered = filename.lower()
+        if lowered.endswith(".tar.gz"):
+            suffix = "files.tar.gz"
+        elif lowered.endswith(".tgz"):
+            suffix = "files.tgz"
+        elif lowered.endswith(".zip"):
+            suffix = "files.zip"
+        else:
+            raise ConflictError("Files archive must be .tar.gz, .tgz or .zip")
+    elif kind == "sql":
+        suffix = "sql"
+    else:
+        raise NotFoundError("kind must be 'files' or 'sql'")
+    upload_id = f"{_uuid.uuid4().hex}.{suffix}"
+    _os.makedirs(settings.uploads_dir, exist_ok=True)
+    path = f"{settings.uploads_dir}/{upload_id}"
+    size = 0
+    with open(path, "wb") as fh:
+        async for chunk in request.stream():
+            size += len(chunk)
+            fh.write(chunk)
+    if size == 0:
+        _os.unlink(path)
+        raise ConflictError("Upload was empty")
+    return ImportUploadResponse(upload_id=upload_id, size_bytes=size)
+
+
+@router.post(
+    "/{site_id}/import", response_model=OperationAccepted, status_code=status.HTTP_202_ACCEPTED
+)
+async def start_import(
+    request: Request,
+    site_id: int,
+    body: StartImportRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Import uploaded files/SQL into the site. Overwrites in place — take a
+    backup first (the UI insists)."""
+    import os as _os
+
+    from app.services import site_import as import_service
+
+    site = await _get_active_site(db, user, site_id)
+    settings = _settings(request)
+    if not body.files_upload_id and not body.sql_upload_id:
+        raise ConflictError("Provide a files upload, an SQL upload, or both")
+    archive_path = sql_path = None
+    if body.files_upload_id:
+        archive_path = _upload_path(settings, body.files_upload_id)
+        if not _os.path.exists(archive_path):
+            raise NotFoundError("Files upload not found — upload it first")
+    if body.sql_upload_id:
+        sql_path = _upload_path(settings, body.sql_upload_id)
+        if not _os.path.exists(sql_path):
+            raise NotFoundError("SQL upload not found — upload it first")
+        if not body.target_db:
+            raise ConflictError("target_db is required when importing an SQL dump")
+    old_domain = None
+    if body.old_domain:
+        old_domain = validate_domain(body.old_domain)
+        if old_domain == site.domain:
+            old_domain = None  # nothing to rewrite
+
+    op = Operation(
+        kind="import_site",
+        site_id=site.id,
+        domain=site.domain,
+        steps_json=initial_steps(
+            import_service.import_steps(
+                with_files=archive_path is not None,
+                with_sql=sql_path is not None,
+                with_replace=old_domain is not None and site.wordpress,
+            )
+        ),
+    )
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    background.add_task(
+        import_service.run_import_site,
+        request.app.state.sessionmaker,
+        settings,
+        site_id=site.id,
+        operation_id=op.id,
+        archive_path=archive_path,
+        sql_path=sql_path,
+        old_domain=old_domain,
+        target_db=body.target_db,
+    )
+    return OperationAccepted(site=SiteResponse.model_validate(site), operation_id=op.id)
+
+
+# --- staging clones (Phase 11d) -------------------------------------------------------
+
+
+class PushStagingRequest(BaseModel):
+    confirm_domain: str
+
+
+@router.post(
+    "/{site_id}/staging", response_model=OperationAccepted, status_code=status.HTTP_202_ACCEPTED
+)
+async def create_staging(
+    request: Request,
+    site_id: int,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Clone this site (files + DB) to staging.<domain>."""
+    from app.services import staging as staging_service
+
+    site = await _get_active_site(db, user, site_id)
+    if site.staging_of is not None:
+        raise ConflictError("This already is a staging site")
+    staging_domain = staging_service.staging_domain_for(site.domain)
+    existing = (
+        await db.execute(select(Site).where(Site.domain == staging_domain))
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise ConflictError(f"A staging site for {site.domain} already exists")
+
+    staging_site = staging_service.make_staging_site(site, _settings(request))
+    db.add(staging_site)
+    await db.flush()
+    op = Operation(
+        kind="create_staging",
+        site_id=staging_site.id,
+        domain=staging_domain,
+        steps_json=initial_steps(staging_service.CREATE_STAGING_STEPS),
+    )
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+    await db.refresh(staging_site)
+
+    background.add_task(
+        staging_service.run_create_staging,
+        request.app.state.sessionmaker,
+        _settings(request),
+        source_site_id=site.id,
+        staging_site_id=staging_site.id,
+        operation_id=op.id,
+    )
+    return OperationAccepted(site=SiteResponse.model_validate(staging_site), operation_id=op.id)
+
+
+@router.post(
+    "/{site_id}/staging/push",
+    response_model=OperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def push_staging(
+    request: Request,
+    site_id: int,
+    body: PushStagingRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Push a staging clone back to production (files with --delete + DB replay).
+    Destructive: requires typing the PRODUCTION domain to confirm."""
+    from app.services import staging as staging_service
+
+    staging_site = await _get_active_site(db, user, site_id)
+    if staging_site.staging_of is None:
+        raise ConflictError("This site is not a staging clone")
+    production = await db.get(Site, staging_site.staging_of)
+    if production is None:
+        raise ConflictError("The production site for this clone no longer exists")
+    if body.confirm_domain.strip().lower() != production.domain:
+        raise ConflictError("Confirmation does not match the production domain")
+
+    op = Operation(
+        kind="push_staging",
+        site_id=production.id,
+        domain=production.domain,
+        steps_json=initial_steps(staging_service.PUSH_STAGING_STEPS),
+    )
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    background.add_task(
+        staging_service.run_push_staging,
+        request.app.state.sessionmaker,
+        _settings(request),
+        staging_site_id=staging_site.id,
+        operation_id=op.id,
+    )
+    return OperationAccepted(site=SiteResponse.model_validate(production), operation_id=op.id)

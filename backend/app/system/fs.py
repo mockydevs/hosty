@@ -54,8 +54,21 @@ def build_rmtree_argv(path: str, *, root: str) -> list[str]:
     return ["rm", "-rf", "--", validate_site_path(path, root=root)]
 
 
-async def _run_or_raise(argv: list[str], what: str) -> None:
-    result = await runner.run(argv, timeout=60)
+def build_rsync_argv(src_dir: str, dst_dir: str, *, root: str, delete: bool = False) -> list[str]:
+    """Pure: mirror `src_dir`'s contents into `dst_dir` (both validated inside
+    the sites root). `delete` removes files in dst missing from src (Phase 11d
+    staging push-back)."""
+    src = validate_site_path(src_dir, root=root)
+    dst = validate_site_path(dst_dir, root=root)
+    argv = ["rsync", "-a"]
+    if delete:
+        argv.append("--delete")
+    argv.extend(["--", f"{src}/", f"{dst}/"])
+    return argv
+
+
+async def _run_or_raise(argv: list[str], what: str, *, timeout: float = 60) -> None:
+    result = await runner.run(argv, timeout=timeout)
     if not result.ok:
         raise FsOperationError(f"{what} failed: {result.stderr.strip() or result.stdout.strip()}")
 
@@ -71,6 +84,14 @@ async def chown_recursive(user: str, path: str, *, root: str) -> None:
 async def remove_tree(path: str, *, root: str) -> None:
     """Idempotent: removing a tree that does not exist succeeds (rm -rf)."""
     await _run_or_raise(build_rmtree_argv(path, root=root), f"rm -rf {path}")
+
+
+async def mirror_tree(src_dir: str, dst_dir: str, *, root: str, delete: bool = False) -> None:
+    await _run_or_raise(
+        build_rsync_argv(src_dir, dst_dir, root=root, delete=delete),
+        f"rsync {src_dir} -> {dst_dir}",
+        timeout=1800,
+    )
 
 
 def write_file(path: str, content: str, *, root: str) -> None:

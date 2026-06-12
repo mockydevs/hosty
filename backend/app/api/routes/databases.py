@@ -20,7 +20,7 @@ from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import hash_token
 from app.db.models import Database, Site, User
 from app.services import adminer as adminer_service
-from app.services import mariadb
+from app.services import mariadb, quotas
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -107,7 +107,8 @@ async def create_database(
     if site.status != "active":
         raise ConflictError(f"Site is {site.status}; wait until it is active")
 
-    if not is_admin(user) and user.max_databases is not None:
+    limits = await quotas.effective_limits(db, user)
+    if not is_admin(user) and limits.max_databases is not None:
         owned = (
             await db.execute(
                 select(func.count())
@@ -116,8 +117,8 @@ async def create_database(
                 .where(Site.owner_id == user.id)
             )
         ).scalar_one()
-        if owned >= user.max_databases:
-            raise ConflictError(f"Database quota reached ({user.max_databases})")
+        if owned >= limits.max_databases:
+            raise ConflictError(f"Database quota reached ({limits.max_databases})")
 
     name = mariadb.validate_identifier(body.name)
     duplicate = (

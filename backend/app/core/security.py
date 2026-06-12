@@ -30,7 +30,13 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
 
 
-def create_access_token(*, subject: str, secret: str, ttl_seconds: int) -> str:
+def create_access_token(
+    *,
+    subject: str,
+    secret: str,
+    ttl_seconds: int,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
     now = int(time.time())
     payload = {
         "sub": subject,
@@ -38,8 +44,40 @@ def create_access_token(*, subject: str, secret: str, ttl_seconds: int) -> str:
         "exp": now + ttl_seconds,
         "type": "access",
         "jti": uuid.uuid4().hex,
+        **(extra_claims or {}),
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
+TOTP_CHALLENGE_TTL_SECONDS = 5 * 60
+
+
+def create_totp_challenge(*, subject: str, secret: str) -> str:
+    """Short-lived token bridging password success → TOTP verification (11d)."""
+    now = int(time.time())
+    payload = {
+        "sub": subject,
+        "iat": now,
+        "exp": now + TOTP_CHALLENGE_TTL_SECONDS,
+        "type": "totp_challenge",
+        "jti": uuid.uuid4().hex,
+    }
+    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
+def decode_totp_challenge(token: str, *, secret: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["sub", "iat", "exp"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise UnauthorizedError("Invalid or expired 2FA challenge") from exc
+    if payload.get("type") != "totp_challenge":
+        raise UnauthorizedError("Invalid token type")
+    return payload
 
 
 def decode_access_token(token: str, *, secret: str) -> dict[str, Any]:
