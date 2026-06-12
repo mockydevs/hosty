@@ -13,7 +13,7 @@ from app.main import create_app
 
 def main() -> None:
     app = create_app()
-    json.dump(app.openapi(), sys.stdout, indent=2, sort_keys=True)
+    json.dump(app.openapi(), sys.stdout, indent=2)
     sys.stdout.write("\n")
 
 

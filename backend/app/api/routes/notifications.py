@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, HttpUrl
+from fastapi import APIRouter, Depends, Request, status
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.api.deps import get_db, require_admin
 from app.core.clock import utcnow
 from app.core.errors import NotFoundError
 from app.db.models import Notification, PanelSetting
+from app.services import mail
 from app.services.notifications import WEBHOOK_SETTINGS_KEY
 
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -117,3 +118,116 @@ async def delete_webhook(db: AsyncSession = Depends(get_db)) -> None:
         raise NotFoundError("No webhook configured")
     await db.delete(row)
     await db.commit()
+
+
+# --- SMTP config ---------------------------------------------------------------------
+
+
+class SMTPConfigResponse(BaseModel):
+    configured: bool
+    host: str = ""
+    port: int = 587
+    from_email: str = ""
+    from_name: str = "Hosty"
+    security: Literal["starttls", "ssl", "none"] = "starttls"
+    username: str = ""
+    notification_recipients: list[str] = Field(default_factory=list)
+    has_password: bool = False
+
+
+class UpdateSMTPConfigRequest(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(default=587, ge=1, le=65535)
+    from_email: str = Field(max_length=254)
+    from_name: str = Field(default="Hosty", max_length=80)
+    security: Literal["starttls", "ssl", "none"] = "starttls"
+    username: str = Field(default="", max_length=255)
+    password: str | None = Field(default=None, max_length=512)
+    notification_recipients: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("from_email")
+    @classmethod
+    def validate_from_email(cls, value: str) -> str:
+        normalized = mail.normalize_email(value)
+        if normalized is None:
+            raise ValueError("From email is required")
+        return normalized
+
+    @field_validator("notification_recipients")
+    @classmethod
+    def validate_recipients(cls, values: list[str]) -> list[str]:
+        return list(mail.normalize_emails(values))
+
+
+class TestSMTPRequest(BaseModel):
+    to: str = Field(max_length=254)
+
+    @field_validator("to")
+    @classmethod
+    def validate_to(cls, value: str) -> str:
+        normalized = mail.normalize_email(value)
+        if normalized is None:
+            raise ValueError("Recipient email is required")
+        return normalized
+
+
+def _smtp_response(config: mail.SMTPConfig | None) -> SMTPConfigResponse:
+    if config is None:
+        return SMTPConfigResponse(configured=False)
+    return SMTPConfigResponse(
+        configured=True,
+        host=config.host,
+        port=config.port,
+        from_email=config.from_email,
+        from_name=config.from_name,
+        security=config.security,
+        username=config.username,
+        notification_recipients=list(config.notification_recipients),
+        has_password=bool(config.password),
+    )
+
+
+@router.get("/smtp", response_model=SMTPConfigResponse)
+async def get_smtp(request: Request, db: AsyncSession = Depends(get_db)) -> SMTPConfigResponse:
+    return _smtp_response(await mail.load(db, request.app.state.settings))
+
+
+@router.put("/smtp", response_model=SMTPConfigResponse)
+async def set_smtp(
+    request: Request, body: UpdateSMTPConfigRequest, db: AsyncSession = Depends(get_db)
+) -> SMTPConfigResponse:
+    config = await mail.save(
+        db,
+        request.app.state.settings,
+        host=body.host,
+        port=body.port,
+        from_email=body.from_email,
+        from_name=body.from_name,
+        security=body.security,
+        username=body.username,
+        password=body.password,
+        notification_recipients=body.notification_recipients,
+    )
+    return _smtp_response(config)
+
+
+@router.post("/smtp/test", response_model=dict[str, bool])
+async def test_smtp(
+    request: Request, body: TestSMTPRequest, db: AsyncSession = Depends(get_db)
+) -> dict[str, bool]:
+    config = await mail.load(db, request.app.state.settings)
+    if config is None:
+        raise NotFoundError("No SMTP configuration stored")
+    await mail.send(
+        config,
+        to=body.to,
+        subject="Hosty SMTP test",
+        text="This is a test email from Hosty.",
+    )
+    return {"sent": True}
+
+
+@router.delete("/smtp", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_smtp(db: AsyncSession = Depends(get_db)) -> None:
+    if not await mail.clear(db):
+        raise NotFoundError("No SMTP configuration stored")

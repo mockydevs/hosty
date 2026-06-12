@@ -3700,6 +3700,143 @@
         ]
       }
     },
+    "/api/notifications/smtp": {
+      "get": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Get Smtp",
+        "operationId": "get_smtp_api_notifications_smtp_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SMTPConfigResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Set Smtp",
+        "operationId": "set_smtp_api_notifications_smtp_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSMTPConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SMTPConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Delete Smtp",
+        "operationId": "delete_smtp_api_notifications_smtp_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/notifications/smtp/test": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Test Smtp",
+        "operationId": "test_smtp_api_notifications_smtp_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestSMTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Test Smtp Api Notifications Smtp Test Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/usage/me": {
       "get": {
         "tags": [
@@ -4897,6 +5034,30 @@
             "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]*$",
             "title": "Username"
           },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 254
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
           "password": {
             "anyOf": [
               {
@@ -4991,14 +5152,25 @@
             "$ref": "#/components/schemas/UserAdminResponse"
           },
           "temp_password": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Temp Password"
+          },
+          "email_sent": {
+            "type": "boolean",
+            "title": "Email Sent",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "user",
-          "temp_password"
+          "user"
         ],
         "title": "CreatedUserResponse"
       },
@@ -6069,6 +6241,66 @@
         ],
         "title": "S3ConfigResponse"
       },
+      "SMTPConfigResponse": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "host": {
+            "type": "string",
+            "title": "Host",
+            "default": ""
+          },
+          "port": {
+            "type": "integer",
+            "title": "Port",
+            "default": 587
+          },
+          "from_email": {
+            "type": "string",
+            "title": "From Email",
+            "default": ""
+          },
+          "from_name": {
+            "type": "string",
+            "title": "From Name",
+            "default": "Hosty"
+          },
+          "security": {
+            "type": "string",
+            "enum": [
+              "starttls",
+              "ssl",
+              "none"
+            ],
+            "title": "Security",
+            "default": "starttls"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "default": ""
+          },
+          "notification_recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notification Recipients"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured"
+        ],
+        "title": "SMTPConfigResponse"
+      },
       "ScheduleResponse": {
         "properties": {
           "enabled": {
@@ -6474,6 +6706,20 @@
         ],
         "title": "SystemStatsResponse"
       },
+      "TestSMTPRequest": {
+        "properties": {
+          "to": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to"
+        ],
+        "title": "TestSMTPRequest"
+      },
       "TokenResponse": {
         "properties": {
           "access_token": {
@@ -6630,6 +6876,76 @@
           "access_key"
         ],
         "title": "UpdateS3ConfigRequest"
+      },
+      "UpdateSMTPConfigRequest": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Host"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "default": 587
+          },
+          "from_email": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "From Email"
+          },
+          "from_name": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "From Name",
+            "default": "Hosty"
+          },
+          "security": {
+            "type": "string",
+            "enum": [
+              "starttls",
+              "ssl",
+              "none"
+            ],
+            "title": "Security",
+            "default": "starttls"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Username",
+            "default": ""
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "notification_recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Notification Recipients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "host",
+          "from_email"
+        ],
+        "title": "UpdateSMTPConfigRequest"
       },
       "UpdateScheduleRequest": {
         "properties": {
@@ -7008,6 +7324,28 @@
           "username": {
             "type": "string",
             "title": "Username"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "role": {
             "type": "string",

@@ -166,6 +166,7 @@ async def run_backup_site(
                     severity="error",
                     message=f"Backup of {site.domain} failed: {error}",
                     dedupe_key=f"backup_failed:{site.domain}",
+                    settings=settings,
                 )
             except Exception as exc:  # notifying must never break the operation
                 log.warning("backup_failure_notification_failed", error=str(exc))

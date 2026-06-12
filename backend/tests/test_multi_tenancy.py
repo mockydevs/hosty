@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest_asyncio
 
+from app.services import mail as mail_service
 from tests.test_sites_api import FakeSystem
 
 CLIENT_PASSWORD = "client-secret-password-1"
@@ -61,6 +62,8 @@ async def test_users_api_is_admin_only(admin_client, client):
 async def test_create_client_with_generated_temp_password(admin_client):
     created = await create_client_user(admin_client, "alice", max_sites=2, max_databases=3)
     assert created["user"]["role"] == "client"
+    assert created["user"]["email"] is None
+    assert created["user"]["phone"] is None
     assert created["user"]["must_change_password"] is True
     assert created["user"]["max_sites"] == 2
     assert len(created["temp_password"]) >= 12
@@ -73,6 +76,36 @@ async def test_duplicate_username_conflicts(admin_client):
     await create_client_user(admin_client, "alice")
     resp = await admin_client.post("/api/users", json={"username": "alice"})
     assert resp.status_code == 409
+
+
+async def test_create_client_emails_temp_password_when_smtp_configured(admin_client, monkeypatch):
+    sent = []
+
+    async def fake_send(config, *, to, subject, text):
+        sent.append((to, subject, text))
+
+    monkeypatch.setattr(mail_service, "send", fake_send)
+    await admin_client.put(
+        "/api/notifications/smtp",
+        json={
+            "host": "smtp.example.com",
+            "port": 587,
+            "from_email": "panel@example.com",
+            "security": "starttls",
+            "notification_recipients": [],
+        },
+    )
+
+    created = await create_client_user(
+        admin_client, "alice", email="Alice@Example.com", phone=" +1 555 0100 "
+    )
+    assert created["user"]["email"] == "alice@example.com"
+    assert created["user"]["phone"] == "+1 555 0100"
+    assert created["email_sent"] is True
+    assert created["temp_password"] is None
+    assert sent[0][0] == "alice@example.com"
+    assert "temporary password" in sent[0][1].lower()
+    assert "alice" in sent[0][2]
 
 
 async def test_temp_password_forces_change(admin_client, client):

@@ -52,24 +52,28 @@ function TempPasswordDialog({
       <DialogContent>
         <DialogTitle>Temporary password for {created?.user.username}</DialogTitle>
         <DialogDescription>
-          Share it over a secure channel. It is shown only once and must be changed on first login.
+          {created?.email_sent
+            ? `The temporary password was emailed to ${created.user.email}.`
+            : "Share it over a secure channel. It is shown only once and must be changed on first login."}
         </DialogDescription>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-sm">
-            {created?.temp_password}
-          </code>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Copy temporary password"
-            onClick={async () => {
-              if (created) await navigator.clipboard.writeText(created.temp_password);
-              toast.success("Copied to clipboard");
-            }}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-        </div>
+        {created?.temp_password && (
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-sm">
+              {created.temp_password}
+            </code>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Copy temporary password"
+              onClick={async () => {
+                await navigator.clipboard.writeText(created.temp_password ?? "");
+                toast.success("Copied to clipboard");
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <DialogActions>
           <Button onClick={onClose}>Done</Button>
         </DialogActions>
@@ -89,6 +93,8 @@ function CreateUserDialog({
 }) {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [maxSites, setMaxSites] = useState("");
   const [maxDatabases, setMaxDatabases] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +108,8 @@ function CreateUserDialog({
       } = await api.POST("/api/users", {
         body: {
           username: username.trim(),
+          email: email.trim() === "" ? null : email.trim(),
+          phone: phone.trim() === "" ? null : phone.trim(),
           max_sites: maxSites === "" ? null : Number(maxSites),
           max_databases: maxDatabases === "" ? null : Number(maxDatabases),
         },
@@ -114,6 +122,8 @@ function CreateUserDialog({
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       setUsername("");
+      setEmail("");
+      setPhone("");
       setMaxSites("");
       setMaxDatabases("");
       setError(null);
@@ -128,8 +138,8 @@ function CreateUserDialog({
       <DialogContent>
         <DialogTitle>New client account</DialogTitle>
         <DialogDescription>
-          A strong temporary password is generated and shown once; the client must change it on
-          first login. Leave a quota blank for unlimited.
+          A strong temporary password is generated. If SMTP is configured and an email is provided,
+          it is mailed to the client; otherwise it is shown once. Leave a quota blank for unlimited.
         </DialogDescription>
         <form
           className="space-y-4"
@@ -147,6 +157,26 @@ function CreateUserDialog({
               placeholder="acme-client"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Email" htmlFor="new-email">
+            <Input
+              id="new-email"
+              type="email"
+              autoComplete="email"
+              placeholder="client@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Phone" htmlFor="new-phone">
+            <Input
+              id="new-phone"
+              type="tel"
+              autoComplete="tel"
+              placeholder="+1 555 0100"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
@@ -636,13 +666,17 @@ export function UsersPage() {
             {admins.map((u) => (
               <TableRow key={u.id}>
                 <TableCell>
-                  <span className="flex items-center gap-2 font-medium">
-                    <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-                    {u.username}
-                    {u.id === me?.id && (
-                      <span className="text-xs text-muted-foreground">(you)</span>
-                    )}
-                  </span>
+                  <div>
+                    <span className="flex items-center gap-2 font-medium">
+                      <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      {u.username}
+                      {u.id === me?.id && (
+                        <span className="text-xs text-muted-foreground">(you)</span>
+                      )}
+                    </span>
+                    {u.email && <div className="text-xs text-muted-foreground">{u.email}</div>}
+                    {u.phone && <div className="text-xs text-muted-foreground">{u.phone}</div>}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="secondary">admin</Badge>
@@ -658,10 +692,14 @@ export function UsersPage() {
             {clients.map((u) => (
               <TableRow key={u.id}>
                 <TableCell>
-                  <span className="flex items-center gap-2 font-medium">
-                    <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-                    {u.username}
-                  </span>
+                  <div>
+                    <span className="flex items-center gap-2 font-medium">
+                      <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      {u.username}
+                    </span>
+                    {u.email && <div className="text-xs text-muted-foreground">{u.email}</div>}
+                    {u.phone && <div className="text-xs text-muted-foreground">{u.phone}</div>}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span className="flex flex-wrap gap-1">

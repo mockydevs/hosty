@@ -16,6 +16,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")  # admin | client
     # Phase 11a: client accounts get a temp password (forced change), can be

@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ from app.core.clock import utcnow
 from app.core.errors import ConflictError, NotFoundError
 from app.core.security import create_access_token, hash_password
 from app.db.models import AuditLog, Database, Operation, Plan, RefreshToken, Site, User
-from app.services import quotas
+from app.services import mail, quotas
 from app.services import sites as sites_service
 from app.services.sites import DELETE_STEPS, initial_steps
 from app.system import slices
@@ -40,6 +40,8 @@ class UserAdminResponse(BaseModel):
 
     id: int
     username: str
+    email: str | None = None
+    phone: str | None = None
     role: str
     suspended: bool
     must_change_password: bool
@@ -58,17 +60,33 @@ class UserAdminResponse(BaseModel):
 
 class CreateUserRequest(BaseModel):
     username: str = Field(min_length=3, max_length=32, pattern=r"^[a-zA-Z][a-zA-Z0-9_.-]*$")
+    email: str | None = Field(default=None, max_length=254)
+    phone: str | None = Field(default=None, max_length=32)
     # Omit to have the panel generate a strong temporary password.
     password: str | None = Field(default=None, min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
     max_sites: int | None = Field(default=None, ge=0, le=1000)
     max_databases: int | None = Field(default=None, ge=0, le=1000)
     plan_id: int | None = None
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        return mail.normalize_email(value)
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_phone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        phone = value.strip()
+        return phone or None
+
 
 class CreatedUserResponse(BaseModel):
     user: UserAdminResponse
     # Shown exactly once — the panel stores only the Argon2id hash.
-    temp_password: str
+    temp_password: str | None = None
+    email_sent: bool = False
 
 
 class UpdateUserRequest(BaseModel):
@@ -120,6 +138,8 @@ def _response(user: User, counts: tuple[int, int], plan: Plan | None = None) -> 
     return UserAdminResponse(
         id=user.id,
         username=user.username,
+        email=user.email,
+        phone=user.phone,
         role=user.role,
         suspended=user.suspended,
         must_change_password=user.must_change_password,
@@ -188,12 +208,20 @@ async def list_users(db: AsyncSession = Depends(get_db)) -> Any:
 
 
 @router.post("", response_model=CreatedUserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(body: CreateUserRequest, db: AsyncSession = Depends(get_db)) -> Any:
+async def create_user(
+    request: Request, body: CreateUserRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
     existing = (
         await db.execute(select(User).where(User.username == body.username))
     ).scalar_one_or_none()
     if existing is not None:
         raise ConflictError(f"A user named {body.username} already exists")
+    if body.email is not None:
+        existing_email = (
+            await db.execute(select(User).where(User.email == body.email))
+        ).scalar_one_or_none()
+        if existing_email is not None:
+            raise ConflictError(f"A user with email {body.email} already exists")
     plan: Plan | None = None
     if body.plan_id is not None:
         plan = await db.get(Plan, body.plan_id)
@@ -202,6 +230,8 @@ async def create_user(body: CreateUserRequest, db: AsyncSession = Depends(get_db
     temp_password = body.password or secrets.token_urlsafe(15)
     user = User(
         username=body.username,
+        email=body.email,
+        phone=body.phone,
         password_hash=hash_password(temp_password),
         role="client",
         must_change_password=True,
@@ -212,7 +242,14 @@ async def create_user(body: CreateUserRequest, db: AsyncSession = Depends(get_db
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return CreatedUserResponse(user=_response(user, (0, 0), plan), temp_password=temp_password)
+    email_sent = await mail.send_user_temp_password(
+        db, request.app.state.settings, user=user, temp_password=temp_password
+    )
+    return CreatedUserResponse(
+        user=_response(user, (0, 0), plan),
+        temp_password=None if email_sent else temp_password,
+        email_sent=email_sent,
+    )
 
 
 @router.patch("/{user_id}", response_model=UserAdminResponse)
@@ -282,7 +319,10 @@ async def update_user(
 
 @router.post("/{user_id}/reset-password", response_model=CreatedUserResponse)
 async def reset_user_password(
-    user_id: int, db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin)
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> Any:
     """Issue a new temporary password (shown once); all sessions are revoked."""
     user = await _get_user(db, user_id)
@@ -298,7 +338,14 @@ async def reset_user_password(
     await db.commit()
     await db.refresh(user)
     counts = await _counts(db, [user.id])
-    return CreatedUserResponse(user=_response(user, counts[user.id]), temp_password=temp_password)
+    email_sent = await mail.send_user_temp_password(
+        db, request.app.state.settings, user=user, temp_password=temp_password
+    )
+    return CreatedUserResponse(
+        user=_response(user, counts[user.id]),
+        temp_password=None if email_sent else temp_password,
+        email_sent=email_sent,
+    )
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_202_ACCEPTED)

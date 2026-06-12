@@ -3,6 +3,7 @@ import { FormField } from "@/components/form-field";
 import { NotificationWebhookCard } from "@/components/notification-webhook-card";
 import { PanelDomainCard } from "@/components/panel-domain-card";
 import { SessionsCard, TwoFactorCard } from "@/components/security-cards";
+import { SMTPSettingsCard } from "@/components/smtp-settings-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -142,6 +143,7 @@ export function SettingsPage() {
         {isAdmin && (
           <div className="space-y-6">
             <PanelDomainCard />
+            <SMTPSettingsCard />
             <NotificationWebhookCard />
           </div>
         )}

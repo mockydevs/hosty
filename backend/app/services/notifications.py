@@ -17,7 +17,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import utcnow
+from app.core.config import Settings
 from app.db.models import Notification, PanelSetting
+from app.services import mail
 
 log = structlog.get_logger("hosty.notifications")
 
@@ -34,6 +36,7 @@ async def emit(
     message: str,
     severity: str = "warning",
     dedupe_key: str | None = None,
+    settings: Settings | None = None,
 ) -> Notification | None:
     """Create a notification; returns None when deduplicated."""
     if severity not in SEVERITIES:
@@ -55,6 +58,8 @@ async def emit(
     await db.refresh(row)
     log.info("notification_emitted", kind=kind, severity=severity, message=message)
     await _webhook(db, row)
+    if settings is not None:
+        await mail.send_notification_email(db, settings, row)
     return row
 
 

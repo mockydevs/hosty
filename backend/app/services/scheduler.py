@@ -144,6 +144,7 @@ async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
                     severity="error",
                     message=f"Managed service {unit} is {status.active_state}",
                     dedupe_key=key,
+                    settings=settings,
                 )
             else:
                 await notifications.resolve(db, key)
@@ -160,6 +161,7 @@ async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
                     severity="error",
                     message=f"Server disk is {percent:.0f}% full",
                     dedupe_key="disk_full:/",
+                    settings=settings,
                 )
             else:
                 await notifications.resolve(db, "disk_full:/")
@@ -188,6 +190,7 @@ async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
                         + (f" — {probe.detail}" if probe.detail else "")
                     ),
                     dedupe_key=key,
+                    settings=settings,
                 )
             else:
                 await notifications.resolve(db, key)
@@ -210,6 +213,7 @@ async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
                             f"{used_mb}MB used of {client.max_disk_mb}MB"
                         ),
                         dedupe_key=key,
+                        settings=settings,
                     )
                 else:
                     await notifications.resolve(db, key)

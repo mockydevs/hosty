@@ -1278,6 +1278,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications/smtp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Smtp */
+        get: operations["get_smtp_api_notifications_smtp_get"];
+        /** Set Smtp */
+        put: operations["set_smtp_api_notifications_smtp_put"];
+        post?: never;
+        /** Delete Smtp */
+        delete: operations["delete_smtp_api_notifications_smtp_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/smtp/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Smtp */
+        post: operations["test_smtp_api_notifications_smtp_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage/me": {
         parameters: {
             query?: never;
@@ -1664,6 +1700,10 @@ export interface components {
         CreateUserRequest: {
             /** Username */
             username: string;
+            /** Email */
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
             /** Password */
             password?: string | null;
             /** Max Sites */
@@ -1689,7 +1729,12 @@ export interface components {
         CreatedUserResponse: {
             user: components["schemas"]["UserAdminResponse"];
             /** Temp Password */
-            temp_password: string;
+            temp_password?: string | null;
+            /**
+             * Email Sent
+             * @default false
+             */
+            email_sent: boolean;
         };
         /** CredentialsResponse */
         CredentialsResponse: {
@@ -2071,6 +2116,49 @@ export interface components {
             /** Has Secret */
             has_secret: boolean;
         };
+        /** SMTPConfigResponse */
+        SMTPConfigResponse: {
+            /** Configured */
+            configured: boolean;
+            /**
+             * Host
+             * @default
+             */
+            host: string;
+            /**
+             * Port
+             * @default 587
+             */
+            port: number;
+            /**
+             * From Email
+             * @default
+             */
+            from_email: string;
+            /**
+             * From Name
+             * @default Hosty
+             */
+            from_name: string;
+            /**
+             * Security
+             * @default starttls
+             * @enum {string}
+             */
+            security: "starttls" | "ssl" | "none";
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /** Notification Recipients */
+            notification_recipients?: string[];
+            /**
+             * Has Password
+             * @default false
+             */
+            has_password: boolean;
+        };
         /** ScheduleResponse */
         ScheduleResponse: {
             /** Enabled */
@@ -2222,6 +2310,11 @@ export interface components {
             /** Uptime Seconds */
             uptime_seconds: number;
         };
+        /** TestSMTPRequest */
+        TestSMTPRequest: {
+            /** To */
+            to: string;
+        };
         /** TokenResponse */
         TokenResponse: {
             /** Access Token */
@@ -2283,6 +2376,38 @@ export interface components {
              * @default hosty
              */
             prefix: string;
+        };
+        /** UpdateSMTPConfigRequest */
+        UpdateSMTPConfigRequest: {
+            /** Host */
+            host: string;
+            /**
+             * Port
+             * @default 587
+             */
+            port: number;
+            /** From Email */
+            from_email: string;
+            /**
+             * From Name
+             * @default Hosty
+             */
+            from_name: string;
+            /**
+             * Security
+             * @default starttls
+             * @enum {string}
+             */
+            security: "starttls" | "ssl" | "none";
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /** Password */
+            password?: string | null;
+            /** Notification Recipients */
+            notification_recipients?: string[];
         };
         /** UpdateScheduleRequest */
         UpdateScheduleRequest: {
@@ -2436,6 +2561,10 @@ export interface components {
             id: number;
             /** Username */
             username: string;
+            /** Email */
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
             /** Role */
             role: string;
             /** Suspended */
@@ -5046,6 +5175,112 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_smtp_api_notifications_smtp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SMTPConfigResponse"];
+                };
+            };
+        };
+    };
+    set_smtp_api_notifications_smtp_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSMTPConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SMTPConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_smtp_api_notifications_smtp_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_smtp_api_notifications_smtp_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestSMTPRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

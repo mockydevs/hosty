@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.db.models import Notification
+from app.services import mail as mail_service
 from app.services import notifications
 from tests.test_multi_tenancy import make_active_client
 
@@ -121,3 +122,82 @@ async def test_webhook_config_roundtrip(admin_client):
 async def test_webhook_rejects_garbage_url(admin_client):
     resp = await admin_client.put("/api/notifications/webhook", json={"url": "not a url"})
     assert resp.status_code == 422
+
+
+# --- SMTP config ----------------------------------------------------------------------
+
+
+async def test_smtp_config_roundtrip_and_test_email(admin_client, monkeypatch):
+    sent = []
+
+    async def fake_send(config, *, to, subject, text):
+        sent.append((config.host, to, subject, text))
+
+    monkeypatch.setattr(mail_service, "send", fake_send)
+
+    assert (await admin_client.get("/api/notifications/smtp")).json()["configured"] is False
+
+    resp = await admin_client.put(
+        "/api/notifications/smtp",
+        json={
+            "host": "smtp.example.com",
+            "port": 587,
+            "from_email": "Panel@Example.com",
+            "from_name": "Hosty Panel",
+            "security": "starttls",
+            "username": "smtp-user",
+            "password": "smtp-secret",
+            "notification_recipients": ["Admin@Example.com", "admin@example.com"],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["configured"] is True
+    assert body["from_email"] == "panel@example.com"
+    assert body["has_password"] is True
+    assert body["notification_recipients"] == ["admin@example.com"]
+
+    resp = await admin_client.post("/api/notifications/smtp/test", json={"to": "ops@example.com"})
+    assert resp.status_code == 200
+    assert sent == [
+        (
+            "smtp.example.com",
+            "ops@example.com",
+            "Hosty SMTP test",
+            "This is a test email from Hosty.",
+        )
+    ]
+
+    assert (await admin_client.delete("/api/notifications/smtp")).status_code == 204
+    assert (await admin_client.delete("/api/notifications/smtp")).status_code == 404
+
+
+async def test_notification_emit_can_email_recipients(admin_client, app, monkeypatch):
+    sent = []
+
+    async def fake_send(config, *, to, subject, text):
+        sent.append((to, subject, text))
+
+    monkeypatch.setattr(mail_service, "send", fake_send)
+    await admin_client.put(
+        "/api/notifications/smtp",
+        json={
+            "host": "smtp.example.com",
+            "port": 587,
+            "from_email": "panel@example.com",
+            "security": "starttls",
+            "notification_recipients": ["ops@example.com"],
+        },
+    )
+    async with app.state.sessionmaker() as db:
+        await notifications.emit(
+            db,
+            kind="disk_full",
+            severity="error",
+            message="Server disk is 95% full",
+            settings=app.state.settings,
+        )
+
+    assert len(sent) == 1
+    assert sent[0][0] == "ops@example.com"
+    assert "disk_full" in sent[0][1]
