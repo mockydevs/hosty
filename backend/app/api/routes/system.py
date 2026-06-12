@@ -1,4 +1,4 @@
-"""System service management (admin-only). Units are restricted to a managed allowlist."""
+"""System service management. Units are restricted to a managed allowlist."""
 
 from __future__ import annotations
 
@@ -8,14 +8,17 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_admin
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.services import panel_config, stats
 from app.services import sites as sites_service
 from app.services.sites import DomainValidationError, validate_domain
 from app.system import systemd
 
+# Reads (stats, service status) are visible to every authenticated user;
+# mutations (service control, panel domain) are admin-only (Phase 11a).
 router = APIRouter(dependencies=[Depends(get_current_user)])
+_admin = Depends(require_admin)
 
 
 class PanelDomainError(AppError):
@@ -68,7 +71,11 @@ async def service_status(request: Request, unit: str) -> systemd.ServiceStatus:
     return await systemd.status(unit)
 
 
-@router.post("/services/{unit}/actions/{action}", response_model=ServiceStatusResponse)
+@router.post(
+    "/services/{unit}/actions/{action}",
+    response_model=ServiceStatusResponse,
+    dependencies=[_admin],
+)
 async def service_action(request: Request, unit: str, action: str) -> systemd.ServiceStatus:
     _check_unit(request, unit)
     if action not in systemd.CONTROL_ACTIONS:
@@ -105,7 +112,7 @@ async def get_panel_domain(request: Request) -> PanelDomainResponse:
     return _panel_response(request.app.state.settings)
 
 
-@router.put("/panel-domain", response_model=PanelDomainResponse)
+@router.put("/panel-domain", response_model=PanelDomainResponse, dependencies=[_admin])
 async def set_panel_domain(
     request: Request, body: SetPanelDomainRequest, db: AsyncSession = Depends(get_db)
 ) -> PanelDomainResponse:
@@ -152,7 +159,7 @@ async def set_panel_domain(
     return _panel_response(settings)
 
 
-@router.delete("/panel-domain", response_model=PanelDomainResponse)
+@router.delete("/panel-domain", response_model=PanelDomainResponse, dependencies=[_admin])
 async def clear_panel_domain(request: Request, db: AsyncSession = Depends(get_db)) -> Any:
     """Back to IP-only access: remove the vhost and allow cookies over HTTP."""
     settings = request.app.state.settings

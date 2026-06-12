@@ -23,17 +23,20 @@ const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/sites", label: "Sites", icon: Globe },
   { to: "/databases", label: "Databases", icon: Database },
-  { to: "/dns", label: "DNS", icon: Network },
+  { to: "/dns", label: "DNS", icon: Network, adminOnly: true },
   { to: "/backups", label: "Backups", icon: Archive },
   { to: "/audit", label: "Audit log", icon: ScrollText },
-  { to: "/users", label: "Users", icon: UsersRound },
+  { to: "/users", label: "Users", icon: UsersRound, adminOnly: true },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const items = NAV.filter((item) => !("adminOnly" in item && item.adminOnly) || isAdmin);
   return (
     <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Main">
-      {NAV.map(({ to, label, icon: Icon, ...rest }) => (
+      {items.map(({ to, label, icon: Icon, ...rest }) => (
         <NavLink
           key={to}
           to={to}

@@ -445,6 +445,11 @@
       },
       "CreateSiteRequest": {
         "properties": {
+          "create_dns_zone": {
+            "default": false,
+            "title": "Create Dns Zone",
+            "type": "boolean"
+          },
           "domain": {
             "maxLength": 253,
             "minLength": 1,
@@ -469,6 +474,61 @@
         "title": "CreateSiteRequest",
         "type": "object"
       },
+      "CreateUserRequest": {
+        "properties": {
+          "max_databases": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Databases"
+          },
+          "max_sites": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sites"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "username": {
+            "maxLength": 32,
+            "minLength": 3,
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]*$",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "CreateUserRequest",
+        "type": "object"
+      },
       "CreateZoneRequest": {
         "properties": {
           "name": {
@@ -487,6 +547,23 @@
           "name"
         ],
         "title": "CreateZoneRequest",
+        "type": "object"
+      },
+      "CreatedUserResponse": {
+        "properties": {
+          "temp_password": {
+            "title": "Temp Password",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserAdminResponse"
+          }
+        },
+        "required": [
+          "user",
+          "temp_password"
+        ],
+        "title": "CreatedUserResponse",
         "type": "object"
       },
       "CredentialsResponse": {
@@ -644,6 +721,28 @@
           "confirm_domain"
         ],
         "title": "DeleteSiteRequest",
+        "type": "object"
+      },
+      "DeleteUserRequest": {
+        "properties": {
+          "confirm_username": {
+            "title": "Confirm Username",
+            "type": "string"
+          },
+          "mode": {
+            "default": "reassign",
+            "enum": [
+              "reassign",
+              "delete_sites"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_username"
+        ],
+        "title": "DeleteUserRequest",
         "type": "object"
       },
       "DeleteZoneRequest": {
@@ -861,6 +960,78 @@
           "status"
         ],
         "title": "OperationStep",
+        "type": "object"
+      },
+      "OperationSummaryResponse": {
+        "description": "Listing entry (Week 21 dashboard notifications): no step detail.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "site_id",
+          "domain",
+          "status",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "OperationSummaryResponse",
         "type": "object"
       },
       "PanelDomainResponse": {
@@ -1455,6 +1626,59 @@
         "title": "UpdateScheduleRequest",
         "type": "object"
       },
+      "UpdateUserRequest": {
+        "properties": {
+          "clear_max_databases": {
+            "default": false,
+            "title": "Clear Max Databases",
+            "type": "boolean"
+          },
+          "clear_max_sites": {
+            "default": false,
+            "title": "Clear Max Sites",
+            "type": "boolean"
+          },
+          "max_databases": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Databases"
+          },
+          "max_sites": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sites"
+          },
+          "suspended": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspended"
+          }
+        },
+        "title": "UpdateUserRequest",
+        "type": "object"
+      },
       "UpsertCloudflareRecordRequest": {
         "properties": {
           "content": {
@@ -1548,11 +1772,88 @@
         "title": "UpsertRecordRequest",
         "type": "object"
       },
+      "UserAdminResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "database_count": {
+            "title": "Database Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "max_databases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Databases"
+          },
+          "max_sites": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sites"
+          },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "site_count": {
+            "title": "Site Count",
+            "type": "integer"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "role",
+          "suspended",
+          "must_change_password",
+          "max_sites",
+          "max_databases",
+          "site_count",
+          "database_count",
+          "created_at"
+        ],
+        "title": "UserAdminResponse",
+        "type": "object"
+      },
       "UserResponse": {
         "properties": {
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
           },
           "role": {
             "title": "Role",
@@ -1566,7 +1867,8 @@
         "required": [
           "id",
           "username",
-          "role"
+          "role",
+          "must_change_password"
         ],
         "title": "UserResponse",
         "type": "object"
@@ -2296,7 +2598,7 @@
     },
     "/api/databases/adminer-session": {
       "post": {
-        "description": "Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.",
+        "description": "Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.\n\nAdmin-only: Adminer's login form takes any server credentials, so the\nproxy must not be reachable by client tenants (Phase 11a).",
         "operationId": "adminer_session_api_databases_adminer_session_post",
         "responses": {
           "200": {
@@ -3260,6 +3562,108 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/operations": {
+      "get": {
+        "description": "Recent operations, newest first. Used by the dashboard to surface\nbackup failures (kind=backup_site&status=failed&since_hours=168).",
+        "operationId": "list_operations_api_operations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Kind",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since_hours",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2160,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Hours"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OperationSummaryResponse"
+                  },
+                  "title": "Response List Operations Api Operations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Operations",
+        "tags": [
+          "operations"
         ]
       }
     },
@@ -4533,6 +4937,243 @@
         "summary": "System Stats",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "list_users_api_users_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserAdminResponse"
+                  },
+                  "title": "Response List Users Api Users Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Users",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "operationId": "create_user_api_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}": {
+      "delete": {
+        "description": "Delete a client account.\n\nmode=reassign: their sites (and everything attached) move to the acting\nadmin. mode=delete_sites: a delete pipeline is started for every site\n(async, same as deleting a site by hand); ownership moves to the acting\nadmin while the teardown runs so records never dangle.",
+        "operationId": "delete_user_api_users__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete User Api Users  User Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete User",
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "operationId": "update_user_api_users__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}/reset-password": {
+      "post": {
+        "description": "Issue a new temporary password (shown once); all sessions are revoked.",
+        "operationId": "reset_user_password_api_users__user_id__reset_password_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset User Password",
+        "tags": [
+          "users"
         ]
       }
     }

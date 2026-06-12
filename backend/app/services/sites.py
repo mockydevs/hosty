@@ -22,6 +22,7 @@ from app.core.clock import utcnow
 from app.core.config import Settings
 from app.db.models import Database, Operation, Site
 from app.services import caddy, filebrowser, mariadb, php_fpm
+from app.services import dns as dns_service
 from app.services.caddy import CaddyClient, SiteSpec
 from app.system import fs, users
 
@@ -133,6 +134,17 @@ CREATE_STEPS = [
     ("finalize", "Activate site"),
 ]
 
+DNS_ZONE_STEP = ("dns_zone", "Create DNS zone")
+
+
+def create_steps(*, with_dns_zone: bool = False) -> list[tuple[str, str]]:
+    """CREATE_STEPS, optionally with the Week 17 auto-create-zone step."""
+    steps = list(CREATE_STEPS)
+    if with_dns_zone:
+        steps.insert(-1, DNS_ZONE_STEP)  # after filebrowser, before finalize
+    return steps
+
+
 DELETE_STEPS = [
     ("caddy", "Remove vhost from Caddy"),
     ("filebrowser", "Remove file manager access"),
@@ -219,6 +231,8 @@ async def run_create_site(
     site_id: int,
     operation_id: int,
     caddy_client: CaddyClient | None = None,
+    create_dns_zone: bool = False,
+    pdns_client: dns_service.PowerDNSClient | None = None,
 ) -> None:
     """Background entrypoint: provision `site_id`, tracking `operation_id`."""
     async with sessionmaker() as db:
@@ -288,23 +302,45 @@ async def run_create_site(
         async def undo_filebrowser() -> None:
             await filebrowser.remove_site_user(site.site_user, settings)
 
+        # Week 17: optionally auto-create the PowerDNS zone (SOA/NS + A -> server).
+        zone_created = False
+
+        def _pdns() -> dns_service.PowerDNSClient:
+            return pdns_client or dns_service.PowerDNSClient(
+                settings.pdns_api_url, settings.pdns_api_key, settings.pdns_server_id
+            )
+
+        async def do_dns_zone() -> None:
+            nonlocal zone_created
+            zone_created = await dns_service.create_zone_with_defaults(
+                _pdns(),
+                site.domain,
+                nameservers=settings.dns_nameservers,
+                public_ip=settings.public_ip,
+                ttl=settings.dns_default_ttl,
+            )
+
+        async def undo_dns_zone() -> None:
+            if zone_created:  # never delete a zone that existed before us
+                await _pdns().delete_zone(dns_service.canonical(site.domain))
+
         async def do_finalize() -> None:
             site.status = "active"
             op.site_id = site.id
             await db.commit()
 
-        ok, error = await _run_pipeline(
-            db,
-            op,
-            [
-                _Step("linux_user", do_user, undo_user),
-                _Step("doc_root", do_docroot, undo_docroot),
-                _Step("php_pool", do_pool, undo_pool),
-                _Step("caddy", do_caddy, undo_caddy),
-                _Step("filebrowser", do_filebrowser, undo_filebrowser),
-                _Step("finalize", do_finalize, None),
-            ],
-        )
+        steps = [
+            _Step("linux_user", do_user, undo_user),
+            _Step("doc_root", do_docroot, undo_docroot),
+            _Step("php_pool", do_pool, undo_pool),
+            _Step("caddy", do_caddy, undo_caddy),
+            _Step("filebrowser", do_filebrowser, undo_filebrowser),
+        ]
+        if create_dns_zone:
+            steps.append(_Step("dns_zone", do_dns_zone, undo_dns_zone))
+        steps.append(_Step("finalize", do_finalize, None))
+
+        ok, error = await _run_pipeline(db, op, steps)
         if ok:
             await _finish(db, op, status="succeeded")
         else:

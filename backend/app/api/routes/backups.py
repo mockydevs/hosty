@@ -8,11 +8,12 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin, require_admin
 from app.core.errors import ConflictError, NotFoundError
-from app.db.models import Operation, Site
+from app.db.models import Operation, Site, User
 from app.services import backup, backup_ops, s3_config
 from app.services.sites import initial_steps
 
@@ -106,16 +107,22 @@ async def _s3_available(request: Request, db: AsyncSession) -> bool:
     return await s3_config.load(db, _settings(request)) is not None
 
 
-async def _get_site(db: AsyncSession, site_id: int) -> Site:
-    site = await db.get(Site, site_id)
-    if site is None:
-        raise NotFoundError("Site not found")
-    return site
-
-
 @router.get("", response_model=list[BackupResponse])
-async def list_all_backups(request: Request) -> Any:
-    return backup.list_backups(_settings(request).backups_root)
+async def list_all_backups(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    backups = backup.list_backups(_settings(request).backups_root)
+    if is_admin(user):
+        return backups
+    owned = {
+        domain
+        for (domain,) in (
+            await db.execute(select(Site.domain).where(Site.owner_id == user.id))
+        ).all()
+    }
+    return [b for b in backups if b.domain in owned]
 
 
 @router.get("/meta", response_model=BackupsMetaResponse)
@@ -127,7 +134,9 @@ async def backups_meta(request: Request, db: AsyncSession = Depends(get_db)) -> 
     )
 
 
-# --- S3 target configuration (UI-managed) --------------------------------------------
+# --- S3 target configuration (UI-managed, admin-only) --------------------------------
+
+s3_admin = Depends(require_admin)
 
 
 def _config_response(config: s3_config.S3Config | None) -> S3ConfigResponse:
@@ -154,7 +163,7 @@ def _config_response(config: s3_config.S3Config | None) -> S3ConfigResponse:
     )
 
 
-@router.get("/s3-config", response_model=S3ConfigResponse)
+@router.get("/s3-config", response_model=S3ConfigResponse, dependencies=[s3_admin])
 async def get_s3_config(request: Request, db: AsyncSession = Depends(get_db)) -> S3ConfigResponse:
     """Current S3 target. The secret access key is never returned."""
     return _config_response(await s3_config.load(db, _settings(request)))
@@ -172,7 +181,7 @@ async def _verify_s3(request: Request, config: s3_config.S3Config) -> None:
     await client.list_keys(f"{config.prefix.strip('/')}/")
 
 
-@router.put("/s3-config", response_model=S3ConfigResponse)
+@router.put("/s3-config", response_model=S3ConfigResponse, dependencies=[s3_admin])
 async def update_s3_config(
     request: Request, body: UpdateS3ConfigRequest, db: AsyncSession = Depends(get_db)
 ) -> S3ConfigResponse:
@@ -207,7 +216,7 @@ async def update_s3_config(
     return _config_response(saved)
 
 
-@router.post("/s3-config/test", response_model=BackupsMetaResponse)
+@router.post("/s3-config/test", response_model=BackupsMetaResponse, dependencies=[s3_admin])
 async def test_s3_config(
     request: Request, db: AsyncSession = Depends(get_db)
 ) -> BackupsMetaResponse:
@@ -220,7 +229,7 @@ async def test_s3_config(
     return BackupsMetaResponse(s3_enabled=True, scheduler_enabled=settings.backup_scheduler_enabled)
 
 
-@router.delete("/s3-config", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/s3-config", status_code=status.HTTP_204_NO_CONTENT, dependencies=[s3_admin])
 async def delete_s3_config(db: AsyncSession = Depends(get_db)) -> None:
     if not await s3_config.clear(db):
         raise NotFoundError("No S3 configuration stored")
@@ -231,9 +240,12 @@ async def delete_s3_config(db: AsyncSession = Depends(get_db)) -> None:
 
 @site_router.get("/{site_id}/backups", response_model=list[BackupResponse])
 async def list_site_backups(
-    request: Request, site_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    site_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Any:
-    site = await _get_site(db, site_id)
+    site = await fetch_owned_site(db, user, site_id)
     return backup.list_backups(_settings(request).backups_root, site.domain)
 
 
@@ -247,8 +259,9 @@ async def start_backup(
     site_id: int,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> OperationStartedResponse:
-    site = await _get_site(db, site_id)
+    site = await fetch_owned_site(db, user, site_id)
     if site.status != "active":
         raise ConflictError(f"Site is {site.status}; only active sites can be backed up")
     with_s3 = await _s3_available(request, db) and site.backup_s3_mirror
@@ -291,8 +304,9 @@ async def start_restore(
     body: RestoreRequest,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> OperationStartedResponse:
-    site = await _get_site(db, site_id)
+    site = await fetch_owned_site(db, user, site_id)
     backup.validate_backup_id(backup_id)
     if body.confirm_domain.strip().lower() != site.domain:
         raise ConflictError("Confirmation does not match the site domain")
@@ -334,8 +348,9 @@ async def delete_backup(
     backup_id: str,
     body: DeleteBackupRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> None:
-    site = await _get_site(db, site_id)
+    site = await fetch_owned_site(db, user, site_id)
     backup.validate_backup_id(backup_id)
     if body.confirm_id.strip() != backup_id:
         raise ConflictError("Confirmation does not match the backup id")
@@ -359,17 +374,24 @@ def _schedule_response(site: Site) -> ScheduleResponse:
 
 
 @site_router.get("/{site_id}/backup-schedule", response_model=ScheduleResponse)
-async def get_schedule(site_id: int, db: AsyncSession = Depends(get_db)) -> ScheduleResponse:
-    return _schedule_response(await _get_site(db, site_id))
+async def get_schedule(
+    site_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ScheduleResponse:
+    return _schedule_response(await fetch_owned_site(db, user, site_id))
 
 
 @site_router.put("/{site_id}/backup-schedule", response_model=ScheduleResponse)
 async def update_schedule(
-    site_id: int, body: UpdateScheduleRequest, db: AsyncSession = Depends(get_db)
+    site_id: int,
+    body: UpdateScheduleRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> ScheduleResponse:
     if not body.include_files and not body.include_databases:
         raise ConflictError("A backup must include files, databases, or both")
-    site = await _get_site(db, site_id)
+    site = await fetch_owned_site(db, user, site_id)
     site.backup_enabled = body.enabled
     site.backup_frequency = body.frequency
     site.backup_hour = body.hour

@@ -236,6 +236,9 @@ export interface paths {
         /**
          * Adminer Session
          * @description Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.
+         *
+         *     Admin-only: Adminer's login form takes any server credentials, so the
+         *     proxy must not be reachable by client tenants (Phase 11a).
          */
         post: operations["adminer_session_api_databases_adminer_session_post"];
         delete?: never;
@@ -514,6 +517,27 @@ export interface paths {
         };
         /** Health */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Operations
+         * @description Recent operations, newest first. Used by the dashboard to surface
+         *     backup failures (kind=backup_site&status=failed&since_hours=168).
+         */
+        get: operations["list_operations_api_operations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -894,6 +918,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_api_users_get"];
+        put?: never;
+        /** Create User */
+        post: operations["create_user_api_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete User
+         * @description Delete a client account.
+         *
+         *     mode=reassign: their sites (and everything attached) move to the acting
+         *     admin. mode=delete_sites: a delete pipeline is started for every site
+         *     (async, same as deleting a site by hand); ownership moves to the acting
+         *     admin while the teardown runs so records never dangle.
+         */
+        delete: operations["delete_user_api_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update User */
+        patch: operations["update_user_api_users__user_id__patch"];
+        trace?: never;
+    };
+    "/api/users/{user_id}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset User Password
+         * @description Issue a new temporary password (shown once); all sessions are revoked.
+         */
+        post: operations["reset_user_password_api_users__user_id__reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1045,10 +1133,26 @@ export interface components {
         };
         /** CreateSiteRequest */
         CreateSiteRequest: {
+            /**
+             * Create Dns Zone
+             * @default false
+             */
+            create_dns_zone: boolean;
             /** Domain */
             domain: string;
             /** Php Version */
             php_version?: string | null;
+        };
+        /** CreateUserRequest */
+        CreateUserRequest: {
+            /** Max Databases */
+            max_databases?: number | null;
+            /** Max Sites */
+            max_sites?: number | null;
+            /** Password */
+            password?: string | null;
+            /** Username */
+            username: string;
         };
         /** CreateZoneRequest */
         CreateZoneRequest: {
@@ -1059,6 +1163,12 @@ export interface components {
              * @default false
              */
             point_to_server: boolean;
+        };
+        /** CreatedUserResponse */
+        CreatedUserResponse: {
+            /** Temp Password */
+            temp_password: string;
+            user: components["schemas"]["UserAdminResponse"];
         };
         /** CredentialsResponse */
         CredentialsResponse: {
@@ -1121,6 +1231,17 @@ export interface components {
         DeleteSiteRequest: {
             /** Confirm Domain */
             confirm_domain: string;
+        };
+        /** DeleteUserRequest */
+        DeleteUserRequest: {
+            /** Confirm Username */
+            confirm_username: string;
+            /**
+             * Mode
+             * @default reassign
+             * @enum {string}
+             */
+            mode: "reassign" | "delete_sites";
         };
         /** DeleteZoneRequest */
         DeleteZoneRequest: {
@@ -1196,6 +1317,31 @@ export interface components {
             label: string;
             /** Name */
             name: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * OperationSummaryResponse
+         * @description Listing entry (Week 21 dashboard notifications): no step detail.
+         */
+        OperationSummaryResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Domain */
+            domain: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Site Id */
+            site_id: number | null;
             /** Status */
             status: string;
         };
@@ -1438,6 +1584,25 @@ export interface components {
              */
             s3_mirror: boolean;
         };
+        /** UpdateUserRequest */
+        UpdateUserRequest: {
+            /**
+             * Clear Max Databases
+             * @default false
+             */
+            clear_max_databases: boolean;
+            /**
+             * Clear Max Sites
+             * @default false
+             */
+            clear_max_sites: boolean;
+            /** Max Databases */
+            max_databases?: number | null;
+            /** Max Sites */
+            max_sites?: number | null;
+            /** Suspended */
+            suspended?: boolean | null;
+        };
         /** UpsertCloudflareRecordRequest */
         UpsertCloudflareRecordRequest: {
             /** Content */
@@ -1473,10 +1638,38 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** UserAdminResponse */
+        UserAdminResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Database Count */
+            database_count: number;
+            /** Id */
+            id: number;
+            /** Max Databases */
+            max_databases: number | null;
+            /** Max Sites */
+            max_sites: number | null;
+            /** Must Change Password */
+            must_change_password: boolean;
+            /** Role */
+            role: string;
+            /** Site Count */
+            site_count: number;
+            /** Suspended */
+            suspended: boolean;
+            /** Username */
+            username: string;
+        };
         /** UserResponse */
         UserResponse: {
             /** Id */
             id: number;
+            /** Must Change Password */
+            must_change_password: boolean;
             /** Role */
             role: string;
             /** Username */
@@ -2587,6 +2780,40 @@ export interface operations {
             };
         };
     };
+    list_operations_api_operations_get: {
+        parameters: {
+            query?: {
+                kind?: string[];
+                status?: string | null;
+                since_hours?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationSummaryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_operation_api_operations__operation_id__get: {
         parameters: {
             query?: never;
@@ -3403,6 +3630,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatsResponse"];
+                };
+            };
+        };
+    };
+    list_users_api_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminResponse"][];
+                };
+            };
+        };
+    };
+    create_user_api_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_api_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_api_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_user_password_api_users__user_id__reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

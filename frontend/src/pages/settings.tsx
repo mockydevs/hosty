@@ -2,15 +2,17 @@ import { CloudflareSettingsCard } from "@/components/cloudflare-settings-card";
 import { FormField } from "@/components/form-field";
 import { PanelDomainCard } from "@/components/panel-domain-card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
 import { ApiError, useAuth } from "@/lib/auth";
 /**
- * Settings: server-level configuration (panel domain/HTTPS, Cloudflare).
- * ChangePasswordForm is defined here but rendered on the Users page.
+ * Settings: account (change password) for everyone; server-level configuration
+ * (panel domain/HTTPS, Cloudflare) is admin-only (Phase 11a).
  */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -94,7 +96,9 @@ export function ChangePasswordForm({ onChanged }: { onChanged?: () => void }) {
 }
 
 export function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const isAdmin = user?.role === "admin";
 
   return (
     <div className="space-y-6">
@@ -107,9 +111,29 @@ export function SettingsPage() {
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
-        <PanelDomainCard />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Change password</CardTitle>
+            <CardDescription>
+              Changing your password signs you out everywhere, including this session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChangePasswordForm
+              onChanged={async () => {
+                await logout();
+                navigate("/login");
+              }}
+            />
+          </CardContent>
+        </Card>
 
-        <CloudflareSettingsCard />
+        {isAdmin && (
+          <div className="space-y-6">
+            <PanelDomainCard />
+            <CloudflareSettingsCard />
+          </div>
+        )}
       </div>
     </div>
   );

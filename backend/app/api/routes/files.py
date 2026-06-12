@@ -11,10 +11,10 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import fetch_owned_site, get_current_user, get_db
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.tickets import issue_token, token_scope
-from app.db.models import Site
+from app.db.models import User
 from app.services.filebrowser import AUTH_HEADER
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -33,14 +33,15 @@ class FilesSessionResponse(BaseModel):
 
 @router.post("/{site_id}/files-session", response_model=FilesSessionResponse)
 async def files_session(
-    request: Request, site_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    site_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> FilesSessionResponse:
     settings = request.app.state.settings
     if not settings.filebrowser_enabled:
         raise NotFoundError("File manager is disabled")
-    site = await db.get(Site, site_id)
-    if site is None:
-        raise NotFoundError("Site not found")
+    site = await fetch_owned_site(db, user, site_id)
     if site.status != "active":
         raise ConflictError(f"Site is {site.status}; wait until it is active")
     ticket = issue_token(

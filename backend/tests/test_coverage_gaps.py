@@ -204,23 +204,28 @@ async def test_wp_actions_maintenance_and_salts(monkeypatch):
     assert ["config", "shuffle-salts"] in calls
 
 
-async def test_wp_login_link_installs_package_once(monkeypatch):
+async def test_wp_login_link_uses_eval_reset_key(monkeypatch):
     calls: list[list[str]] = []
 
     async def fake_run_wp(user, root, args, timeout=120.0, check=True):
         calls.append(list(args))
-        if args[:2] == ["help", "login"]:
-            return _result(ok=False)  # package missing on first probe
-        if args[:2] == ["user", "list"]:
-            return _result(stdout="admin\n")
-        if args[:2] == ["login", "create"]:
-            return _result(stdout="https://a.example/wp-login.php?magic=token\n")
+        if args[:1] == ["eval"]:
+            return _result(stdout="https://a.example/wp-login.php?action=rp&key=k&login=admin\n")
         return _result()
 
     monkeypatch.setattr(wordpress, "run_wp", fake_run_wp)
     url = await wordpress.run_action(FakeSite(), "login_link")
-    assert url == "https://a.example/wp-login.php?magic=token"
-    assert ["package", "install", "aaemnnosttv/wp-cli-login-command"] in calls
+    assert url == "https://a.example/wp-login.php?action=rp&key=k&login=admin"
+    assert calls and calls[0][0] == "eval"
+
+
+async def test_wp_login_link_empty_url_raises(monkeypatch):
+    async def fake_run_wp(user, root, args, timeout=120.0, check=True):
+        return _result(stdout="")
+
+    monkeypatch.setattr(wordpress, "run_wp", fake_run_wp)
+    with pytest.raises(wordpress.WordPressError):
+        await wordpress.run_action(FakeSite(), "login_link")
 
 
 async def test_wp_status_tolerates_garbage_outputs(monkeypatch):

@@ -17,7 +17,13 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")  # admin | client
+    # Phase 11a: client accounts get a temp password (forced change), can be
+    # suspended, and may carry per-resource quotas (None = unlimited).
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    suspended: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    max_sites: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     password_changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
@@ -39,6 +45,11 @@ class Site(Base):
     __tablename__ = "sites"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Phase 11a: every site belongs to a user; clients only ever see their own.
+    # Nullable for migration friendliness (legacy rows are backfilled to admin).
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     domain: Mapped[str] = mapped_column(String(253), unique=True, nullable=False)
     site_user: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     doc_root: Mapped[str] = mapped_column(String(255), nullable=False)

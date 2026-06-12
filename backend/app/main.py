@@ -14,7 +14,18 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
-from app.api.routes import audit, auth, backups, databases, dns, files, health, sites, system
+from app.api.routes import (
+    audit,
+    auth,
+    backups,
+    databases,
+    dns,
+    files,
+    health,
+    sites,
+    system,
+    users,
+)
 from app.core import logging as app_logging
 from app.core.config import Settings, get_settings
 from app.core.errors import register_error_handlers
@@ -77,11 +88,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         if settings.adminer_enabled:
             try:
-                from app.services.adminer import ADMINER_POOL_NAME, render_adminer_pool
-                from app.system import systemd
                 from pathlib import Path
 
-                pool_dir = Path(settings.php_pool_dir_template.format(version=settings.default_php_version))
+                from app.services.adminer import ADMINER_POOL_NAME, render_adminer_pool
+                from app.system import systemd
+
+                pool_dir = Path(
+                    settings.php_pool_dir_template.format(version=settings.default_php_version)
+                )
                 pool_path = pool_dir / f"{ADMINER_POOL_NAME}.conf"
                 pool_content = render_adminer_pool(settings)
 
@@ -90,7 +104,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     pool_path.write_text(pool_content, encoding="utf-8")
                     await systemd.control("reload", f"php{settings.default_php_version}-fpm")
             except Exception as exc:
-                structlog.get_logger("hosty.startup").warning("adminer_pool_setup_failed", error=str(exc))
+                structlog.get_logger("hosty.startup").warning(
+                    "adminer_pool_setup_failed", error=str(exc)
+                )
         scheduler_task: asyncio.Task | None = None
         if settings.backup_scheduler_enabled and settings.env != "test":
             from app.services import scheduler
@@ -133,6 +149,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(audit.router, prefix="/api/audit", tags=["audit"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+    app.include_router(users.router, prefix="/api/users", tags=["users"])
     app.include_router(system.router, prefix="/api/system", tags=["system"])
     app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
     app.include_router(sites.operations_router, prefix="/api/operations", tags=["operations"])

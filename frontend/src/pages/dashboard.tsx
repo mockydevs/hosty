@@ -15,11 +15,13 @@ import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { formatBytes, formatUptime } from "@/lib/format";
 /**
- * Dashboard: live resource gauges, managed service status, and recent audited activity.
+ * Dashboard: live resource gauges, managed service status, and backup failure
+ * notifications (Week 21) for the last 7 days.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cpu, HardDrive, MemoryStick, RotateCcw } from "lucide-react";
+import { AlertTriangle, Cpu, HardDrive, MemoryStick, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 type ServiceStatus = components["schemas"]["ServiceStatusResponse"];
@@ -59,6 +61,77 @@ function Gauge({
         <p className="text-xs text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
+  );
+}
+
+/** Week 21: failed backup/restore runs from the last 7 days, with a link to the site. */
+function BackupFailures() {
+  const failures = useQuery({
+    queryKey: ["operations", "backup-failures"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/operations", {
+        params: {
+          query: {
+            kind: ["backup_site", "restore_site"],
+            status: "failed",
+            since_hours: 168,
+            limit: 10,
+          },
+        },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load operations"));
+      return data;
+    },
+    refetchInterval: 60_000,
+  });
+
+  if (!failures.data || failures.data.length === 0) return null;
+
+  return (
+    <section aria-label="Backup failures">
+      <Card className="border-destructive/40">
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <AlertTriangle className="h-4 w-4 text-destructive" aria-hidden />
+            Backup failures (last 7 days)
+          </CardTitle>
+          <Link to="/backups" className="text-xs text-muted-foreground hover:underline">
+            All backups
+          </Link>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {failures.data.map((op) => (
+            <div
+              key={op.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {op.site_id ? (
+                    <Link to={`/sites/${op.site_id}`} className="hover:underline">
+                      {op.domain}
+                    </Link>
+                  ) : (
+                    op.domain
+                  )}
+                  <Badge variant="outline" className="ml-2">
+                    {op.kind === "restore_site" ? "restore" : "backup"}
+                  </Badge>
+                </p>
+                {op.error && (
+                  <p className="truncate text-xs text-muted-foreground" title={op.error}>
+                    {op.error}
+                  </p>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {new Date(op.created_at).toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
@@ -184,6 +257,8 @@ export function DashboardPage() {
           </p>
         )}
       </div>
+
+      <BackupFailures />
 
       <section aria-label="Resource usage" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.isPending ? (

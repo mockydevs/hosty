@@ -8,12 +8,15 @@ from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_admin
 from app.core.config import Settings
 from app.core.errors import ConflictError, NotFoundError
 from app.services import cloudflare, cloudflare_config, dns
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+# Admin-only for Phase 11a: zones have no per-tenant ownership yet (PowerDNS is
+# external), so exposing them to clients would leak/mutate other tenants' DNS.
+# Phase 11b adds a zone-ownership table and per-client Cloudflare tokens.
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 TEMPLATES = ("point-to-server", "external-mail", "google-workspace")
 
@@ -101,11 +104,7 @@ def _zone_detail(raw: dict[str, Any]) -> ZoneDetailResponse:
 
 
 def _point_to_server_patches(zone: str, settings: Settings) -> list[dict[str, Any]]:
-    ttl = settings.dns_default_ttl
-    return [
-        dns.replace_patch(dns.make_rrset(zone, "@", "A", ttl, [settings.public_ip])),
-        dns.replace_patch(dns.make_rrset(zone, "www", "CNAME", ttl, [zone])),
-    ]
+    return dns.default_zone_patches(zone, settings.public_ip, settings.dns_default_ttl)
 
 
 @router.get("/meta", response_model=DnsMetaResponse)
@@ -348,9 +347,7 @@ async def list_cloudflare_zones(request: Request, db: AsyncSession = Depends(get
     ]
 
 
-@router.get(
-    "/cloudflare/zones/{cf_zone_id}/records", response_model=list[CloudflareRecordResponse]
-)
+@router.get("/cloudflare/zones/{cf_zone_id}/records", response_model=list[CloudflareRecordResponse])
 async def list_cloudflare_records(
     request: Request, cf_zone_id: str, db: AsyncSession = Depends(get_db)
 ) -> Any:

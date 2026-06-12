@@ -1,62 +1,568 @@
+import { FormField } from "@/components/form-field";
+import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { api, apiErrorMessage } from "@/lib/api/client";
+import type { components } from "@/lib/api/schema";
 import { useAuth } from "@/lib/auth";
-import { ChangePasswordForm } from "@/pages/settings";
 /**
- * Users: your account today; client-account management lands here in Phase 11
- * (create clients, suspend, quotas — see TASKS.md).
+ * Users (Phase 11a, admin-only): create client accounts with a temporary
+ * password (shown once), suspend/unsuspend, set quotas, reset passwords and
+ * delete accounts (reassign their sites or tear them down).
  */
-import { UserRound } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, KeyRound, Plus, Trash2, UserRound } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
+type AdminUser = components["schemas"]["UserAdminResponse"];
+type CreatedUser = components["schemas"]["CreatedUserResponse"];
+
+function quotaLabel(value: number | null | undefined): string {
+  return value === null || value === undefined ? "Unlimited" : String(value);
+}
+
+function TempPasswordDialog({
+  created,
+  onClose,
+}: {
+  created: CreatedUser | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={created !== null} onClose={onClose}>
+      <DialogContent>
+        <DialogTitle>Temporary password for {created?.user.username}</DialogTitle>
+        <DialogDescription>
+          Share it over a secure channel. It is shown only once and must be changed on first
+          login.
+        </DialogDescription>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-sm">
+            {created?.temp_password}
+          </code>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Copy temporary password"
+            onClick={async () => {
+              if (created) await navigator.clipboard.writeText(created.temp_password);
+              toast.success("Copied to clipboard");
+            }}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+        </div>
+        <DialogActions>
+          <Button onClick={onClose}>Done</Button>
+        </DialogActions>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateUserDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (created: CreatedUser) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [username, setUsername] = useState("");
+  const [maxSites, setMaxSites] = useState("");
+  const [maxDatabases, setMaxDatabases] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const { data, error: apiError, response } = await api.POST("/api/users", {
+        body: {
+          username: username.trim(),
+          max_sites: maxSites === "" ? null : Number(maxSites),
+          max_databases: maxDatabases === "" ? null : Number(maxDatabases),
+        },
+      });
+      if (apiError || !data) {
+        throw new Error(apiErrorMessage(apiError, `Create failed (${response.status})`));
+      }
+      return data;
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      setUsername("");
+      setMaxSites("");
+      setMaxDatabases("");
+      setError(null);
+      onClose();
+      onCreated(data);
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogContent>
+        <DialogTitle>New client account</DialogTitle>
+        <DialogDescription>
+          A strong temporary password is generated and shown once; the client must change it on
+          first login. Leave a quota blank for unlimited.
+        </DialogDescription>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate();
+          }}
+          noValidate
+        >
+          <FormField label="Username" htmlFor="new-username" error={error ?? undefined}>
+            <Input
+              id="new-username"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="acme-client"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Max sites" htmlFor="new-max-sites">
+              <Input
+                id="new-max-sites"
+                type="number"
+                min={0}
+                placeholder="Unlimited"
+                value={maxSites}
+                onChange={(e) => setMaxSites(e.target.value)}
+              />
+            </FormField>
+            <FormField label="Max databases" htmlFor="new-max-databases">
+              <Input
+                id="new-max-databases"
+                type="number"
+                min={0}
+                placeholder="Unlimited"
+                value={maxDatabases}
+                onChange={(e) => setMaxDatabases(e.target.value)}
+              />
+            </FormField>
+          </div>
+          <DialogActions>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={username.trim().length < 3} loading={create.isPending}>
+              Create account
+            </Button>
+          </DialogActions>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditQuotasDialog({
+  user,
+  onClose,
+}: {
+  user: AdminUser | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [maxSites, setMaxSites] = useState(user?.max_sites?.toString() ?? "");
+  const [maxDatabases, setMaxDatabases] = useState(user?.max_databases?.toString() ?? "");
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!user) return;
+      const { error, response } = await api.PATCH("/api/users/{user_id}", {
+        params: { path: { user_id: user.id } },
+        body: {
+          max_sites: maxSites === "" ? null : Number(maxSites),
+          max_databases: maxDatabases === "" ? null : Number(maxDatabases),
+          clear_max_sites: maxSites === "",
+          clear_max_databases: maxDatabases === "",
+        },
+      });
+      if (error) throw new Error(apiErrorMessage(error, `Update failed (${response.status})`));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast.success("Quotas updated");
+      onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  return (
+    <Dialog open={user !== null} onClose={onClose}>
+      <DialogContent>
+        <DialogTitle>Quotas for {user?.username}</DialogTitle>
+        <DialogDescription>Leave a field blank for unlimited.</DialogDescription>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Max sites" htmlFor="edit-max-sites">
+            <Input
+              id="edit-max-sites"
+              type="number"
+              min={0}
+              placeholder="Unlimited"
+              value={maxSites}
+              onChange={(e) => setMaxSites(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Max databases" htmlFor="edit-max-databases">
+            <Input
+              id="edit-max-databases"
+              type="number"
+              min={0}
+              placeholder="Unlimited"
+              value={maxDatabases}
+              onChange={(e) => setMaxDatabases(e.target.value)}
+            />
+          </FormField>
+        </div>
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={save.isPending} onClick={() => save.mutate()}>
+            Save quotas
+          </Button>
+        </DialogActions>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteUserDialog({
+  user,
+  onClose,
+}: {
+  user: AdminUser | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [confirm, setConfirm] = useState("");
+  const [mode, setMode] = useState<"reassign" | "delete_sites">("reassign");
+
+  const del = useMutation({
+    mutationFn: async () => {
+      if (!user) return;
+      const { error, response } = await api.DELETE("/api/users/{user_id}", {
+        params: { path: { user_id: user.id } },
+        body: { mode, confirm_username: confirm },
+      });
+      if (error) throw new Error(apiErrorMessage(error, `Delete failed (${response.status})`));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      await queryClient.invalidateQueries({ queryKey: ["sites"] });
+      toast.success(
+        mode === "reassign"
+          ? `${user?.username} deleted — their sites now belong to you`
+          : `${user?.username} deleted — site teardown started`,
+      );
+      setConfirm("");
+      onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  return (
+    <Dialog open={user !== null} onClose={onClose}>
+      <DialogContent>
+        <DialogTitle>Delete {user?.username}?</DialogTitle>
+        <DialogDescription>
+          This account owns {user?.site_count ?? 0} site(s) and {user?.database_count ?? 0}{" "}
+          database(s). Choose what happens to them.
+        </DialogDescription>
+        <div className="space-y-2 text-sm">
+          <label className="flex items-start gap-2" htmlFor="delete-mode-reassign">
+            <input
+              id="delete-mode-reassign"
+              type="radio"
+              name="delete-mode"
+              className="mt-1"
+              checked={mode === "reassign"}
+              onChange={() => setMode("reassign")}
+            />
+            <span>
+              <span className="font-medium">Reassign to me</span>
+              <span className="block text-muted-foreground">
+                Sites keep running; you become their owner.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2" htmlFor="delete-mode-teardown">
+            <input
+              id="delete-mode-teardown"
+              type="radio"
+              name="delete-mode"
+              className="mt-1"
+              checked={mode === "delete_sites"}
+              onChange={() => setMode("delete_sites")}
+            />
+            <span>
+              <span className="font-medium">Delete their sites too</span>
+              <span className="block text-muted-foreground">
+                Files, databases, vhosts and Linux users are removed permanently.
+              </span>
+            </span>
+          </label>
+        </div>
+        <FormField label="Type the username to confirm" htmlFor="delete-confirm">
+          <Input
+            id="delete-confirm"
+            placeholder={user?.username}
+            autoComplete="off"
+            spellCheck={false}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </FormField>
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={confirm.trim() !== user?.username}
+            loading={del.isPending}
+            onClick={() => del.mutate()}
+          >
+            Delete account
+          </Button>
+        </DialogActions>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UserRowActions({
+  user,
+  onEditQuotas,
+  onDelete,
+  onTempPassword,
+}: {
+  user: AdminUser;
+  onEditQuotas: () => void;
+  onDelete: () => void;
+  onTempPassword: (created: CreatedUser) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  const suspend = useMutation({
+    mutationFn: async () => {
+      const { error, response } = await api.PATCH("/api/users/{user_id}", {
+        params: { path: { user_id: user.id } },
+        body: { suspended: !user.suspended },
+      });
+      if (error) throw new Error(apiErrorMessage(error, `Update failed (${response.status})`));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast.success(user.suspended ? `${user.username} unsuspended` : `${user.username} suspended`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const resetPassword = useMutation({
+    mutationFn: async () => {
+      const { data, error, response } = await api.POST("/api/users/{user_id}/reset-password", {
+        params: { path: { user_id: user.id } },
+      });
+      if (error || !data) {
+        throw new Error(apiErrorMessage(error, `Reset failed (${response.status})`));
+      }
+      return data;
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      onTempPassword(data);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button
+        variant="outline"
+        size="sm"
+        loading={suspend.isPending}
+        onClick={() => suspend.mutate()}
+      >
+        {user.suspended ? "Unsuspend" : "Suspend"}
+      </Button>
+      <Button variant="outline" size="sm" onClick={onEditQuotas}>
+        Quotas
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Reset password for ${user.username}`}
+        loading={resetPassword.isPending}
+        onClick={() => resetPassword.mutate()}
+      >
+        <KeyRound className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Delete ${user.username}`}
+        onClick={onDelete}
+      >
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
+  );
+}
 
 export function UsersPage() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user: me } = useAuth();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [created, setCreated] = useState<CreatedUser | null>(null);
+  const [quotaUser, setQuotaUser] = useState<AdminUser | null>(null);
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+
+  const users = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/users");
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load users"));
+      return data;
+    },
+  });
+
+  const clients = (users.data ?? []).filter((u) => u.role !== "admin");
+  const admins = (users.data ?? []).filter((u) => u.role === "admin");
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden /> Your account
-            </CardTitle>
-            <CardDescription>The account you are currently signed in with.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">Username</span>
-              <span className="font-medium">{user?.username}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">Role</span>
-              <Badge variant="secondary">{user?.role}</Badge>
-            </div>
-            <p className="pt-2 text-xs text-muted-foreground">
-              Managing client accounts (create, suspend, quotas) arrives with multi-tenancy.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Change password</CardTitle>
-            <CardDescription>
-              Changing your password signs you out everywhere, including this session.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChangePasswordForm
-              onChanged={async () => {
-                await logout();
-                navigate("/login");
-              }}
-            />
-          </CardContent>
-        </Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+          <p className="text-sm text-muted-foreground">
+            Client accounts see and manage only their own sites, databases and backups.
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4" aria-hidden /> New client
+        </Button>
       </div>
+
+      {users.isPending ? (
+        <LoadingState label="Loading users…" />
+      ) : users.isError ? (
+        <ErrorState message={users.error.message} onRetry={() => users.refetch()} />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="hidden sm:table-cell">Sites</TableHead>
+              <TableHead className="hidden sm:table-cell">Databases</TableHead>
+              <TableHead className="hidden md:table-cell">Quotas (sites / DBs)</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {admins.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell>
+                  <span className="flex items-center gap-2 font-medium">
+                    <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    {u.username}
+                    {u.id === me?.id && (
+                      <span className="text-xs text-muted-foreground">(you)</span>
+                    )}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">admin</Badge>
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">{u.site_count}</TableCell>
+                <TableCell className="hidden sm:table-cell">{u.database_count}</TableCell>
+                <TableCell className="hidden text-muted-foreground md:table-cell">—</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground">
+                  Manage in Settings
+                </TableCell>
+              </TableRow>
+            ))}
+            {clients.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell>
+                  <span className="flex items-center gap-2 font-medium">
+                    <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    {u.username}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="flex flex-wrap gap-1">
+                    {u.suspended ? (
+                      <Badge variant="destructive">Suspended</Badge>
+                    ) : (
+                      <Badge variant="success">Active</Badge>
+                    )}
+                    {u.must_change_password && <Badge variant="outline">Temp password</Badge>}
+                  </span>
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">{u.site_count}</TableCell>
+                <TableCell className="hidden sm:table-cell">{u.database_count}</TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {quotaLabel(u.max_sites)} / {quotaLabel(u.max_databases)}
+                </TableCell>
+                <TableCell>
+                  <UserRowActions
+                    user={u}
+                    onEditQuotas={() => setQuotaUser(u)}
+                    onDelete={() => setDeleteUser(u)}
+                    onTempPassword={setCreated}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+            {clients.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6}>
+                  <EmptyState
+                    title="No client accounts yet"
+                    description="Create one to give a customer their own scoped panel access."
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
+
+      <CreateUserDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={setCreated}
+      />
+      <TempPasswordDialog created={created} onClose={() => setCreated(null)} />
+      {quotaUser && <EditQuotasDialog user={quotaUser} onClose={() => setQuotaUser(null)} />}
+      {deleteUser && <DeleteUserDialog user={deleteUser} onClose={() => setDeleteUser(null)} />}
     </div>
   );
 }

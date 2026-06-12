@@ -1,5 +1,6 @@
 import { LoadingState } from "@/components/states";
 import { ThemeProvider, useTheme } from "@/components/theme";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AppLayout } from "@/layout/app-layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
 /**
@@ -12,7 +13,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, Suspense, lazy, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 
 const LoginPage = lazy(() => import("@/pages/login").then((m) => ({ default: m.LoginPage })));
@@ -40,14 +41,55 @@ const SettingsPage = lazy(() =>
 );
 const AuditPage = lazy(() => import("@/pages/audit").then((m) => ({ default: m.AuditPage })));
 const UsersPage = lazy(() => import("@/pages/users").then((m) => ({ default: m.UsersPage })));
+const ChangePasswordForm = lazy(() =>
+  import("@/pages/settings").then((m) => ({ default: m.ChangePasswordForm })),
+);
+
+/** Phase 11a: accounts with a temporary password must change it before
+ * anything else — the API blocks every other endpoint with 403 anyway. */
+function ForcedPasswordChange() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Set a new password</CardTitle>
+          <CardDescription>
+            Hi {user?.username} — your account uses a temporary password. Choose your own to
+            continue; you will then log in again with it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={<LoadingState />}>
+            <ChangePasswordForm
+              onChanged={async () => {
+                await logout();
+                navigate("/login");
+              }}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
   if (status === "loading") return <LoadingState full />;
   if (status === "anonymous") {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
+  if (user?.must_change_password) return <ForcedPasswordChange />;
+  return <>{children}</>;
+}
+
+/** Admin-only routes render a redirect for clients (the API enforces 403 anyway). */
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (user && user.role !== "admin") return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -82,13 +124,48 @@ export function App() {
                 <Route path="/sites" element={<SitesPage />} />
                 <Route path="/sites/:siteId" element={<SiteDetailPage />} />
                 <Route path="/databases" element={<DatabasesPage />} />
-                <Route path="/dns" element={<DnsPage />} />
-                <Route path="/dns/cloudflare" element={<CloudflareZonesPage />} />
-                <Route path="/dns/cloudflare/:cfZoneId" element={<CloudflareZonePage />} />
-                <Route path="/dns/:zoneId" element={<DnsZonePage />} />
+                <Route
+                  path="/dns"
+                  element={
+                    <RequireAdmin>
+                      <DnsPage />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="/dns/cloudflare"
+                  element={
+                    <RequireAdmin>
+                      <CloudflareZonesPage />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="/dns/cloudflare/:cfZoneId"
+                  element={
+                    <RequireAdmin>
+                      <CloudflareZonePage />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="/dns/:zoneId"
+                  element={
+                    <RequireAdmin>
+                      <DnsZonePage />
+                    </RequireAdmin>
+                  }
+                />
                 <Route path="/backups" element={<BackupsPage />} />
                 <Route path="/audit" element={<AuditPage />} />
-                <Route path="/users" element={<UsersPage />} />
+                <Route
+                  path="/users"
+                  element={
+                    <RequireAdmin>
+                      <UsersPage />
+                    </RequireAdmin>
+                  }
+                />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

@@ -14,7 +14,11 @@ async def test_setup_required_then_completed(client):
     )
     assert resp.status_code == 201
     assert resp.json()["username"] == TEST_USER
-    assert "password" not in resp.text
+    # Neither the password value nor any hash may leak (the boolean
+    # `must_change_password` field is fine).
+    assert TEST_PASSWORD not in resp.text
+    assert "password_hash" not in resp.text
+    assert "$argon2" not in resp.text
     assert (await client.get("/api/auth/setup")).json() == {"setup_required": False}
 
 

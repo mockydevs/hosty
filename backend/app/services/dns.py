@@ -8,6 +8,7 @@ the PowerDNS REST API.
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 import re
 from dataclasses import dataclass
@@ -230,6 +231,47 @@ def default_nameservers(zone: str, configured: list[str]) -> list[str]:
         return [canonical(ns) for ns in configured]
     zone_c = canonical(zone)
     return [f"ns1.{zone_c}", f"ns2.{zone_c}"]
+
+
+def default_zone_patches(zone: str, public_ip: str, ttl: int) -> list[dict[str, Any]]:
+    """Sane-default records for a fresh zone: @ A -> server IP, www -> @."""
+    return [
+        replace_patch(make_rrset(zone, "@", "A", ttl, [public_ip])),
+        replace_patch(make_rrset(zone, "www", "CNAME", ttl, [zone])),
+    ]
+
+
+async def create_zone_with_defaults(
+    client: PowerDNSClient,
+    domain: str,
+    *,
+    nameservers: list[str],
+    public_ip: str,
+    ttl: int,
+) -> bool:
+    """Create `domain` as a zone with SOA/NS defaults (Week 17 auto-create).
+
+    When the server's public IP is configured, also point the apex (and www)
+    at this server. Returns True if the zone was created, False if it already
+    existed (idempotent skip — existing records are never touched).
+    """
+    zone = validate_zone_name(domain)
+    try:
+        created = await client.create_zone(zone, default_nameservers(zone, nameservers))
+    except ConflictError:
+        log.info("dns_zone_exists_skip", zone=zone)
+        return False
+    if public_ip:
+        zone_id = str(created.get("id", zone))
+        try:
+            await client.patch_rrsets(zone_id, default_zone_patches(zone, public_ip, ttl))
+        except Exception:
+            # Never leave a half-initialized zone behind.
+            with contextlib.suppress(Exception):
+                await client.delete_zone(zone_id)
+            raise
+    log.info("dns_zone_autocreated", zone=zone, pointed_at_server=bool(public_ip))
+    return True
 
 
 # --- PowerDNS REST client ---------------------------------------------------------

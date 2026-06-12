@@ -61,6 +61,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     role: str
+    must_change_password: bool
 
 
 class SetupStatusResponse(BaseModel):
@@ -138,6 +139,8 @@ async def login(
     ).scalar_one_or_none()
     if user is None or not verify_password(user.password_hash, body.password):
         raise UnauthorizedError("Invalid username or password")
+    if user.suspended:
+        raise UnauthorizedError("Account suspended — contact your administrator")
     limiter.reset(key)
     return await _issue_tokens(request, response, db, user)
 
@@ -169,6 +172,8 @@ async def refresh(
     user = await db.get(User, row.user_id)
     if user is None:
         raise UnauthorizedError("User no longer exists")
+    if user.suspended:
+        raise UnauthorizedError("Account suspended — contact your administrator")
     row.revoked_at = now
     return await _issue_tokens(request, response, db, user)
 
@@ -195,6 +200,7 @@ async def change_password(
     if not verify_password(user.password_hash, body.current_password):
         raise UnauthorizedError("Current password is incorrect")
     user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False  # temp password fulfilled (Phase 11a)
     user.password_changed_at = utcnow()
     db.add(user)
     # Revoke every active session: old access tokens die via iat check.

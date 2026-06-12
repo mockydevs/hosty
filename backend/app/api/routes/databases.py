@@ -12,13 +12,13 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin, require_admin
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import hash_token
-from app.db.models import Database, Site
+from app.db.models import Database, Site, User
 from app.services import adminer as adminer_service
 from app.services import mariadb
 
@@ -61,18 +61,24 @@ class AdminerSessionResponse(BaseModel):
 
 
 @router.get("", response_model=list[DatabaseListEntry])
-async def list_databases(db: AsyncSession = Depends(get_db)) -> Any:
-    rows = (
-        await db.execute(
-            select(Database, Site.domain)
-            .join(Site, Site.id == Database.site_id)
-            .order_by(Database.name)
-        )
-    ).all()
-    try:
-        physical = set(await mariadb.list_physical_databases())
-    except mariadb.MariaDBError:
-        physical = None  # server unreachable: skip orphan detection
+async def list_databases(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> Any:
+    query = (
+        select(Database, Site.domain)
+        .join(Site, Site.id == Database.site_id)
+        .order_by(Database.name)
+    )
+    if not is_admin(user):
+        query = query.where(Site.owner_id == user.id)
+    rows = (await db.execute(query)).all()
+
+    physical: set[str] | None = None
+    if is_admin(user):  # orphan/missing detection is server-wide -> admin only
+        try:
+            physical = set(await mariadb.list_physical_databases())
+        except mariadb.MariaDBError:
+            physical = None  # server unreachable: skip orphan detection
 
     entries = [
         DatabaseListEntry(
@@ -92,13 +98,26 @@ async def list_databases(db: AsyncSession = Depends(get_db)) -> Any:
     "/sites/{site_id}", response_model=CredentialsResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_database(
-    site_id: int, body: CreateDatabaseRequest, db: AsyncSession = Depends(get_db)
+    site_id: int,
+    body: CreateDatabaseRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Any:
-    site = await db.get(Site, site_id)
-    if site is None:
-        raise NotFoundError("Site not found")
+    site = await fetch_owned_site(db, user, site_id)
     if site.status != "active":
         raise ConflictError(f"Site is {site.status}; wait until it is active")
+
+    if not is_admin(user) and user.max_databases is not None:
+        owned = (
+            await db.execute(
+                select(func.count())
+                .select_from(Database)
+                .join(Site, Site.id == Database.site_id)
+                .where(Site.owner_id == user.id)
+            )
+        ).scalar_one()
+        if owned >= user.max_databases:
+            raise ConflictError(f"Database quota reached ({user.max_databases})")
 
     name = mariadb.validate_identifier(body.name)
     duplicate = (
@@ -124,13 +143,26 @@ async def create_database(
     return CredentialsResponse(database=DatabaseResponse.model_validate(row), password=password)
 
 
-@router.delete("/{database_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_database(
-    database_id: int, body: DeleteDatabaseRequest, db: AsyncSession = Depends(get_db)
-) -> Response:
+async def _fetch_owned_database(db: AsyncSession, user: User, database_id: int) -> Database:
+    """404 (not 403) for other tenants' databases — existence never leaks."""
     row = await db.get(Database, database_id)
     if row is None:
         raise NotFoundError("Database not found")
+    if not is_admin(user):
+        site = await db.get(Site, row.site_id)
+        if site is None or site.owner_id != user.id:
+            raise NotFoundError("Database not found")
+    return row
+
+
+@router.delete("/{database_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_database(
+    database_id: int,
+    body: DeleteDatabaseRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    row = await _fetch_owned_database(db, user, database_id)
     if body.confirm_name.strip() != row.name:
         raise ConflictError("Confirmation does not match the database name")
     await mariadb.drop_database(row.name, row.db_user)
@@ -139,7 +171,11 @@ async def delete_database(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete("/orphans/{name}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/orphans/{name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_admin)],
+)
 async def delete_orphan_database(
     name: str, body: DeleteDatabaseRequest, db: AsyncSession = Depends(get_db)
 ) -> Response:
@@ -156,9 +192,7 @@ async def delete_orphan_database(
     if name in mariadb.SYSTEM_SCHEMAS:
         raise ConflictError("System schemas cannot be deleted")
 
-    managed = (
-        await db.execute(select(Database).where(Database.name == name))
-    ).scalar_one_or_none()
+    managed = (await db.execute(select(Database).where(Database.name == name))).scalar_one_or_none()
     if managed is not None:
         raise ConflictError(
             "This database is managed by the panel — delete it from its own entry instead"
@@ -173,10 +207,12 @@ async def delete_orphan_database(
 
 
 @router.post("/{database_id}/reset-password", response_model=CredentialsResponse)
-async def reset_password(database_id: int, db: AsyncSession = Depends(get_db)) -> Any:
-    row = await db.get(Database, database_id)
-    if row is None:
-        raise NotFoundError("Database not found")
+async def reset_password(
+    database_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    row = await _fetch_owned_database(db, user, database_id)
     password = mariadb.generate_password()
     await mariadb.reset_password(row.db_user, password)
     row.password_hash = hash_token(password)
@@ -185,9 +221,16 @@ async def reset_password(database_id: int, db: AsyncSession = Depends(get_db)) -
     return CredentialsResponse(database=DatabaseResponse.model_validate(row), password=password)
 
 
-@router.post("/adminer-session", response_model=AdminerSessionResponse)
+@router.post(
+    "/adminer-session",
+    response_model=AdminerSessionResponse,
+    dependencies=[Depends(require_admin)],
+)
 async def adminer_session(request: Request) -> Any:
-    """Mint a short-lived ticket; the /adminer proxy swaps it for a cookie."""
+    """Mint a short-lived ticket; the /adminer proxy swaps it for a cookie.
+
+    Admin-only: Adminer's login form takes any server credentials, so the
+    proxy must not be reachable by client tenants (Phase 11a)."""
     settings = request.app.state.settings
     ticket = adminer_service.issue_token(
         secret=settings.secret_key,
