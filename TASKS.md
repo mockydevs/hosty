@@ -287,6 +287,33 @@ Built from scratch. Hobby pace: **~10 hrs/week → ~26 weeks**.
 
 ---
 
+# Phase 11 — Multi-tenancy & User Management (post-1.0)
+
+Goal: a developer/admin installs Hosty once and hosts multiple client users.
+Each client sees and manages ONLY their own services; the admin sees everything.
+
+### Phase 11a: Ownership & scoping (core)
+- [ ] Migration: `sites.owner_id` (FK users, existing sites → admin); `users.must_change_password`, `users.suspended`, `users.max_sites`, `users.max_databases`
+- [ ] AuthZ layer: `require_owner_or_admin` dependency; every sites/databases/backups/operations route scoped to owner (admin unrestricted); 404 (not 403) for other tenants' resources to avoid existence leaks
+- [ ] Users API (admin-only): create client with temp password (forced change on first login), suspend/unsuspend, delete (choose: delete sites too, or reassign to admin), set quotas
+- [ ] Quota enforcement on site/database create (max_sites, max_databases per client)
+- [ ] Audit log scoping: clients see only their own entries; admin sees all
+- [ ] Users page in sidebar (admin-only): list, create, suspend, quotas, delete
+- [ ] Client UX: dashboard/site list/databases/backups filtered to own resources; Settings shows only change-password for clients (panel domain + Cloudflare token remain admin-only)
+
+### Phase 11b: DNS & Cloudflare for clients
+- [ ] Zone ownership table (PowerDNS zones are external — map zone name → owner); clients create and manage their own zones + records, admin sees all
+- [ ] Per-client Cloudflare tokens: stored encrypted per user (`panel_settings` key `cloudflare:{user_id}` or a `user_settings` table); the Settings Cloudflare card works for every user against their own account
+- [ ] Cloudflare zones/records/push endpoints resolve the CURRENT USER's token — each client sees only their own Cloudflare account's zones (natural isolation); env-var token remains an admin-only fallback
+- [ ] Push-to-Cloudflare for a PowerDNS zone uses the zone owner's token
+
+### Phase 11c: Resource scoping
+- [ ] systemd slices per site user: CPUQuota + MemoryMax set from per-client limits
+- [ ] Disk quotas per site user (filesystem quota or du-based soft limits with warnings)
+- [ ] Per-client usage view (their sites' CPU/mem/disk), admin keeps whole-server stats
+
+---
+
 ## Recurring (every week)
 
 - [ ] All CI checks green before merge — never bypass

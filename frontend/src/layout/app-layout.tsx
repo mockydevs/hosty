@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   Network,
+  ScrollText,
   Server,
   Settings,
   X,
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/databases", label: "Databases", icon: Database },
   { to: "/dns", label: "DNS", icon: Network },
   { to: "/backups", label: "Backups", icon: Archive },
+  { to: "/audit", label: "Audit log", icon: ScrollText },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

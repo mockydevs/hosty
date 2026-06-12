@@ -1,4 +1,3 @@
-import { AuditLogCard } from "@/components/audit-log-card";
 import { CloudflareSettingsCard } from "@/components/cloudflare-settings-card";
 import { FormField } from "@/components/form-field";
 import { PanelDomainCard } from "@/components/panel-domain-card";
@@ -132,8 +131,6 @@ export function SettingsPage() {
 
         <CloudflareSettingsCard />
       </div>
-
-      <AuditLogCard />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { toast } from "sonner";
 export function CloudflareSettingsCard() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState("");
+  const [feedback, setFeedback] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
 
   const config = useQuery({
     queryKey: ["dns", "cloudflare", "config"],
@@ -38,10 +39,14 @@ export function CloudflareSettingsCard() {
     },
     onSuccess: async () => {
       setToken("");
+      setFeedback({ kind: "ok", message: "Token verified with Cloudflare and saved." });
       await queryClient.invalidateQueries({ queryKey: ["dns"] });
       toast.success("Cloudflare token verified and saved");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      setFeedback({ kind: "error", message: err.message });
+      toast.error(err.message);
+    },
   });
 
   const remove = useMutation({
@@ -103,9 +108,23 @@ export function CloudflareSettingsCard() {
               placeholder={config.data?.configured ? "Replace token…" : "Paste your token"}
               autoComplete="off"
               value={token}
-              onChange={(e) => setToken(e.target.value)}
+              onChange={(e) => {
+                setToken(e.target.value);
+                setFeedback(null);
+              }}
             />
           </FormField>
+          {feedback && (
+            <output
+              className={
+                feedback.kind === "ok"
+                  ? "block text-sm text-success"
+                  : "block text-sm text-destructive"
+              }
+            >
+              {feedback.message}
+            </output>
+          )}
           <div className="flex gap-2">
             <Button type="submit" disabled={token.trim().length < 10} loading={save.isPending}>
               Verify &amp; save

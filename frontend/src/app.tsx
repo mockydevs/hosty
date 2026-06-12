@@ -38,6 +38,7 @@ const BackupsPage = lazy(() => import("@/pages/backups").then((m) => ({ default:
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage })),
 );
+const AuditPage = lazy(() => import("@/pages/audit").then((m) => ({ default: m.AuditPage })));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -85,6 +86,7 @@ export function App() {
                 <Route path="/dns/cloudflare/:cfZoneId" element={<CloudflareZonePage />} />
                 <Route path="/dns/:zoneId" element={<DnsZonePage />} />
                 <Route path="/backups" element={<BackupsPage />} />
+                <Route path="/audit" element={<AuditPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
