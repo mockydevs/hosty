@@ -19,7 +19,12 @@ from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin, r
 from app.api.routes.files import PROXY_CSP
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import hash_token
-from app.db.models import Database, Site, User
+from app.core.tickets import token_scope
+from app.db.models import Database, Site, Stack, StackService, User
+from app.orchestration.blueprints.wordpress import ADMINER as WP_ADMINER_SERVICE
+from app.orchestration.blueprints.wordpress import DB as WP_DB_SERVICE
+from app.orchestration.blueprints.wordpress import DB_NAME as WP_DB_NAME
+from app.orchestration.blueprints.wordpress import DB_USER as WP_DB_USER
 from app.services import adminer as adminer_service
 from app.services import mariadb, quotas
 
@@ -59,6 +64,11 @@ class DeleteDatabaseRequest(BaseModel):
 
 class AdminerSessionResponse(BaseModel):
     url: str
+
+
+stack_router = APIRouter(dependencies=[Depends(get_current_user)])
+STACK_TICKET_PREFIX = "adminer-stack-ticket:"
+STACK_SESSION_PREFIX = "adminer-stack:"
 
 
 @router.get("", response_model=list[DatabaseListEntry])
@@ -242,6 +252,61 @@ async def adminer_session(request: Request) -> Any:
     return AdminerSessionResponse(url=f"/adminer/?hosty_ticket={ticket}")
 
 
+async def _fetch_owned_stack(db: AsyncSession, user: User, stack_id: int) -> Stack:
+    stack = await db.get(Stack, stack_id)
+    if stack is None or (not is_admin(user) and stack.owner_id != user.id):
+        raise NotFoundError("Stack not found")
+    return stack
+
+
+async def _stack_service(db: AsyncSession, stack_id: int, name: str) -> StackService:
+    row = (
+        await db.execute(
+            select(StackService).where(StackService.stack_id == stack_id, StackService.name == name)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError("Stack service not found")
+    return row
+
+
+@stack_router.post("/{stack_id}/adminer-session", response_model=AdminerSessionResponse)
+async def stack_adminer_session(
+    request: Request,
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Mint a stack-scoped Adminer ticket.
+
+    The database service stays stack-internal; the ticket proxy targets the
+    stack's private Adminer sidecar, which shares the Podman network with the DB.
+    """
+    settings = request.app.state.settings
+    if not settings.adminer_enabled:
+        raise NotFoundError("Adminer is disabled")
+    stack = await _fetch_owned_stack(db, user, stack_id)
+    if stack.status != "ready":
+        raise ConflictError(f"Stack is {stack.status}; wait until it is ready")
+    adminer_svc = await _stack_service(db, stack.id, WP_ADMINER_SERVICE)
+    if adminer_svc.host_port is None:
+        raise NotFoundError("Stack has no Adminer endpoint")
+    await _stack_service(db, stack.id, WP_DB_SERVICE)
+    ticket = adminer_service.issue_token(
+        secret=settings.secret_key,
+        ttl_seconds=adminer_service.TICKET_TTL_SECONDS,
+        scope=f"{STACK_TICKET_PREFIX}{stack.id}:{user.id}:{user.token_version}",
+    )
+    return AdminerSessionResponse(
+        url=(
+            f"/adminer/?hosty_ticket={ticket}"
+            f"&server={stack.name}-{WP_DB_SERVICE}"
+            f"&username={WP_DB_USER}"
+            f"&db={WP_DB_NAME}"
+        )
+    )
+
+
 # --- Adminer reverse proxy (cookie/ticket auth, NOT bearer auth) -------------------
 
 proxy_router = APIRouter()
@@ -260,28 +325,77 @@ HOP_BY_HOP = {
 }
 
 
+async def _stack_adminer_upstream(
+    db: AsyncSession, settings, scope: str, *, ticket: bool
+) -> tuple[str, str] | None:
+    prefix = STACK_TICKET_PREFIX if ticket else STACK_SESSION_PREFIX
+    if not scope.startswith(prefix):
+        return None
+    try:
+        stack_id_raw, user_id_raw, version_raw = scope.removeprefix(prefix).rsplit(":", 2)
+        stack_id = int(stack_id_raw)
+        user_id = int(user_id_raw)
+        token_version = int(version_raw)
+    except (TypeError, ValueError):
+        raise UnauthorizedError("Adminer session expired — reopen it from the panel") from None
+
+    user = await db.get(User, user_id)
+    stack = await db.get(Stack, stack_id)
+    if (
+        user is None
+        or user.suspended
+        or user.token_version != token_version
+        or stack is None
+        or stack.status != "ready"
+        or (user.role != "admin" and stack.owner_id != user.id)
+    ):
+        raise UnauthorizedError("Adminer session is no longer authorized")
+    svc = await _stack_service(db, stack.id, WP_ADMINER_SERVICE)
+    if svc.host_port is None:
+        raise UnauthorizedError("Adminer session is no longer authorized")
+    session_scope = f"{STACK_SESSION_PREFIX}{stack.id}:{user.id}:{user.token_version}"
+    return f"127.0.0.1:{svc.host_port}", session_scope
+
+
 @proxy_router.api_route("/adminer{path:path}", methods=["GET", "POST"], include_in_schema=False)
-async def adminer_proxy(request: Request, path: str) -> Response:
+async def adminer_proxy(
+    request: Request, path: str, db: AsyncSession = Depends(get_db)
+) -> Response:
     settings = request.app.state.settings
     if not settings.adminer_enabled:
         raise NotFoundError("Adminer is disabled")
 
     authorized = False
     set_session_cookie = False
+    upstream_addr = settings.adminer_internal_addr
+    session_scope = "session"
     ticket = request.query_params.get("hosty_ticket")
-    if ticket and adminer_service.verify_token(ticket, secret=settings.secret_key, scope="ticket"):
-        authorized = True
-        set_session_cookie = True
+    if ticket:
+        scope = token_scope(ticket, secret=settings.secret_key)
+        if scope == "ticket":
+            authorized = True
+            set_session_cookie = True
+        elif scope:
+            target = await _stack_adminer_upstream(db, settings, scope, ticket=True)
+            if target is not None:
+                upstream_addr, session_scope = target
+                authorized = True
+                set_session_cookie = True
     else:
         cookie = request.cookies.get(adminer_service.SESSION_COOKIE)
-        if cookie and adminer_service.verify_token(
-            cookie, secret=settings.secret_key, scope="session"
-        ):
-            authorized = True
+        if cookie:
+            scope = token_scope(cookie, secret=settings.secret_key)
+            if scope == "session":
+                authorized = True
+            elif scope:
+                target = await _stack_adminer_upstream(db, settings, scope, ticket=False)
+                if target is not None:
+                    upstream_addr, session_scope = target
+                    authorized = True
     if not authorized:
         raise UnauthorizedError("Adminer session expired — reopen it from the panel")
 
-    upstream = f"http://{settings.adminer_internal_addr}{path or '/'}"
+    upstream = f"http://{upstream_addr}{path or '/'}"
     params = [(k, v) for k, v in request.query_params.multi_items() if k != "hosty_ticket"]
     headers = {
         k: v
@@ -321,7 +435,7 @@ async def adminer_proxy(request: Request, path: str) -> Response:
             adminer_service.issue_token(
                 secret=settings.secret_key,
                 ttl_seconds=settings.adminer_session_ttl_seconds,
-                scope="session",
+                scope=session_scope,
             ),
             max_age=settings.adminer_session_ttl_seconds,
             httponly=True,

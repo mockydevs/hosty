@@ -19,11 +19,16 @@ rotation are desired-state edits the reconciler applies — both covered.
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from app.orchestration.blueprints import get_blueprint
 from app.orchestration.blueprints.wordpress import (
+    ADMINER,
+    DB,
+    FILES,
     SALT_ENV_KEYS,
+    WEB,
     derive_salts,
     php_series_of,
 )
@@ -163,13 +168,20 @@ async def test_stack_composition(admin_client, stack_host, wp_cli):
     services = {s["name"]: s for s in stack["services"]}
 
     assert "php8.3-apache" in services["web"]["image"]
+    assert "@sha256:" in services[WEB]["image"]
+    assert "@sha256:" in services[DB]["image"]
+    assert "@sha256:" in services[ADMINER]["image"]
+    assert "@sha256:" in services[FILES]["image"]
     assert services["web"]["internal_port"] == 80 and services["web"]["host_port"]
     # The DB is stack-internal: no published port, unreachable from the host.
     assert services["db"]["internal_port"] is None and services["db"]["host_port"] is None
-    assert {v["name"]: v["mount_path"] for v in stack["volumes"]} == {
-        "html": "/var/www/html",
-        "db-data": "/var/lib/mysql",
-    }
+    assert services[ADMINER]["internal_port"] == 8080 and services[ADMINER]["host_port"]
+    assert services[FILES]["internal_port"] == 80 and services[FILES]["host_port"]
+    assert sorted((v["name"], v["service_name"], v["mount_path"]) for v in stack["volumes"]) == [
+        ("db-data", DB, "/var/lib/mysql"),
+        ("html", FILES, "/srv"),
+        ("html", WEB, "/var/www/html"),
+    ]
     assert stack["endpoints"][0]["domain"] == "wp.example.com"
 
     # Web env carries DB credentials + all 8 panel-managed salts (env file,
@@ -184,6 +196,56 @@ async def test_stack_composition(admin_client, stack_host, wp_cli):
     )
     assert f"MARIADB_PASSWORD={password}" in db_env
     assert "MARIADB_RANDOM_ROOT_PASSWORD=1" in db_env
+
+
+async def test_stack_adminer_and_filebrowser_sessions_target_private_sidecars(
+    admin_client, stack_host, wp_cli, app
+):
+    adminer_seen: list[httpx.Request] = []
+    files_seen: list[httpx.Request] = []
+
+    def adminer_handler(request: httpx.Request) -> httpx.Response:
+        adminer_seen.append(request)
+        return httpx.Response(200, text="<title>Stack Adminer</title>")
+
+    def files_handler(request: httpx.Request) -> httpx.Response:
+        files_seen.append(request)
+        return httpx.Response(200, text="<title>Stack Files</title>")
+
+    app.state.adminer_http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(adminer_handler)
+    )
+    app.state.files_http_client = httpx.AsyncClient(transport=httpx.MockTransport(files_handler))
+
+    stack_id = await create_wp_stack(admin_client)
+    stack = (await admin_client.get(f"/api/stacks/{stack_id}")).json()
+    services = {s["name"]: s for s in stack["services"]}
+
+    resp = await admin_client.post(f"/api/stacks/{stack_id}/adminer-session")
+    assert resp.status_code == 200, resp.text
+    adminer_url = resp.json()["url"]
+    assert adminer_url.startswith("/adminer/?hosty_ticket=")
+    assert "server=blog-db" in adminer_url
+    assert "username=wordpress" in adminer_url
+    resp = await admin_client.get(adminer_url)
+    assert resp.status_code == 200
+    assert adminer_seen[-1].url.host == "127.0.0.1"
+    assert adminer_seen[-1].url.port == services[ADMINER]["host_port"]
+    assert "hosty_ticket" not in str(adminer_seen[-1].url)
+
+    resp = await admin_client.post(f"/api/stacks/{stack_id}/files-session")
+    assert resp.status_code == 200, resp.text
+    files_url = resp.json()["url"]
+    assert files_url.startswith("/files/?hosty_ticket=")
+    resp = await admin_client.get(files_url)
+    assert resp.status_code == 200
+    assert files_seen[-1].url.host == "127.0.0.1"
+    assert files_seen[-1].url.port == services[FILES]["host_port"]
+    # Stack Filebrowser runs no-auth behind the signed panel proxy; the
+    # legacy singleton identity header is intentionally not sent.
+    from app.services.filebrowser import AUTH_HEADER
+
+    assert AUTH_HEADER not in files_seen[-1].headers
 
 
 def test_derive_salts_is_deterministic_and_distinct():

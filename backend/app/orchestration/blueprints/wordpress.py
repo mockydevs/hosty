@@ -1,10 +1,12 @@
 """Blueprint #1: WordPress (v2/M5, ADR-013) — the v1 pipeline's parity
 replacement, fully containerized.
 
-Composition: `web` = official `wordpress:<php>-apache` image (pinned version
-tag per supported PHP series) + `db` = per-stack MariaDB on the stack's
-internal network (NO host port — only the web container can reach it).
-Volumes: `html` (the full /var/www/html so WP-CLI can share it) + `db-data`.
+Composition: `web` = official `wordpress:<php>-apache` image (digest-pinned
+per supported PHP series) + `db` = per-stack MariaDB on the stack's internal
+network (NO host port — only sibling containers can reach it). Private
+`adminer` and `files` sidecars expose loopback-only ports for the panel's
+existing ticket proxies; they are not public endpoints. Volumes: `html` (the
+full /var/www/html so WP-CLI and Filebrowser can share it) + `db-data`.
 
 WP-CLI runs as a transient `wordpress:cli` container (`podman run --rm`)
 joined to the stack network and sharing the html volume + the web service's
@@ -51,6 +53,8 @@ log = structlog.get_logger("hosty.blueprint.wordpress")
 
 WEB = "web"
 DB = "db"
+ADMINER = "adminer"
+FILES = "files"
 HTML_VOLUME = "html"
 DB_VOLUME = "db-data"
 DB_NAME = "wordpress"
@@ -60,12 +64,35 @@ WWW_DATA = "33:33"  # www-data in the official images (inside the userns)
 # Pinned per supported PHP series — a blueprint release updates these;
 # existing stacks re-render only via the explicit switch_php upgrade action.
 WEB_IMAGES = {
-    "8.2": "docker.io/library/wordpress:6.8-php8.2-apache",
-    "8.3": "docker.io/library/wordpress:6.8-php8.3-apache",
-    "8.4": "docker.io/library/wordpress:6.8-php8.4-apache",
+    "8.2": (
+        "docker.io/library/wordpress:6.8-php8.2-apache"
+        "@sha256:1e6215749283955d5c9ffea6c297651ed23cdfdbb91677ad7abd705b2682f2cf"
+    ),
+    "8.3": (
+        "docker.io/library/wordpress:6.8-php8.3-apache"
+        "@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+    ),
+    "8.4": (
+        "docker.io/library/wordpress:6.8-php8.4-apache"
+        "@sha256:da2a1ff20daa435abf260853ebfd829b1f5f9b8400938940c7393f786a63bf94"
+    ),
 }
-CLI_IMAGE = "docker.io/library/wordpress:cli-2.12"
-DB_IMAGE = "docker.io/library/mariadb:11.4"
+CLI_IMAGE = (
+    "docker.io/library/wordpress:cli-2.12"
+    "@sha256:744d4cbfb63d6ed90808cf87d99f822ed569c9cec714f602ca7d2fc955892455"
+)
+DB_IMAGE = (
+    "docker.io/library/mariadb:11.4"
+    "@sha256:1b46b73d4b629022dfa29e6db3bb0d63b5df714fc3bfbe5057d63d76d8f6054b"
+)
+ADMINER_IMAGE = (
+    "docker.io/library/adminer:5.3.0"
+    "@sha256:2b845b0e8e89245afd5bce48c20f3348581021492a64667a2c38a8e7e1096c46"
+)
+FILEBROWSER_IMAGE = (
+    "docker.io/filebrowser/filebrowser:v2.32.0"
+    "@sha256:593478e3c24c5ea9f5d7478dc549965b7bc7030707291006ce8d0b6162d3454b"
+)
 DEFAULT_PHP = "8.3"
 
 _PHP_FROM_IMAGE_RE = re.compile(r"php(\d+\.\d+)-apache")
@@ -235,7 +262,7 @@ class WordPressBlueprint:
         return WordPressInputs
 
     def ports_needed(self, inputs: WordPressInputs) -> list[str]:
-        return [WEB]
+        return [WEB, ADMINER, FILES]
 
     def secrets_needed(self, inputs: WordPressInputs) -> list[str]:
         return ["db_password", "salt_seed"]
@@ -272,12 +299,35 @@ class WordPressBlueprint:
                 )
             ),
         )
+        adminer = ServiceSpec(
+            name=ADMINER,
+            image=ADMINER_IMAGE,
+            env=(("ADMINER_DEFAULT_SERVER", f"{name}-{DB}"),),
+            internal_port=8080,
+            host_port=alloc.ports[ADMINER],
+        )
+        files = ServiceSpec(
+            name=FILES,
+            image=FILEBROWSER_IMAGE,
+            env=tuple(
+                sorted(
+                    {
+                        "FB_BASEURL": "/files",
+                        "FB_NOAUTH": "true",
+                        "FB_ROOT": "/srv",
+                    }.items()
+                )
+            ),
+            internal_port=80,
+            host_port=alloc.ports[FILES],
+        )
         return StackSpec(
             name=name,
             tenant=alloc.tenant,
-            services=(web, database),
+            services=(web, database, adminer, files),
             volumes=(
                 VolumeSpec(name=HTML_VOLUME, service=WEB, mount_path="/var/www/html"),
+                VolumeSpec(name=HTML_VOLUME, service=FILES, mount_path="/srv"),
                 VolumeSpec(name=DB_VOLUME, service=DB, mount_path="/var/lib/mysql"),
             ),
             endpoints=(
