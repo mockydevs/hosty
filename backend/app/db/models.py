@@ -28,6 +28,8 @@ class User(Base):
     max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Phase 12a: containerized apps quota.
     max_apps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # v2 (ADR-013): stacks quota — replaces max_sites/max_apps at M6.
+    max_stacks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Phase 11d: a plan supplies default quotas; explicit per-user values above
     # always win (see services/quotas.py).
     plan_id: Mapped[int | None] = mapped_column(
@@ -69,6 +71,7 @@ class Plan(Base):
     max_sites: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_databases: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_apps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_stacks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_disk_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cpu_quota_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
     memory_max_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -131,6 +134,25 @@ class Site(Base):
     )
 
 
+class Tenant(Base):
+    """v2/M0 (ADR-013): one client account = one Linux user with a fixed,
+    panel-allocated subuid/subgid range. This table is the LEDGER — host
+    state (useradd, usermod --add-subuids) is derived from it, never the
+    other way round. Rows are kept on user deletion until the host user is
+    confirmed gone, so a uid range is never silently reissued."""
+
+    __tablename__ = "tenants"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    linux_user: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    uid: Mapped[int | None] = mapped_column(Integer, nullable=True)  # set once provisioned
+    subuid_start: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    subuid_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
 class App(Base):
     """Phase 12a: a containerized app — ONE container, routed through Caddy.
 
@@ -165,6 +187,80 @@ class App(Base):
     )
 
 
+class Stack(Base):
+    """v2 (ADR-013): one deployable unit a client owns — desired state only.
+    The reconciler converges the host toward it; `status` is a cached
+    projection for the UI, NEVER an input to planning. Generation semantics
+    are K8s-style: API writes bump `generation`; the reconciler sets
+    `observed_generation = generation` after convergence."""
+
+    __tablename__ = "stacks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)  # slug
+    blueprint_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    blueprint_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Fernet-encrypted JSON of the user's blueprint inputs (incl. secrets).
+    inputs_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # converging | ready | degraded | suspended | deleting | error
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="converging")
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    observed_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class StackService(Base):
+    """One container of a stack (v2). Rendered by the blueprint at create/
+    upgrade time; the reconciler reads THESE rows, never the blueprint."""
+
+    __tablename__ = "stack_services"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stack_id: Mapped[int] = mapped_column(
+        ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(32), nullable=False)
+    image: Mapped[str] = mapped_column(String(512), nullable=False)
+    image_digest: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    internal_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    host_port: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
+    env_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    memory_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cpu_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_web: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class StackVolume(Base):
+    __tablename__ = "stack_volumes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stack_id: Mapped[int] = mapped_column(
+        ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(32), nullable=False)
+    service_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    mount_path: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class StackEndpoint(Base):
+    __tablename__ = "stack_endpoints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stack_id: Mapped[int] = mapped_column(
+        ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    domain: Mapped[str] = mapped_column(String(253), unique=True, nullable=False)
+    service_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    behind_cloudflare: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
 class Operation(Base):
     """A tracked long-running task (site provisioning/deletion) the UI can poll."""
 
@@ -174,6 +270,11 @@ class Operation(Base):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)  # create_site | delete_site
     site_id: Mapped[int | None] = mapped_column(
         ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # v2 (ADR-013): stack-scoped operations (create_stack | delete_stack |
+    # converge_stack | action:<blueprint>.<action>).
+    stack_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stacks.id", ondelete="SET NULL"), nullable=True, index=True
     )
     domain: Mapped[str] = mapped_column(String(253), nullable=False)
     # pending | running | succeeded | failed
