@@ -116,11 +116,16 @@ class StackSpec:
         service_names = [s.name for s in self.services]
         if len(set(service_names)) != len(service_names):
             raise SpecValidationError(f"Stack {self.name!r}: duplicate service names")
-        volume_names = [v.name for v in self.volumes]
-        if len(set(volume_names)) != len(volume_names):
-            raise SpecValidationError(f"Stack {self.name!r}: duplicate volume names")
+        volume_defs: set[tuple[str, str]] = set()
         known = set(service_names)
         for volume in self.volumes:
+            volume_key = (volume.name, volume.service)
+            if volume_key in volume_defs:
+                raise SpecValidationError(
+                    f"Stack {self.name!r}: duplicate volume {volume.name!r} mounts into "
+                    f"service {volume.service!r} more than once"
+                )
+            volume_defs.add(volume_key)
             if volume.service not in known:
                 raise SpecValidationError(
                     f"Stack {self.name!r}: volume {volume.name!r} mounts into "

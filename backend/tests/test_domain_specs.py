@@ -138,7 +138,16 @@ def test_stack_rejects_duplicate_service_names():
         make_stack(services=(make_service(), make_service(host_port=20002)))
 
 
-def test_stack_rejects_duplicate_volume_names():
+def test_stack_allows_shared_volume_names_with_distinct_service_mounts():
+    volumes = (
+        VolumeSpec(name="data", service="web", mount_path="/app/data"),
+        VolumeSpec(name="data", service="worker", mount_path="/data"),
+    )
+    stack = make_stack(services=(make_service(), make_service(name="worker")), volumes=volumes)
+    assert [vol.service for vol in stack.volumes_for("worker")] == ["worker"]
+
+
+def test_stack_rejects_duplicate_volume_names_with_conflicting_mounts_on_same_service():
     volumes = (
         VolumeSpec(name="data", service="web", mount_path="/a"),
         VolumeSpec(name="data", service="web", mount_path="/b"),

@@ -131,15 +131,16 @@ def write_env_files(tenant: str, files: dict[str, str]) -> None:
     from quadlet.env_file_path and are re-checked to sit inside the tenant's
     stacks root."""
     validate_tenant_username(tenant)
-    root = quadlet.stacks_root(tenant)
+    root = os.path.normpath(quadlet.stacks_root(tenant))
     for path, content in files.items():
-        if os.path.normpath(path) != path or not path.startswith(root + "/"):
+        normalized = os.path.normpath(path)
+        if normalized != root and not normalized.startswith(root + os.sep):
             raise StackHostError(f"Env file path escapes the stacks root: {path!r}")
-        directory = os.path.dirname(path)
+        directory = os.path.dirname(normalized)
         os.makedirs(directory, exist_ok=True)
-        _open_write(path, content, 0o600)
+        _open_write(normalized, content, 0o600)
         shutil.chown(directory, user=tenant, group=tenant)
-        shutil.chown(path, user=tenant, group=tenant)
+        shutil.chown(normalized, user=tenant, group=tenant)
 
 
 def ensure_volume_dir(tenant: str, stack: str, volume: str) -> None:
