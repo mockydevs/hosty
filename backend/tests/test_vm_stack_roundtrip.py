@@ -106,7 +106,7 @@ async def test_stack_spec_round_trips_on_the_host():
         )
         assert quadlet.read_spec_hash(on_disk) == spec_hash(spec, spec.services[0])
 
-        journal = await systemd_user.journal(TENANT, unit, tail=50)
+        journal = await systemd_user.journal(TENANT, unit, uid=info.uid, tail=50)
         assert journal.strip(), "journald must show container output"
     finally:
         with contextlib.suppress(systemd_user.SystemdUserError):

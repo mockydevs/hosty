@@ -82,6 +82,18 @@ def build_ps_argv(uid: int) -> list[str]:
     ]
 
 
+def build_stack_ps_ids_argv(uid: int, stack: str) -> list[str]:
+    """Container IDs of one stack (any state), for teardown cleanup."""
+    return [
+        *_base(uid),
+        "ps",
+        "--all",
+        "--quiet",
+        "--filter",
+        f"label={STACK_LABEL}={validate_object_name(stack)}",
+    ]
+
+
 def build_pull_argv(uid: int, image: str) -> list[str]:
     return [*_base(uid), "image", "pull", "--quiet", validate_image_ref(image)]
 
@@ -224,6 +236,26 @@ async def _run_or_raise(argv: list[str], what: str, *, timeout: float = 60) -> r
         detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
         raise PodmanError(f"{what} failed: {detail[:400]}")
     return result
+
+
+async def remove_stack_containers(uid: int, stack: str) -> None:
+    """Force-remove every container labelled for `stack`, freeing its
+    published ports. This is the teardown safety net for ORPHANS — a
+    container that outlived its quadlet unit (e.g. a unit removed without a
+    clean stop) keeps a rootlessport bound to its host port; the next stack
+    that reuses that port then fails with "address already in use". Graceful:
+    a missing podman / unreachable socket is a no-op, never an exception."""
+    try:
+        listed = await runner.run(build_stack_ps_ids_argv(uid, stack), timeout=30)
+    except runner.CommandNotFoundError:
+        return
+    ids = [cid for cid in listed.stdout.split() if cid]
+    if not ids:
+        return
+    try:
+        await runner.run([*_base(uid), "rm", "--force", "--", *ids], timeout=180)
+    except runner.CommandNotFoundError:
+        return
 
 
 async def ps(uid: int) -> list[PsContainer]:

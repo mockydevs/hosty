@@ -22,7 +22,7 @@ from app.core.secrets import decrypt_secret
 from app.db.models import SshKey, Tenant, User
 from app.domain import actions as act
 from app.services import tenancy
-from app.system import quadlet, stackhost, systemd_user
+from app.system import podman, quadlet, stackhost, systemd_user
 
 log = structlog.get_logger("hosty.executor")
 
@@ -92,6 +92,10 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
             uid = await _uid_for(ctx.db, tenant)
             await asyncio.to_thread(stackhost.remove_units, uid, stack)
             await asyncio.to_thread(stackhost.remove_env_files, tenant, stack)
+            # Safety net: force-remove any leftover container for this stack so
+            # an orphan can't keep its published port bound (the next stack to
+            # reuse that port would fail with "address already in use").
+            await podman.remove_stack_containers(uid, stack)
         case act.DaemonReload(tenant=tenant):
             await systemd_user.daemon_reload(tenant)
         case act.StartService(tenant=tenant, stack=stack, service=service):

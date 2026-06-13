@@ -26,7 +26,7 @@ from app.db.models import App, Operation, Site, Stack, StackEndpoint, User
 from app.domain.validate import SpecValidationError, validate_domain_name, validate_slug
 from app.orchestration.blueprints import list_blueprints
 from app.orchestration.blueprints.base import ActionResult, Blueprint
-from app.services import image_versions, quotas
+from app.services import image_versions, quotas, tenancy
 from app.services import stacks as stacks_service
 from app.services.stacks import StackValidationError
 from app.system import quadlet, systemd_user
@@ -529,9 +529,13 @@ async def stack_logs(
         chosen = next((s for s in services if s.name == service), None)
         if chosen is None:
             raise NotFoundError("Service not found")
+    tenant_row = await tenancy.get_tenant(db, stack.owner_id)
+    if tenant_row is None or tenant_row.uid is None:
+        raise ConflictError("Stack tenant is not provisioned yet; no logs available")
     logs = await systemd_user.journal(
-        stacks_service.tenant_for(stack.owner_id),
+        tenant_row.linux_user,
         quadlet.service_unit_name(stack.name, chosen.name),
+        uid=tenant_row.uid,
         tail=tail,
     )
     return StackLogsResponse(service=chosen.name, logs=logs)
