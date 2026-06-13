@@ -65,8 +65,25 @@ function BlueprintPicker({
                     className="cursor-pointer hover:border-primary transition-all duration-200 group flex items-start p-4"
                     onClick={() => onPick(bp)}
                   >
-                    <div className="mr-4 mt-1 rounded-md bg-muted p-2 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      <Boxes className="h-8 w-8" aria-hidden />
+                    <div className="mr-4 mt-1 rounded-md bg-muted p-2 group-hover:bg-primary/10 group-hover:text-primary transition-colors flex items-center justify-center">
+                      {meta.icon ? (
+                        <img
+                          src={`/icons/${meta.icon}.svg`}
+                          className="h-8 w-8 object-contain"
+                          alt=""
+                          onError={(e) => {
+                            // Fallback to Boxes if image fails to load
+                            const target = e.currentTarget;
+                            target.style.display = "none";
+                            target.parentElement?.classList.add("fallback-boxes");
+                          }}
+                        />
+                      ) : (
+                        <Boxes className="h-8 w-8" aria-hidden />
+                      )}
+                      {meta.icon && (
+                        <Boxes className="h-8 w-8 hidden [.fallback-boxes_&]:block" aria-hidden />
+                      )}
                     </div>
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between">

@@ -2,13 +2,20 @@ import { FormField } from "@/components/form-field";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogActions, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Key, KeyRound, Plus, ShieldAlert, Ticket, Trash2 } from "lucide-react";
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 function SshKeysTab() {
@@ -99,7 +106,9 @@ function SshKeysTab() {
                   rows={8}
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-xs"
                   value={privateKey}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrivateKey(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setPrivateKey(e.target.value)
+                  }
                 />
               </FormField>
               <FormField label="Public Key (Optional)" htmlFor="public-key">
@@ -109,7 +118,9 @@ function SshKeysTab() {
                   rows={3}
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-xs"
                   value={publicKey}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPublicKey(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setPublicKey(e.target.value)
+                  }
                 />
               </FormField>
               <DialogActions>
@@ -206,7 +217,7 @@ function ApiTokensTab() {
       }
       return data;
     },
-    onSuccess: async (data: any) => {
+    onSuccess: async (data: { token: string }) => {
       setNewToken(data.token);
       setOpen(false);
       setName("");
@@ -236,7 +247,9 @@ function ApiTokensTab() {
           <div className="flex gap-2">
             <ShieldAlert className="h-5 w-5" color="currentColor" />
             <div className="flex-1">
-              <h5 className="mb-1 font-medium leading-none tracking-tight">Save your new API Token!</h5>
+              <h5 className="mb-1 font-medium leading-none tracking-tight">
+                Save your new API Token!
+              </h5>
               <div className="text-sm opacity-90 mt-2 space-y-2">
                 This token will <strong>never be shown again</strong>. Please copy it immediately.
                 <div className="mt-2 flex items-center gap-2">
