@@ -332,12 +332,15 @@ export function SchemaForm({
               <FormField label={label} htmlFor={field.name} error={error}>
                 <select
                   id={field.name}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                  // bg/text + color-scheme so the native option popup is
+                  // readable in dark mode (default popup is light → white
+                  // text on white was invisible).
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground [color-scheme:light_dark]"
                   value={values[field.name] as string}
                   onChange={(e) => set(field.name, e.target.value)}
                 >
                   {options.map((opt) => (
-                    <option key={opt} value={opt}>
+                    <option key={opt} value={opt} className="bg-background text-foreground">
                       {opt}
                     </option>
                   ))}

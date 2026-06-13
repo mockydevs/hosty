@@ -62,21 +62,25 @@ def test_is_active_argv():
     ]
 
 
-def test_journal_argv_clamps_tail():
-    argv = systemd_user.build_journal_argv("hosty-t-7", "blog-web.service", tail=999999)
+def test_journal_argv_reads_user_unit_by_field_match():
+    # No `-M`: machined doesn't know a lingering user@.host manager. Match the
+    # tenant's user-unit logs in root's merged journal by UID + user-unit.
+    argv = systemd_user.build_journal_argv("hosty-t-7", "blog-web.service", uid=6007, tail=999999)
     assert argv == [
         "journalctl",
-        "-M",
-        "hosty-t-7@.host",  # connect AS the tenant TO the local host, like systemctl
-        "--user-unit",
-        "blog-web.service",
+        "_UID=6007",
+        "_SYSTEMD_USER_UNIT=blog-web.service",
         "-n",
         "5000",
         "--no-pager",
         "--output",
         "short-iso",
     ]
-    assert systemd_user.build_journal_argv("hosty-t-7", "blog-web.service", tail=-5)[6] == "1"
+    # Tail clamps into [1, 5000] (the value after the "-n" flag at index 3).
+    assert (
+        systemd_user.build_journal_argv("hosty-t-7", "blog-web.service", uid=6007, tail=-5)[4]
+        == "1"
+    )
 
 
 @pytest.mark.parametrize("user", ["root", "site-blog", "hosty-t-", "hosty-t-7\n", "-x"])
@@ -150,7 +154,10 @@ async def test_is_active_and_journal(monkeypatch):
 
     monkeypatch.setattr(systemd_user.runner, "run", ok)
     assert await systemd_user.is_active("hosty-t-7", "blog-web.service") is True
-    assert await systemd_user.journal("hosty-t-7", "blog-web.service", tail=10) == "log line\n"
+    assert (
+        await systemd_user.journal("hosty-t-7", "blog-web.service", uid=6007, tail=10)
+        == "log line\n"
+    )
     assert await systemd_user.daemon_reload("hosty-t-7") is None
     assert len(calls) == 3
 

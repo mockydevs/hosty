@@ -76,18 +76,21 @@ def build_is_active_argv(user: str, unit: str) -> list[str]:
     ]
 
 
-def build_journal_argv(user: str, unit: str, *, tail: int = 200) -> list[str]:
+def build_journal_argv(user: str, unit: str, *, uid: int, tail: int = 200) -> list[str]:
+    """Read a tenant user-unit's logs from ROOT's merged journal by field
+    match. `journalctl -M <user>@.host` does NOT work here: machined only
+    knows registered containers, not a lingering `user@.host` manager, so it
+    fails with "No machine known". Matching `_UID` + `_SYSTEMD_USER_UNIT` is
+    machined-free and still sees crashed / `--rm`'d containers, since the
+    journald LogDriver entries persist after the container is gone."""
     tail = max(1, min(int(tail), 5000))
-    # Same machine spec as every systemctl call: `<user>@.host` (connect AS
-    # the tenant user TO the local host). A bare `<user>@` makes journalctl
-    # read the whole string as a container name and fail with "No machine
-    # '<user>@' known".
+    validate_tenant_username(user)
+    if not isinstance(uid, int) or isinstance(uid, bool) or uid <= 0:
+        raise InvalidSystemdUserArgError(f"Invalid uid: {uid!r}")
     return [
         "journalctl",
-        "-M",
-        _machine(user),
-        "--user-unit",
-        validate_unit(unit),
+        f"_UID={uid}",
+        f"_SYSTEMD_USER_UNIT={validate_unit(unit)}",
         "-n",
         str(tail),
         "--no-pager",
@@ -138,8 +141,8 @@ async def is_active(user: str, unit: str) -> bool:
     return result.ok
 
 
-async def journal(user: str, unit: str, *, tail: int = 200) -> str:
+async def journal(user: str, unit: str, *, uid: int, tail: int = 200) -> str:
     result = await _run_or_raise(
-        build_journal_argv(user, unit, tail=tail), f"journal read for {unit}", timeout=30
+        build_journal_argv(user, unit, uid=uid, tail=tail), f"journal read for {unit}", timeout=30
     )
     return result.stdout
