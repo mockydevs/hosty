@@ -248,6 +248,7 @@ cat > /etc/sysctl.d/99-hosty-rootless.conf <<'SYSCTL'
 user.max_user_namespaces = 28633
 kernel.unprivileged_userns_clone = 1
 kernel.apparmor_restrict_unprivileged_userns = 0
+net.ipv4.ip_unprivileged_port_start = 80
 SYSCTL
 sysctl -e -p /etc/sysctl.d/99-hosty-rootless.conf >/dev/null 2>&1 || true
 

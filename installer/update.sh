@@ -56,6 +56,12 @@ command -v pnpm >/dev/null || corepack enable
   pnpm install --frozen-lockfile
   pnpm exec vite build
 )
+# ── Host setup ───────────────────────────────────────────────────────────────
+log "Applying host sysctl prerequisites"
+if ! grep -q "net.ipv4.ip_unprivileged_port_start" /etc/sysctl.d/99-hosty-rootless.conf 2>/dev/null; then
+  echo "net.ipv4.ip_unprivileged_port_start = 80" >> /etc/sysctl.d/99-hosty-rootless.conf
+fi
+sysctl -e -p /etc/sysctl.d/99-hosty-rootless.conf >/dev/null 2>&1 || true
 
 # ── Restart service ──────────────────────────────────────────────────────────
 log "Restarting hosty service"
