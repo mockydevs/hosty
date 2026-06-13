@@ -208,3 +208,31 @@ async def test_panel_domain_dns_record_is_admin_only(panel_app):
             "/api/system/panel-domain/dns-record", json={"domain": "panel.example.com"}
         )
         assert resp.status_code == 401
+
+
+async def test_set_and_clear_apps_base_domain(panel_client, panel_settings, tmp_path):
+    # Default: no wildcard base; the sslip.io fallback IP is surfaced.
+    resp = await panel_client.get("/api/system/apps-base-domain")
+    assert resp.json() == {"base_domain": None, "sslip_fallback_ip": "203.0.113.7"}
+
+    resp = await panel_client.put(
+        "/api/system/apps-base-domain", json={"base_domain": "Apps.Example.COM"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["base_domain"] == "apps.example.com"  # normalized
+    assert panel_settings.apps_base_domain == "apps.example.com"
+    assert "HOSTY_APPS_BASE_DOMAIN=apps.example.com" in (tmp_path / "hosty.env").read_text()
+
+    resp = await panel_client.delete("/api/system/apps-base-domain")
+    assert resp.status_code == 200 and resp.json()["base_domain"] is None
+    assert "HOSTY_APPS_BASE_DOMAIN" not in (tmp_path / "hosty.env").read_text()
+    assert (await panel_client.delete("/api/system/apps-base-domain")).status_code == 404
+
+
+async def test_apps_base_domain_requires_auth(panel_app):
+    transport = ASGITransport(app=panel_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        assert (await c.get("/api/system/apps-base-domain")).status_code == 401
+        assert (
+            await c.put("/api/system/apps-base-domain", json={"base_domain": "x.io"})
+        ).status_code == 401

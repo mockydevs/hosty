@@ -53,6 +53,10 @@ class Settings(BaseSettings):
 
     # Phase 9: hardening
     panel_domain: str | None = None  # production: Caddy fronts the panel on this host
+    # Wildcard base for auto-generated stack domains (e.g. "apps.example.com" →
+    # "<stack>.apps.example.com"). When unset, generation falls back to sslip.io
+    # off `public_ip` ("<stack>.<ip>.sslip.io"), so it works with zero DNS setup.
+    apps_base_domain: str | None = None
     panel_upstream: str = "127.0.0.1:8800"
     panel_allowed_ips: Annotated[list[str], NoDecode] = []
     # Where UI-driven config changes (panel domain, cookie flag) are persisted.

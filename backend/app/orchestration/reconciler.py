@@ -120,6 +120,14 @@ class Reconciler:
         await self._track_drift(outcomes)
         return outcomes
 
+    async def resync_ingress(self) -> None:
+        """Re-apply the full ingress config out of band. A domain/endpoint
+        edit changes no units, so the planner emits nothing and the normal
+        trailing SyncCaddy never fires — this is how that change reaches
+        Caddy."""
+        async with self._sessionmaker() as db:
+            await self._sync_caddy(db)
+
     async def converge_stack(self, name: str, *, operation_id: int | None = None) -> StackOutcome:
         """On-demand convergence after an API write (202 + operation)."""
         async with self._sessionmaker() as db:

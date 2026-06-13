@@ -201,6 +201,47 @@ describe("SchemaForm", () => {
     expect(fields[0]?.kind).toBe("select");
   });
 
+  it("fills a field from a fieldAction (Autogenerate domain)", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema: JsonSchema = {
+      type: "object",
+      properties: { domain: { type: "string", title: "Domain" } },
+    };
+    render(
+      <SchemaForm
+        schema={schema}
+        onSubmit={onSubmit}
+        submitLabel="Create"
+        fieldActions={{
+          domain: { label: "Autogenerate", run: async () => "blog.apps.example.com" },
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Autogenerate" }));
+    expect(screen.getByLabelText("Domain")).toHaveValue("blog.apps.example.com");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(onSubmit).toHaveBeenCalledWith({ domain: "blog.apps.example.com" });
+  });
+
+  it("leaves a field unchanged when the action returns null", async () => {
+    const user = userEvent.setup();
+    const schema: JsonSchema = {
+      type: "object",
+      properties: { domain: { type: "string", title: "Domain" } },
+    };
+    render(
+      <SchemaForm
+        schema={schema}
+        onSubmit={() => {}}
+        fieldActions={{ domain: { label: "Autogenerate", run: async () => null } }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Autogenerate" }));
+    expect(screen.getByLabelText("Domain")).toHaveValue("");
+  });
+
   it("renders secret-flagged fields as password inputs", () => {
     const schema: JsonSchema = {
       type: "object",

@@ -434,6 +434,126 @@ function DeleteStackDialog({
   );
 }
 
+function EndpointsCard({
+  stack,
+  onOperation,
+}: {
+  stack: Stack;
+  onOperation: (operationId: number) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [domain, setDomain] = useState("");
+  const hasWeb = stack.services.some((s) => s.is_web && s.host_port != null);
+
+  const setDomainMut = useMutation({
+    mutationFn: async (value: string | null) => {
+      const { data, error } = await api.PUT("/api/stacks/{stack_id}/domain", {
+        params: { path: { stack_id: stack.id } },
+        body: { domain: value, behind_cloudflare: false },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Could not set the domain"));
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success("Updating domain…");
+      onOperation(data.operation_id);
+      setEditing(false);
+      void queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to set the domain"),
+  });
+
+  const autogenerate = async () => {
+    const { data, error } = await api.GET("/api/stacks/suggested-domain", {
+      params: { query: { name: stack.name } },
+    });
+    if (error || !data) {
+      toast.error(apiErrorMessage(error, "Set an apps base domain or server public IP first"));
+      return;
+    }
+    setDomain(data.domain);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">Endpoints</CardTitle>
+        {hasWeb && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setDomain(stack.endpoints[0]?.domain ?? "");
+              setEditing(true);
+            }}
+          >
+            {stack.endpoints.length ? "Change domain" : "Set domain"}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        {stack.endpoints.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No public domains — services are reachable only inside the stack.
+          </p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {stack.endpoints.map((ep) => (
+              <li key={ep.domain} className="flex items-center gap-2">
+                <a
+                  href={`https://${ep.domain}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 font-medium hover:underline"
+                >
+                  {ep.domain}
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                </a>
+                <span className="font-mono text-xs text-muted-foreground">→ {ep.service_name}</span>
+                {ep.behind_cloudflare && <Badge variant="outline">Cloudflare</Badge>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+      <Dialog open={editing} onClose={() => setEditing(false)}>
+        <DialogContent>
+          <DialogTitle>{stack.endpoints.length ? "Change domain" : "Set domain"}</DialogTitle>
+          <DialogDescription>
+            Point a public domain at this stack's web service. Leave blank to auto-generate one
+            (wildcard base, or sslip.io off the server IP).
+          </DialogDescription>
+          <div className="flex items-center gap-2">
+            <Input
+              className="flex-1"
+              value={domain}
+              placeholder="app.example.com"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setDomain(e.target.value)}
+            />
+            <Button type="button" variant="outline" onClick={autogenerate}>
+              Autogenerate
+            </Button>
+          </div>
+          <DialogActions>
+            <Button variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button
+              loading={setDomainMut.isPending}
+              onClick={() => setDomainMut.mutate(domain.trim() || null)}
+            >
+              Save
+            </Button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 export function StackDetailPage() {
   const { stackId } = useParams();
   const location = useLocation();
@@ -547,38 +667,7 @@ export function StackDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Endpoints</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.endpoints.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No public domains — services are reachable only inside the stack.
-              </p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {data.endpoints.map((ep) => (
-                  <li key={ep.domain} className="flex items-center gap-2">
-                    <a
-                      href={`https://${ep.domain}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 font-medium hover:underline"
-                    >
-                      {ep.domain}
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                    </a>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      → {ep.service_name}
-                    </span>
-                    {ep.behind_cloudflare && <Badge variant="outline">Cloudflare</Badge>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <EndpointsCard stack={data} onOperation={setOperationId} />
       </div>
 
       <ActionsCard stack={data} actions={actions} />

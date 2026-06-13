@@ -271,6 +271,31 @@ export function StackCreatePage() {
               submitLabel="Create stack"
               pending={pending}
               serverError={serverError}
+              fieldActions={
+                (selected.inputs_schema as JsonSchema).properties?.domain
+                  ? {
+                      domain: {
+                        label: "Autogenerate",
+                        run: async () => {
+                          const slug = name.trim().toLowerCase();
+                          const { data, error } = await api.GET("/api/stacks/suggested-domain", {
+                            params: { query: { name: slug } },
+                          });
+                          if (error || !data) {
+                            toast.error(
+                              apiErrorMessage(
+                                error,
+                                "Set an apps base domain or server public IP first",
+                              ),
+                            );
+                            return null;
+                          }
+                          return data.domain;
+                        },
+                      },
+                    }
+                  : undefined
+              }
             >
               <FormField label="Stack name" htmlFor="stack-name" error={nameError ?? undefined}>
                 <Input

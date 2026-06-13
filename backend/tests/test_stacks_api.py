@@ -476,3 +476,101 @@ async def test_action_dispatch_and_show_once(admin_client, stack_host, echo_blue
     assert resp.status_code == 200 and resp.json()["ok"] is False
 
     assert (await admin_client.post(f"/api/stacks/{stack_id}/actions/missing")).status_code == 404
+
+
+# --- auto-generated + editable domains -------------------------------------------------
+
+
+async def test_suggested_domain_base_then_sslip_then_none(admin_client, stack_host, settings):
+    settings.apps_base_domain = "apps.example.com"
+    r = await admin_client.get("/api/stacks/suggested-domain", params={"name": "blog"})
+    assert r.status_code == 200 and r.json()["domain"] == "blog.apps.example.com"
+
+    # No wildcard base configured → sslip.io off the public IP (zero DNS setup).
+    settings.apps_base_domain = None
+    settings.public_ip = "203.0.113.9"
+    r = await admin_client.get("/api/stacks/suggested-domain", params={"name": "blog"})
+    assert r.json()["domain"] == "blog.203.0.113.9.sslip.io"
+
+    # Neither configured → nothing to generate.
+    settings.public_ip = ""
+    r = await admin_client.get("/api/stacks/suggested-domain", params={"name": "blog"})
+    assert r.status_code == 409
+
+
+async def test_create_auto_assigns_domain_when_blank(admin_client, stack_host, settings):
+    settings.apps_base_domain = "apps.example.com"
+    body = {
+        "name": "autoweb",
+        "blueprint_id": "raw-image",
+        "inputs": {"image": "nginx:1.27", "internal_port": 80},
+    }
+    payload, op = await create_stack_ok(admin_client, body)
+    assert op["status"] == "succeeded", op
+    assert [e["domain"] for e in payload["stack"]["endpoints"]] == ["autoweb.apps.example.com"]
+
+
+async def test_create_keeps_explicit_domain(admin_client, stack_host, settings):
+    settings.apps_base_domain = "apps.example.com"  # ignored when a domain is given
+    payload, _ = await create_stack_ok(admin_client)  # CREATE_BODY → app.example.com
+    assert [e["domain"] for e in payload["stack"]["endpoints"]] == ["app.example.com"]
+
+
+async def test_db_stack_gets_no_auto_domain(admin_client, stack_host, settings):
+    settings.apps_base_domain = "apps.example.com"
+    body = {
+        "name": "pgonly",
+        "blueprint_id": "postgres",
+        "inputs": {"version": "16", "database": "app", "user": "app"},
+    }
+    payload, _ = await create_stack_ok(admin_client, body)
+    assert payload["stack"]["endpoints"] == []  # no web service → internal only
+
+
+async def test_set_stack_domain_changes_and_reconverges(admin_client, stack_host):
+    payload, _ = await create_stack_ok(admin_client)
+    stack_id = payload["stack"]["id"]
+    r = await admin_client.put(f"/api/stacks/{stack_id}/domain", json={"domain": "new.example.com"})
+    assert r.status_code == 202, r.text
+    detail = (await admin_client.get(f"/api/stacks/{stack_id}")).json()
+    assert [e["domain"] for e in detail["endpoints"]] == ["new.example.com"]
+    assert any("new.example.com" in str(c) for c in stack_host.caddy.configs)
+
+
+async def test_set_stack_domain_blank_autogenerates(admin_client, stack_host, settings):
+    settings.apps_base_domain = "apps.example.com"
+    payload, _ = await create_stack_ok(admin_client)
+    stack_id = payload["stack"]["id"]
+    r = await admin_client.put(f"/api/stacks/{stack_id}/domain", json={})
+    assert r.status_code == 202, r.text
+    detail = (await admin_client.get(f"/api/stacks/{stack_id}")).json()
+    assert [e["domain"] for e in detail["endpoints"]] == ["blog.apps.example.com"]
+
+
+async def test_set_stack_domain_rejected_for_non_web_stack(admin_client, stack_host):
+    body = {
+        "name": "pgonly",
+        "blueprint_id": "postgres",
+        "inputs": {"version": "16", "database": "app", "user": "app"},
+    }
+    payload, _ = await create_stack_ok(admin_client, body)
+    stack_id = payload["stack"]["id"]
+    r = await admin_client.put(f"/api/stacks/{stack_id}/domain", json={"domain": "pg.example.com"})
+    assert r.status_code == 422
+
+
+async def test_set_stack_domain_refuses_conflict(admin_client, stack_host):
+    await create_stack_ok(admin_client)  # occupies app.example.com
+    other, _ = await create_stack_ok(
+        admin_client,
+        {
+            "name": "second",
+            "blueprint_id": "raw-image",
+            "inputs": {"image": "nginx:1.27", "internal_port": 80, "domain": "second.example.com"},
+        },
+    )
+    # Point the second stack at the first's domain → conflict.
+    r = await admin_client.put(
+        f"/api/stacks/{other['stack']['id']}/domain", json={"domain": "app.example.com"}
+    )
+    assert r.status_code == 409

@@ -486,6 +486,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/apps-base-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Apps Base Domain */
+        get: operations["get_apps_base_domain_api_system_apps_base_domain_get"];
+        /**
+         * Set Apps Base Domain
+         * @description Wildcard base for auto-generated stack domains: point `*.<base>` at this
+         *     server once, and new web stacks get `<stack>.<base>` by default. Without
+         *     it, generation falls back to sslip.io off the server's public IP.
+         */
+        put: operations["set_apps_base_domain_api_system_apps_base_domain_put"];
+        post?: never;
+        /**
+         * Clear Apps Base Domain
+         * @description Back to sslip.io auto-domains (or none, if no public IP is set).
+         */
+        delete: operations["clear_apps_base_domain_api_system_apps_base_domain_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/panel-domain/dns-record": {
         parameters: {
             query?: never;
@@ -900,9 +927,31 @@ export interface paths {
         /**
          * Get Blueprints
          * @description The catalog that drives the create wizard: each blueprint's typed
-         *     inputs as JSON Schema — no per-blueprint UI code.
+         *     inputs as JSON Schema — no per-blueprint UI code. Version fields are
+         *     populated from the image registry so new releases appear automatically.
          */
         get: operations["get_blueprints_api_stacks_blueprints_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/suggested-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Suggested Domain
+         * @description Powers the create wizard's Autogenerate button: the domain a stack of
+         *     this name would get (wildcard base, or sslip.io off the public IP).
+         */
+        get: operations["get_suggested_domain_api_stacks_suggested_domain_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -942,6 +991,28 @@ export interface paths {
         post?: never;
         /** Delete Stack */
         delete: operations["delete_stack_api_stacks__stack_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Stack Domain
+         * @description Set or change the public domain of a web-facing stack. A blank domain
+         *     auto-generates one. The single web endpoint is replaced, the generation is
+         *     bumped, and the stack re-converges (Caddy re-syncs the route).
+         */
+        put: operations["set_stack_domain_api_stacks__stack_id__domain_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1990,6 +2061,13 @@ export interface components {
              */
             created_at: string;
         };
+        /** AppsBaseDomainResponse */
+        AppsBaseDomainResponse: {
+            /** Base Domain */
+            base_domain: string | null;
+            /** Sslip Fallback Ip */
+            sslip_fallback_ip: string | null;
+        };
         /** AuditEntryResponse */
         AuditEntryResponse: {
             /** Id */
@@ -2773,6 +2851,11 @@ export interface components {
             /** Current */
             current: boolean;
         };
+        /** SetAppsBaseDomainRequest */
+        SetAppsBaseDomainRequest: {
+            /** Base Domain */
+            base_domain: string;
+        };
         /** SetPanelDomainRequest */
         SetPanelDomainRequest: {
             /** Domain */
@@ -2782,6 +2865,16 @@ export interface components {
              * @default false
              */
             force: boolean;
+        };
+        /** SetStackDomainRequest */
+        SetStackDomainRequest: {
+            /** Domain */
+            domain?: string | null;
+            /**
+             * Behind Cloudflare
+             * @default false
+             */
+            behind_cloudflare: boolean;
         };
         /** SetupRequest */
         SetupRequest: {
@@ -2986,6 +3079,11 @@ export interface components {
             target_db?: string | null;
             /** Old Domain */
             old_domain?: string | null;
+        };
+        /** SuggestedDomainResponse */
+        SuggestedDomainResponse: {
+            /** Domain */
+            domain: string;
         };
         /** SystemStatsResponse */
         SystemStatsResponse: {
@@ -4264,6 +4362,79 @@ export interface operations {
             };
         };
     };
+    get_apps_base_domain_api_system_apps_base_domain_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppsBaseDomainResponse"];
+                };
+            };
+        };
+    };
+    set_apps_base_domain_api_system_apps_base_domain_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAppsBaseDomainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppsBaseDomainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_apps_base_domain_api_system_apps_base_domain_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppsBaseDomainResponse"];
+                };
+            };
+        };
+    };
     create_panel_domain_dns_record_api_system_panel_domain_dns_record_post: {
         parameters: {
             query?: never;
@@ -5114,6 +5285,37 @@ export interface operations {
             };
         };
     };
+    get_suggested_domain_api_stacks_suggested_domain_get: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestedDomainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_stacks_api_stacks_get: {
         parameters: {
             query?: never;
@@ -5210,6 +5412,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DeleteStackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_stack_domain_api_stacks__stack_id__domain_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStackDomainRequest"];
             };
         };
         responses: {

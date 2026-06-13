@@ -184,6 +184,59 @@ async def clear_panel_domain(request: Request, db: AsyncSession = Depends(get_db
     return _panel_response(settings)
 
 
+# --- apps base domain (auto-generated stack domains) ----------------------------------
+
+
+class AppsBaseDomainResponse(BaseModel):
+    base_domain: str | None
+    # When base_domain is unset, stack domains fall back to sslip.io off this IP.
+    sslip_fallback_ip: str | None
+
+
+class SetAppsBaseDomainRequest(BaseModel):
+    base_domain: str = Field(min_length=1, max_length=253)
+
+
+def _apps_base_response(settings: Any) -> AppsBaseDomainResponse:
+    return AppsBaseDomainResponse(
+        base_domain=settings.apps_base_domain or None,
+        sslip_fallback_ip=settings.public_ip or None,
+    )
+
+
+@router.get("/apps-base-domain", response_model=AppsBaseDomainResponse)
+async def get_apps_base_domain(request: Request) -> AppsBaseDomainResponse:
+    return _apps_base_response(request.app.state.settings)
+
+
+@router.put("/apps-base-domain", response_model=AppsBaseDomainResponse, dependencies=[_admin])
+async def set_apps_base_domain(
+    request: Request, body: SetAppsBaseDomainRequest
+) -> AppsBaseDomainResponse:
+    """Wildcard base for auto-generated stack domains: point `*.<base>` at this
+    server once, and new web stacks get `<stack>.<base>` by default. Without
+    it, generation falls back to sslip.io off the server's public IP."""
+    settings = request.app.state.settings
+    try:
+        base = validate_domain(body.base_domain)
+    except DomainValidationError as exc:
+        raise ConflictError(str(exc)) from exc
+    settings.apps_base_domain = base
+    panel_config.update_env_file(settings.env_file_path, {"HOSTY_APPS_BASE_DOMAIN": base})
+    return _apps_base_response(settings)
+
+
+@router.delete("/apps-base-domain", response_model=AppsBaseDomainResponse, dependencies=[_admin])
+async def clear_apps_base_domain(request: Request) -> AppsBaseDomainResponse:
+    """Back to sslip.io auto-domains (or none, if no public IP is set)."""
+    settings = request.app.state.settings
+    if not settings.apps_base_domain:
+        raise NotFoundError("No apps base domain configured")
+    settings.apps_base_domain = None
+    panel_config.update_env_file(settings.env_file_path, {"HOSTY_APPS_BASE_DOMAIN": None})
+    return _apps_base_response(settings)
+
+
 # --- one-click panel-domain DNS record --------------------------------------------------
 
 

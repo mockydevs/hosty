@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, is_admin
 from app.core.errors import ConflictError, NotFoundError
 from app.db.models import App, Operation, Site, Stack, StackEndpoint, User
-from app.domain.validate import SpecValidationError, validate_slug
+from app.domain.validate import SpecValidationError, validate_domain_name, validate_slug
 from app.orchestration.blueprints import list_blueprints
 from app.orchestration.blueprints.base import ActionResult, Blueprint
 from app.services import image_versions, quotas
@@ -171,14 +171,18 @@ def _parse_inputs(blueprint: Blueprint, raw: dict[str, Any]) -> BaseModel:
         raise StackValidationError(f"Invalid blueprint inputs — {problems}") from exc
 
 
-async def _refuse_domain_conflicts(db: AsyncSession, domains: list[str]) -> None:
+async def _refuse_domain_conflicts(
+    db: AsyncSession, domains: list[str], *, exclude_stack_id: int | None = None
+) -> None:
     """One domain, one route: collisions with sites, apps, and other stacks
-    are refused at create."""
+    are refused. `exclude_stack_id` skips the stack's own endpoints so a
+    domain edit that keeps the same value is not a self-conflict."""
     if not domains:
         return
-    if (
-        await db.execute(select(StackEndpoint).where(StackEndpoint.domain.in_(domains)))
-    ).first() is not None:
+    stack_q = select(StackEndpoint).where(StackEndpoint.domain.in_(domains))
+    if exclude_stack_id is not None:
+        stack_q = stack_q.where(StackEndpoint.stack_id != exclude_stack_id)
+    if (await db.execute(stack_q)).first() is not None:
         raise ConflictError("Another stack already uses this domain")
     if (await db.execute(select(Site).where(Site.domain.in_(domains)))).first() is not None:
         raise ConflictError("A site already uses this domain")
@@ -227,6 +231,29 @@ async def get_blueprints() -> Any:
         )
         for bp, schema in zip(blueprints, schemas, strict=True)
     ]
+
+
+class SuggestedDomainResponse(BaseModel):
+    domain: str
+
+
+@router.get("/suggested-domain", response_model=SuggestedDomainResponse)
+async def get_suggested_domain(
+    request: Request, name: str = Query(min_length=1, max_length=32)
+) -> Any:
+    """Powers the create wizard's Autogenerate button: the domain a stack of
+    this name would get (wildcard base, or sslip.io off the public IP)."""
+    try:
+        slug = validate_slug(name, what="stack name")
+    except SpecValidationError as exc:
+        raise StackValidationError(str(exc)) from exc
+    domain = stacks_service.suggested_domain(slug, _settings(request))
+    if domain is None:
+        raise ConflictError(
+            "No domain can be generated yet — set an apps base domain in Settings, "
+            "or configure the server's public IP."
+        )
+    return SuggestedDomainResponse(domain=domain)
 
 
 @router.get("", response_model=list[StackResponse])
@@ -282,6 +309,9 @@ async def create_stack(
     alloc = await stacks_service.allocate(db, settings, blueprint, inputs, owner_id=user.id)
     try:
         spec = blueprint.render(name, inputs, alloc)
+        # Web stacks created without a domain get a generated one (wildcard
+        # base or sslip.io) so they are reachable by default; editable later.
+        spec = stacks_service.with_auto_domain(spec, settings)
     except SpecValidationError as exc:
         raise StackValidationError(str(exc)) from exc
     await _refuse_domain_conflicts(db, [ep.domain for ep in spec.endpoints])
@@ -344,6 +374,74 @@ async def delete_stack(
     reconciler = request.app.state.reconciler
     background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
     return StackOperationAccepted(stack=response, operation_id=op.id)
+
+
+class SetStackDomainRequest(BaseModel):
+    # Blank/omitted → generate one (wildcard base or sslip.io).
+    domain: str | None = Field(default=None, max_length=253)
+    behind_cloudflare: bool = False
+
+
+@router.put(
+    "/{stack_id}/domain",
+    response_model=StackOperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def set_stack_domain(
+    request: Request,
+    stack_id: int,
+    body: SetStackDomainRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Set or change the public domain of a web-facing stack. A blank domain
+    auto-generates one. The single web endpoint is replaced, the generation is
+    bumped, and the stack re-converges (Caddy re-syncs the route)."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+    settings = _settings(request)
+    services, _, endpoints = await stacks_service.stack_children(db, stack.id)
+    web = next((s for s in services if s.is_web and s.host_port is not None), None)
+    if web is None:
+        raise StackValidationError("This stack has no web-facing service to route a domain to")
+
+    raw = (body.domain or "").strip().lower()
+    domain = raw or stacks_service.suggested_domain(stack.name, settings)
+    if not domain:
+        raise ConflictError(
+            "No domain provided and none can be generated — set an apps base domain "
+            "in Settings, or configure the server's public IP."
+        )
+    try:
+        validate_domain_name(domain)
+    except SpecValidationError as exc:
+        raise StackValidationError(str(exc)) from exc
+    await _refuse_domain_conflicts(db, [domain], exclude_stack_id=stack.id)
+
+    for endpoint in endpoints:
+        await db.delete(endpoint)
+    db.add(
+        StackEndpoint(
+            stack_id=stack.id,
+            domain=domain,
+            service_name=web.name,
+            behind_cloudflare=body.behind_cloudflare,
+        )
+    )
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=domain)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    reconciler = request.app.state.reconciler
+    background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
+    # A domain change alters no units, so converge plans nothing and would not
+    # touch Caddy — re-sync ingress explicitly so the new route goes live.
+    background.add_task(reconciler.resync_ingress)
+    return StackOperationAccepted(stack=await stack_response(db, stack), operation_id=op.id)
 
 
 @router.post("/{stack_id}/actions/{action_name}", response_model=StackActionResponse)

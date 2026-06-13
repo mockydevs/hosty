@@ -135,6 +135,35 @@ function parseField(field: Field, raw: FieldState): [string | null, unknown] {
   }
 }
 
+/** A per-field action (e.g. "Autogenerate" next to a domain). `run` returns
+ * the new field value, or null to leave it unchanged (e.g. on error). */
+export type FieldAction = { label: string; run: () => Promise<string | null> };
+
+function FieldActionButton({
+  action,
+  onValue,
+}: { action: FieldAction; onValue: (v: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      loading={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const value = await action.run();
+          if (value != null) onValue(value);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {action.label}
+    </Button>
+  );
+}
+
 function MapEditor({
   id,
   rows,
@@ -207,6 +236,7 @@ export function SchemaForm({
   submitLabel = "Create",
   pending = false,
   serverError,
+  fieldActions,
   children,
 }: {
   schema: JsonSchema;
@@ -214,6 +244,8 @@ export function SchemaForm({
   submitLabel?: string;
   pending?: boolean;
   serverError?: string | null;
+  /** Per-field action buttons keyed by field name (e.g. domain → Autogenerate). */
+  fieldActions?: Record<string, FieldAction>;
   /** Extra fields rendered above the schema-driven ones (e.g. stack name). */
   children?: React.ReactNode;
 }) {
@@ -317,19 +349,28 @@ export function SchemaForm({
             </div>
           );
         }
+        const action = fieldActions?.[field.name];
+        const input = (
+          <Input
+            id={field.name}
+            type={field.schema.secret ? "password" : field.kind === "number" ? "number" : "text"}
+            value={values[field.name] as string}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => set(field.name, e.target.value)}
+          />
+        );
         return (
           <div className={colSpanClass} key={field.name}>
             <FormField label={label} htmlFor={field.name} error={error}>
-              <Input
-                id={field.name}
-                type={
-                  field.schema.secret ? "password" : field.kind === "number" ? "number" : "text"
-                }
-                value={values[field.name] as string}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => set(field.name, e.target.value)}
-              />
+              {action ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">{input}</div>
+                  <FieldActionButton action={action} onValue={(v) => set(field.name, v)} />
+                </div>
+              ) : (
+                input
+              )}
               {field.schema.description && (
                 <p className="text-xs text-muted-foreground">{field.schema.description}</p>
               )}

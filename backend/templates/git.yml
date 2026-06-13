@@ -22,7 +22,8 @@ x-hosty:
       description: "Port the application listens on inside the container"
     domain:
       type: "string"
-      description: "Public domain for the application"
+      default: ""
+      description: "Public domain — leave blank to auto-generate one"
 
 services:
   web:

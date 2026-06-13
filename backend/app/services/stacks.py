@@ -9,6 +9,7 @@ rows. The reconciler reads rows, never the blueprint.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import secrets as pysecrets
 
@@ -40,6 +41,36 @@ class StackValidationError(AppError):
 
 def tenant_for(owner_id: int) -> str:
     return f"hosty-t-{int(owner_id)}"
+
+
+def suggested_domain(name: str, settings: Settings) -> str | None:
+    """Auto-generated public domain for a stack. Uses the configured wildcard
+    base (`<name>.<apps_base_domain>`) when set; otherwise a zero-config
+    sslip.io name off the server's public IP (`<name>.<ip>.sslip.io`), which
+    resolves to the box with no DNS setup. None when neither is available."""
+    base = (settings.apps_base_domain or "").strip().lower().strip(".")
+    if base:
+        return f"{name}.{base}"
+    ip = (settings.public_ip or "").strip()
+    if ip:
+        return f"{name}.{ip}.sslip.io"
+    return None
+
+
+def with_auto_domain(spec: StackSpec, settings: Settings) -> StackSpec:
+    """If a web-facing stack was created without a domain, attach a generated
+    one so it is reachable by default (editable later). No-op when the spec
+    already has an endpoint, has no public web service, or no domain can be
+    generated."""
+    if spec.endpoints:
+        return spec
+    web = next((s for s in spec.services if s.is_web and s.host_port is not None), None)
+    if web is None:
+        return spec
+    domain = suggested_domain(spec.name, settings)
+    if domain is None:
+        return spec
+    return dataclasses.replace(spec, endpoints=(EndpointSpec(domain=domain, service=web.name),))
 
 
 def encrypt_env(env: dict[str, str], settings: Settings) -> str | None:

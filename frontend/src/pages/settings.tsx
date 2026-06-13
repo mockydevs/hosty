@@ -1,3 +1,4 @@
+import { AppsDomainCard } from "@/components/apps-domain-card";
 import { CloudflareSettingsCard } from "@/components/cloudflare-settings-card";
 import { FormField } from "@/components/form-field";
 import { NotificationWebhookCard } from "@/components/notification-webhook-card";
@@ -146,6 +147,7 @@ export function SettingsPage() {
           <div className="space-y-6">
             <SMTPSettingsCard />
             <PanelDomainCard />
+            <AppsDomainCard />
             <NotificationWebhookCard />
           </div>
         )}
