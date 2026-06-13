@@ -1,0 +1,35 @@
+x-hosty:
+  name: "PostgreSQL"
+  version: 1
+  category: "Databases"
+  icon: "postgres"
+  description: "Deploy a PostgreSQL database."
+  ports:
+    - db
+  secrets:
+    - db_password
+  inputs:
+    version:
+      type: "string"
+      default: "16"
+      description: "PostgreSQL version (e.g. 15, 16)"
+    database:
+      type: "string"
+      default: "postgres"
+      description: "Default database name"
+    user:
+      type: "string"
+      default: "postgres"
+      description: "Superuser name"
+
+services:
+  db:
+    image: postgres:${version}
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_DB: ${database}
+      POSTGRES_USER: ${user}
+      POSTGRES_PASSWORD: ${db_password}
+    volumes:
+      - db-data:/var/lib/postgresql/data

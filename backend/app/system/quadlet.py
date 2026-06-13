@@ -59,6 +59,10 @@ def container_file_name(stack: str, service: str) -> str:
     return f"{stack}-{service}.container"
 
 
+def build_file_name(stack: str, service: str) -> str:
+    return f"{stack}-{service}.build"
+
+
 def network_file_name(stack: str) -> str:
     return f"{stack}.network"
 
@@ -86,7 +90,7 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         "",
         "[Container]",
         f"ContainerName={stack.name}-{service.name}",
-        f"Image={service.image}",
+        f"Image={build_file_name(stack.name, service.name) if service.build_repo else service.image}",
         f"Network={network_file_name(stack.name)}",
         # Hardening — unconditional.
         "NoNewPrivileges=true",
@@ -138,6 +142,23 @@ def network_unit(stack: StackSpec) -> str:
     )
 
 
+def build_unit(stack: StackSpec, service: ServiceSpec) -> str:
+    branch = f"#{service.build_branch}" if service.build_branch else ""
+    return "\n".join(
+        [
+            MANAGED_HEADER,
+            f"# hosty-stack={stack.name}",
+            f"# hosty-service={service.name}",
+            f"{SPEC_HASH_MARKER}{spec_hash(stack, service)}",
+            "",
+            "[Build]",
+            f"ImageTag=hosty/{stack.name}-{service.name}:latest",
+            f"SetWorkingDirectory={service.build_repo}{branch}",
+            "",
+        ]
+    )
+
+
 def unit_files(stack: StackSpec) -> dict[str, str]:
     """The COMPLETE desired unit-file set for a stack: what WriteUnits syncs
     the quadlet directory to (write these, delete any other file of this
@@ -145,6 +166,8 @@ def unit_files(stack: StackSpec) -> dict[str, str]:
     files = {network_file_name(stack.name): network_unit(stack)}
     for service in stack.services:
         files[container_file_name(stack.name, service.name)] = container_unit(stack, service)
+        if service.build_repo:
+            files[build_file_name(stack.name, service.name)] = build_unit(stack, service)
     return files
 
 

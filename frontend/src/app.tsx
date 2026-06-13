@@ -46,6 +46,9 @@ const BackupsPage = lazy(() => import("@/pages/backups").then((m) => ({ default:
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage })),
 );
+const SecurityPage = lazy(() =>
+  import("@/pages/security").then((m) => ({ default: m.SecurityPage })),
+);
 const AuditPage = lazy(() => import("@/pages/audit").then((m) => ({ default: m.AuditPage })));
 const UsersPage = lazy(() => import("@/pages/users").then((m) => ({ default: m.UsersPage })));
 const UsagePage = lazy(() => import("@/pages/usage").then((m) => ({ default: m.UsagePage })));
@@ -144,6 +147,7 @@ export function App() {
                 <Route path="/dns/:zoneId" element={<DnsZonePage />} />
                 <Route path="/backups" element={<BackupsPage />} />
                 <Route path="/usage" element={<UsagePage />} />
+                <Route path="/security" element={<SecurityPage />} />
                 <Route path="/audit" element={<AuditPage />} />
                 <Route
                   path="/users"

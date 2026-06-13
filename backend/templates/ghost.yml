@@ -1,0 +1,39 @@
+x-hosty:
+  name: "Ghost"
+  version: 1
+  category: "Applications"
+  icon: "file-text"
+  description: "Ghost is a powerful app for new-media creators to publish, share, and grow a business around their content."
+  ports:
+    - web
+  secrets:
+    - db_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://myblog.com)"
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${db_password}
+      MYSQL_DATABASE: ghost
+      MYSQL_USER: ghost
+      MYSQL_PASSWORD: ${db_password}
+    volumes:
+      - db-data:/var/lib/mysql
+
+  web:
+    image: ghost:5
+    ports:
+      - 2368:2368
+    environment:
+      database__client: mysql
+      database__connection__host: db
+      database__connection__user: ghost
+      database__connection__password: ${db_password}
+      database__connection__database: ghost
+      url: ${domain}
+    volumes:
+      - ghost-content:/var/lib/ghost/content

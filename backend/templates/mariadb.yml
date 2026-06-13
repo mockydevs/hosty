@@ -1,0 +1,37 @@
+x-hosty:
+  name: "MariaDB"
+  version: 1
+  category: "Databases"
+  icon: "mariadb"
+  description: "MariaDB is a community-developed, commercially supported fork of the MySQL relational database management system."
+  ports:
+    - db
+  secrets:
+    - root_password
+    - db_password
+  inputs:
+    version:
+      type: "string"
+      default: "11.4"
+      description: "MariaDB version (e.g. 10.11, 11.4)"
+    database:
+      type: "string"
+      default: "mariadb"
+      description: "Default database name"
+    user:
+      type: "string"
+      default: "mariadb"
+      description: "User name"
+
+services:
+  db:
+    image: mariadb:${version}
+    ports:
+      - 3306:3306
+    environment:
+      MARIADB_ROOT_PASSWORD: ${root_password}
+      MARIADB_DATABASE: ${database}
+      MARIADB_USER: ${user}
+      MARIADB_PASSWORD: ${db_password}
+    volumes:
+      - db-data:/var/lib/mysql

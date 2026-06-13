@@ -26,6 +26,7 @@ from app.api.routes import (
     notifications,
     plans,
     sites,
+    security,
     stacks,
     system,
     usage,
@@ -188,6 +189,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(plans.router, prefix="/api/plans", tags=["plans"])
     app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
     app.include_router(usage.router, prefix="/api/usage", tags=["usage"])
+    app.include_router(security.router, prefix="/api/security", tags=["security"])
     app.include_router(backups.router, prefix="/api/backups", tags=["backups"])
     app.include_router(backups.site_router, prefix="/api/sites", tags=["backups"])
     app.include_router(backups.stack_router, prefix="/api/stacks", tags=["backups"])

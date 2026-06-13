@@ -17,8 +17,9 @@ from app.api.deps import fetch_owned_site, get_current_user, get_db, is_admin
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.tickets import issue_token, token_scope
 from app.db.models import Site, Stack, StackService, User
-from app.orchestration.blueprints.wordpress import FILES as WP_FILES_SERVICE
 from app.services.filebrowser import AUTH_HEADER
+
+WP_FILES_SERVICE = "files"
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 stack_router = APIRouter(dependencies=[Depends(get_current_user)])

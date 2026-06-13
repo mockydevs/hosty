@@ -1,0 +1,30 @@
+x-hosty:
+  name: "MongoDB"
+  version: 1
+  category: "Databases"
+  icon: "mongodb"
+  description: "MongoDB is a source-available cross-platform document-oriented database program."
+  ports:
+    - db
+  secrets:
+    - root_password
+  inputs:
+    version:
+      type: "string"
+      default: "7.0"
+      description: "MongoDB version (e.g. 6.0, 7.0)"
+    username:
+      type: "string"
+      default: "root"
+      description: "Root username"
+
+services:
+  db:
+    image: mongo:${version}
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${username}
+      MONGO_INITDB_ROOT_PASSWORD: ${root_password}
+    volumes:
+      - db-data:/data/db

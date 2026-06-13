@@ -231,14 +231,23 @@ export function SchemaForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      {children}
+    <form onSubmit={handleSubmit} className="grid gap-6 sm:grid-cols-2" noValidate>
+      {children && <div className="sm:col-span-2 space-y-4">{children}</div>}
+
       {fields.map((field) => {
         const label = labelFor(field.name, field.schema);
         const error = errors[field.name];
+
+        // Maps take full width
+        const colSpanClass = field.kind === "map" ? "sm:col-span-2" : "";
+
         if (field.kind === "boolean") {
           return (
-            <label key={field.name} className="flex items-start gap-2 text-sm" htmlFor={field.name}>
+            <label
+              key={field.name}
+              className={`flex items-start gap-2 text-sm ${colSpanClass}`}
+              htmlFor={field.name}
+            >
               <input
                 id={field.name}
                 type="checkbox"
@@ -259,45 +268,54 @@ export function SchemaForm({
         }
         if (field.kind === "map") {
           return (
-            <FormField key={field.name} label={label} htmlFor={field.name} error={error}>
-              {field.schema.description && (
-                <p className="text-xs text-muted-foreground">{field.schema.description}</p>
-              )}
-              <MapEditor
-                id={field.name}
-                rows={values[field.name] as MapRow[]}
-                onChange={(rows) => set(field.name, rows)}
-                keyPlaceholder="name"
-                valuePlaceholder="value"
-                secret={field.schema.secret}
-              />
-            </FormField>
+            <div className={colSpanClass} key={field.name}>
+              <FormField label={label} htmlFor={field.name} error={error}>
+                {field.schema.description && (
+                  <p className="text-xs text-muted-foreground">{field.schema.description}</p>
+                )}
+                <MapEditor
+                  id={field.name}
+                  rows={values[field.name] as MapRow[]}
+                  onChange={(rows) => set(field.name, rows)}
+                  keyPlaceholder="name"
+                  valuePlaceholder="value"
+                  secret={field.schema.secret}
+                />
+              </FormField>
+            </div>
           );
         }
         return (
-          <FormField key={field.name} label={label} htmlFor={field.name} error={error}>
-            <Input
-              id={field.name}
-              type={field.schema.secret ? "password" : field.kind === "number" ? "number" : "text"}
-              value={values[field.name] as string}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => set(field.name, e.target.value)}
-            />
-            {field.schema.description && (
-              <p className="text-xs text-muted-foreground">{field.schema.description}</p>
-            )}
-          </FormField>
+          <div className={colSpanClass} key={field.name}>
+            <FormField label={label} htmlFor={field.name} error={error}>
+              <Input
+                id={field.name}
+                type={
+                  field.schema.secret ? "password" : field.kind === "number" ? "number" : "text"
+                }
+                value={values[field.name] as string}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => set(field.name, e.target.value)}
+              />
+              {field.schema.description && (
+                <p className="text-xs text-muted-foreground">{field.schema.description}</p>
+              )}
+            </FormField>
+          </div>
         );
       })}
-      {serverError && (
-        <p className="text-sm text-destructive" role="alert">
-          {serverError}
-        </p>
-      )}
-      <Button type="submit" loading={pending}>
-        {submitLabel}
-      </Button>
+
+      <div className="sm:col-span-2 pt-2">
+        {serverError && (
+          <p className="mb-4 text-sm text-destructive" role="alert">
+            {serverError}
+          </p>
+        )}
+        <Button type="submit" loading={pending} className="w-full sm:w-auto">
+          {submitLabel}
+        </Button>
+      </div>
     </form>
   );
 }

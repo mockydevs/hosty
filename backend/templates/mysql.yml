@@ -1,0 +1,37 @@
+x-hosty:
+  name: "MySQL"
+  version: 1
+  category: "Databases"
+  icon: "mysql"
+  description: "MySQL is an open-source relational database management system."
+  ports:
+    - db
+  secrets:
+    - root_password
+    - db_password
+  inputs:
+    version:
+      type: "string"
+      default: "8.0"
+      description: "MySQL version (e.g. 8.0, 8.4)"
+    database:
+      type: "string"
+      default: "mysql"
+      description: "Default database name"
+    user:
+      type: "string"
+      default: "mysql"
+      description: "User name"
+
+services:
+  db:
+    image: mysql:${version}
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: ${root_password}
+      MYSQL_DATABASE: ${database}
+      MYSQL_USER: ${user}
+      MYSQL_PASSWORD: ${db_password}
+    volumes:
+      - db-data:/var/lib/mysql

@@ -22,7 +22,7 @@ import type { components } from "@/lib/api/schema";
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Boxes, Copy } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -47,7 +47,7 @@ function BlueprintPicker({
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {categories.map((category) => {
         const categoryBlueprints = blueprints.filter(
           (bp) => ((bp as BlueprintWithMeta).category || "Other") === category,
@@ -55,38 +55,32 @@ function BlueprintPicker({
         return (
           <div key={category} className="space-y-4">
             <h2 className="text-xl font-semibold tracking-tight">{category}</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
               {categoryBlueprints.map((bp) => {
                 const schema = bp.inputs_schema as JsonSchema;
                 const meta = bp as BlueprintWithMeta;
                 return (
                   <Card
                     key={bp.id}
-                    className="cursor-pointer hover:border-primary transition-colors"
+                    className="cursor-pointer hover:border-primary transition-all duration-200 group flex items-start p-4"
                     onClick={() => onPick(bp)}
                   >
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden />
-                        {meta.display_name || schema.title || bp.id}
-                      </CardTitle>
-                      <CardDescription>
+                    <div className="mr-4 mt-1 rounded-md bg-muted p-2 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <Boxes className="h-8 w-8" aria-hidden />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold leading-none tracking-tight text-base">
+                          {meta.display_name || schema.title || bp.id}
+                        </h3>
+                        <Badge variant="secondary" className="text-[10px]">
+                          v{bp.version}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
                         {meta.description || schema.description || `Deploy ${bp.id}`}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex items-center justify-between">
-                      <Badge variant="outline">v{bp.version}</Badge>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPick(bp);
-                        }}
-                      >
-                        Choose
-                      </Button>
-                    </CardContent>
+                      </p>
+                    </div>
                   </Card>
                 );
               })}
@@ -159,6 +153,17 @@ export function StackCreatePage() {
   const [pending, setPending] = useState(false);
   const [accepted, setAccepted] = useState<Accepted | null>(null);
 
+  useEffect(() => {
+    if (selected) {
+      const shortId = Math.random().toString(36).substring(2, 6);
+      setName(`${selected.id}-${shortId}`);
+      setNameError(null);
+      setServerError(null);
+    } else {
+      setName("");
+    }
+  }, [selected]);
+
   const blueprints = useQuery({
     queryKey: ["stack-blueprints"],
     queryFn: async () => {
@@ -223,7 +228,7 @@ export function StackCreatePage() {
       ) : !selected ? (
         <BlueprintPicker blueprints={blueprints.data} onPick={setSelected} />
       ) : (
-        <Card className="max-w-2xl">
+        <Card className="max-w-4xl mx-auto w-full">
           <CardHeader>
             <CardTitle className="text-base">Configure</CardTitle>
             <CardDescription>

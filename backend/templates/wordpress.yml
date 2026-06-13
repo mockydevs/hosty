@@ -1,0 +1,48 @@
+x-hosty:
+  name: "WordPress"
+  version: 1
+  category: "Applications"
+  icon: "wordpress"
+  description: "Deploy a fully containerized WordPress instance with MariaDB."
+  ports:
+    - web
+  secrets:
+    - db_password
+    - wp_admin_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (HTTPS via Caddy)"
+    title:
+      type: "string"
+      description: "Site title"
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    admin_email:
+      type: "string"
+      description: "Admin email address"
+
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${db_password}
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: ${db_password}
+    volumes:
+      - db-data:/var/lib/mysql
+
+  web:
+    image: wordpress:latest
+    ports:
+      - 80:80
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${db_password}
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp-data:/var/www/html

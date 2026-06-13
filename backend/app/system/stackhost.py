@@ -143,6 +143,45 @@ def write_env_files(tenant: str, files: dict[str, str]) -> None:
         shutil.chown(normalized, user=tenant, group=tenant)
 
 
+def sync_ssh_keys(tenant: str, keys: list[tuple[str, str]]) -> None:
+    """Write SSH private keys to the tenant's ~/.ssh directory and generate an
+    SSH config file that uses them for all connections. Keys is a list of
+    (name, private_key_text)."""
+    validate_tenant_username(tenant)
+    home = quadlet.home_dir_for(tenant)
+    ssh_dir = os.path.join(home, ".ssh")
+    os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
+    shutil.chown(ssh_dir, user=tenant, group=tenant)
+
+    # Write each private key
+    key_paths = []
+    for name, content in keys:
+        validate_slug(name, what="ssh key name")
+        path = os.path.join(ssh_dir, name)
+        _open_write(path, content, 0o600)
+        shutil.chown(path, user=tenant, group=tenant)
+        key_paths.append(path)
+
+    # Clean up old keys (anything not in the current set, ignoring known_hosts/config)
+    allowed = {k[0] for k in keys}
+    for entry in os.listdir(ssh_dir):
+        if entry not in ("config", "known_hosts") and entry not in allowed:
+            os.remove(os.path.join(ssh_dir, entry))
+
+    # Generate config to blanket-apply all keys to common git hosts
+    config_lines = [
+        "Host github.com gitlab.com bitbucket.org",
+        "  StrictHostKeyChecking accept-new",
+    ]
+    for kp in key_paths:
+        config_lines.append(f"  IdentityFile {kp}")
+    config_lines.append("  IdentitiesOnly yes")
+
+    config_path = os.path.join(ssh_dir, "config")
+    _open_write(config_path, "\n".join(config_lines) + "\n", 0o600)
+    shutil.chown(config_path, user=tenant, group=tenant)
+
+
 def ensure_volume_dir(tenant: str, stack: str, volume: str) -> None:
     """Create one volume directory (and the stack tree above it), tenant-
     owned at every level the panel created."""

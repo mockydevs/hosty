@@ -1,0 +1,16 @@
+x-hosty:
+  name: "Uptime Kuma"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "A fancy self-hosted monitoring tool."
+  ports:
+    - web
+
+services:
+  web:
+    image: louislam/uptime-kuma:1
+    ports:
+      - 3001:3001
+    volumes:
+      - uptime-kuma-data:/app/data

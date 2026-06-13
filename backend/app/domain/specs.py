@@ -55,10 +55,13 @@ class ServiceSpec:
     memory_mb: int | None = None
     cpu_percent: int | None = None
     is_web: bool = False
+    build_repo: str | None = None
+    build_branch: str | None = None
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
-        validate_image_ref(self.image)
+        if not self.build_repo:
+            validate_image_ref(self.image)
         for key, value in self.env:
             validate_env_key(key)
             validate_env_value(key, value)
@@ -171,6 +174,8 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "host_port": service.host_port,
         "memory_mb": service.memory_mb,
         "cpu_percent": service.cpu_percent,
+        "build_repo": service.build_repo,
+        "build_branch": service.build_branch,
         "network": stack.network,
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
     }

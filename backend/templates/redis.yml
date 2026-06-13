@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Redis"
+  version: 1
+  category: "Databases"
+  icon: "redis"
+  description: "Redis is an open source, in-memory data structure store, used as a database, cache, and message broker."
+  ports:
+    - db
+  secrets:
+    - password
+  inputs:
+    version:
+      type: "string"
+      default: "7.2"
+      description: "Redis version (e.g. 7.0, 7.2)"
+
+services:
+  db:
+    image: redis:${version}
+    ports:
+      - 6379:6379
+    environment:
+      REDIS_PASSWORD: ${password}
+    volumes:
+      - db-data:/data

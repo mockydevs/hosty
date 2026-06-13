@@ -1,0 +1,20 @@
+x-hosty:
+  name: "Git Repository"
+  version: 1
+  category: "Source Code"
+  icon: "git-commit"
+  description: "Deploy any application directly from a public Git repository. The application will be built automatically using its Dockerfile."
+  ports:
+    - web
+  inputs:
+    repo:
+      type: "string"
+      description: "Git Repository URL (e.g. https://github.com/user/repo.git)"
+    branch:
+      type: "string"
+      default: "main"
+      description: "Git Branch (e.g. main)"
+
+services:
+  web:
+    build: ${repo}#${branch}

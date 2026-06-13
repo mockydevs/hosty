@@ -8,6 +8,7 @@ import {
   Database,
   Gauge,
   Globe,
+  Key,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -34,6 +35,7 @@ const NAV = [
   { to: "/usage", label: "Usage", icon: Gauge },
   { to: "/audit", label: "Audit log", icon: ScrollText },
   { to: "/users", label: "Users", icon: UsersRound, adminOnly: true },
+  { to: "/security", label: "Keys & Tokens", icon: Key },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

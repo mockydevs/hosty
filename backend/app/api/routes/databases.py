@@ -21,12 +21,14 @@ from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import hash_token
 from app.core.tickets import token_scope
 from app.db.models import Database, Site, Stack, StackService, User
-from app.orchestration.blueprints.wordpress import ADMINER as WP_ADMINER_SERVICE
-from app.orchestration.blueprints.wordpress import DB as WP_DB_SERVICE
-from app.orchestration.blueprints.wordpress import DB_NAME as WP_DB_NAME
-from app.orchestration.blueprints.wordpress import DB_USER as WP_DB_USER
 from app.services import adminer as adminer_service
 from app.services import mariadb, quotas
+
+WP_ADMINER_SERVICE = "adminer"
+WP_DB_SERVICE = "db"
+WP_DB_NAME = "DB_NAME"
+WP_DB_USER = "DB_USER"
+WP_DB_PASSWORD = "DB_PASSWORD"
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
