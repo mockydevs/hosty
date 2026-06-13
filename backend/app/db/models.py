@@ -442,6 +442,7 @@ class GitSource(Base):
     
     # GitHub App Specifics
     app_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    app_slug: Mapped[str | None] = mapped_column(String(128), nullable=True)
     installation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     client_id: Mapped[str] = mapped_column(String(128), nullable=False)
     client_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)

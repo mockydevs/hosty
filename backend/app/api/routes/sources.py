@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import time
 from datetime import datetime
 from typing import Any
@@ -19,11 +23,41 @@ from app.db.models import GitSource, User
 router = APIRouter()
 
 
+def _make_install_state(source_id: int, secret_key: str) -> str:
+    """Return a short-lived signed token encoding source_id (valid 1 hour, no server storage)."""
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps({"s": source_id, "e": int(time.time()) + 3600}).encode()
+        )
+        .rstrip(b"=")
+        .decode()
+    )
+    sig = hmac.new(secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:24]
+    return f"{payload}.{sig}"
+
+
+def _verify_install_state(state: str, secret_key: str) -> int | None:
+    """Validate a state token; return source_id on success, None on failure."""
+    try:
+        payload, sig = state.rsplit(".", 1)
+        expected = hmac.new(secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:24]
+        if not hmac.compare_digest(sig, expected):
+            return None
+        padding = "=" * (4 - len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload + padding))
+        if data["e"] < int(time.time()):
+            return None
+        return int(data["s"])
+    except Exception:
+        return None
+
+
 class SourceResponse(BaseModel):
     id: int
     name: str
     provider: str
     app_id: str
+    app_slug: str | None
     installation_id: str | None
     created_at: datetime
 
@@ -32,6 +66,16 @@ class GitHubCallbackBody(BaseModel):
     code: str
     installation_id: str | None = None
     name: str | None = None
+
+
+class ManifestBody(BaseModel):
+    name: str | None = None
+
+
+class GitHubInstallBody(BaseModel):
+    installation_id: str
+    setup_action: str | None = None
+    state: str | None = None
 
 
 @router.get("", response_model=list[SourceResponse])
@@ -70,6 +114,7 @@ async def delete_source(
 
 @router.post("/github/manifest")
 async def github_manifest(
+    body: ManifestBody,
     request: Request,
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -84,19 +129,26 @@ async def github_manifest(
         or "localhost:8000"
     )
     base_url = f"{protocol}://{host}"
+    app_name = body.name or f"hosty-{user.username}"
 
     manifest = {
-        "name": f"Hosty ({user.username})",
+        "name": app_name,
         "url": base_url,
         "hook_attributes": {
             "url": f"{base_url}/api/webhooks/github",
             "active": True,
         },
         "redirect_url": f"{base_url}/sources/github/callback",
+        "setup_url": f"{base_url}/sources/github/install",
+        "setup_on_update": True,
+        "callback_urls": [f"{base_url}/sources/github/callback"],
+        "request_oauth_on_install": False,
         "public": False,
         "default_permissions": {
             "contents": "read",
             "metadata": "read",
+            "emails": "read",
+            "administration": "read",
             "pull_requests": "read",
         },
         "default_events": ["push", "pull_request"],
@@ -159,6 +211,7 @@ async def github_callback(
         name=app_name,
         provider="github",
         app_id=str(data["id"]),
+        app_slug=data.get("slug") or app_name,
         installation_id=installation_id,
         client_id=data["client_id"],
         client_secret_encrypted=encrypt_secret(data["client_secret"], settings.secret_key),
@@ -274,3 +327,85 @@ async def list_source_repos(
         }
         for r in repos
     ]
+
+
+@router.get("/{source_id}/install-url")
+async def get_install_url(
+    source_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+) -> Any:
+    """Return a signed GitHub App installation URL (state token expires in 1 hour)."""
+    source = await db.get(GitSource, source_id)
+    if not source or source.owner_id != user.id:
+        raise NotFoundError("Source not found")
+    if not source.app_slug:
+        raise ConflictError("Source has no app slug — please delete and re-register.")
+
+    settings = request.app.state.settings
+    state = _make_install_state(source.id, settings.secret_key)
+    url = f"https://github.com/apps/{source.app_slug}/installations/new?state={state}"
+    return {"url": url}
+
+
+@router.post("/github/install")
+async def github_install(
+    body: GitHubInstallBody,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+) -> Any:
+    """Handle GitHub's setup_url redirect after app installation or permission update."""
+    if body.setup_action == "update":
+        # Repository access change — no DB update needed
+        return {"status": "ok"}
+
+    settings = request.app.state.settings
+
+    # Primary path: validate signed state token → direct source lookup
+    if body.state:
+        source_id = _verify_install_state(body.state, settings.secret_key)
+        if source_id:
+            source = await db.get(GitSource, source_id)
+            if source and source.owner_id == user.id:
+                source.installation_id = body.installation_id
+                await db.commit()
+                return {"status": "ok", "source_id": source.id}
+
+    # Fallback: verify via GitHub API which app owns this installation
+    result = await db.execute(
+        select(GitSource).where(
+            GitSource.owner_id == user.id,
+            GitSource.installation_id.is_(None),
+        )
+    )
+    sources = result.scalars().all()
+
+    for source in sources:
+        try:
+            private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+            now = int(time.time())
+            app_jwt = pyjwt.encode(
+                {"iat": now - 60, "exp": now + 540, "iss": source.app_id},
+                private_key,
+                algorithm="RS256",
+            )
+            async with httpx.AsyncClient() as gh:
+                resp = await gh.get(
+                    f"https://api.github.com/app/installations/{body.installation_id}",
+                    headers={
+                        "Authorization": f"Bearer {app_jwt}",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                )
+            if resp.status_code == 200:
+                inst = resp.json()
+                if str(inst.get("app_id")) == str(source.app_id):
+                    source.installation_id = body.installation_id
+                    await db.commit()
+                    return {"status": "ok", "source_id": source.id}
+        except Exception:
+            continue
+
+    return {"status": "ok"}  # Could not match; user can use Refresh Installation

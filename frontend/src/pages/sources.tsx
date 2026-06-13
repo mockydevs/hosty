@@ -12,10 +12,82 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { ExternalLink, Github, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+
+const ADJECTIVES = [
+  "admiring", "agile", "amazing", "bold", "brave", "bright", "calm", "clever",
+  "dazzling", "eager", "epic", "fervent", "focused", "friendly", "gentle", "graceful",
+  "happy", "keen", "kind", "lively", "lucky", "magical", "nimble", "peaceful",
+  "proud", "quick", "rapid", "resilient", "serene", "sharp", "sleek", "smart",
+  "swift", "tender", "vibrant", "vigilant", "wise", "witty",
+];
+const NOUNS = [
+  "albatross", "badger", "beaver", "bison", "cardinal", "crane", "crow", "eagle",
+  "falcon", "finch", "fox", "gecko", "grouse", "hawk", "heron", "jaguar",
+  "kestrel", "kite", "lark", "lynx", "merlin", "moose", "osprey", "otter",
+  "panther", "puffin", "raven", "robin", "seal", "sparrow", "swift", "tiger",
+  "viper", "wagtail", "weasel", "wolf", "wren",
+];
+
+function generateAppName(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const suffix = Math.random().toString(36).slice(2, 10);
+  return `${adj}-${noun}-${suffix}`;
+}
+
+export function GitHubInstallPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const called = useRef(false);
+
+  useEffect(() => {
+    if (called.current) return;
+    called.current = true;
+
+    const installation_id = searchParams.get("installation_id");
+    const setup_action = searchParams.get("setup_action");
+    const state = searchParams.get("state");
+
+    if (!installation_id) {
+      navigate("/sources", { replace: true });
+      return;
+    }
+
+    api
+      .POST("/api/sources/github/install" as any, {
+        body: { installation_id, setup_action, state } as any,
+      })
+      .then(({ error: apiError }) => {
+        if (apiError) {
+          setError(apiErrorMessage(apiError, "Failed to save installation"));
+          return;
+        }
+        navigate("/sources", { replace: true });
+      });
+  }, [searchParams, navigate]);
+
+  if (error) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <ErrorState message={error} />
+          <div className="mt-4 flex justify-center">
+            <Button variant="outline" onClick={() => navigate("/sources")}>
+              Back to Sources
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <LoadingState label="Saving GitHub App installation…" />;
+}
 
 export function GitHubCallbackPage() {
   const [searchParams] = useSearchParams();
@@ -81,7 +153,9 @@ export function SourcesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await (api as any).DELETE(`/api/sources/${id}`);
+      const { error } = await (api as any).DELETE("/api/sources/{source_id}", {
+        params: { path: { source_id: id } },
+      });
       if (error) throw new Error(apiErrorMessage(error, "Failed to delete source"));
     },
     onSuccess: () => {
@@ -93,7 +167,10 @@ export function SourcesPage() {
 
   const refreshMutation = useMutation({
     mutationFn: async (id: number) => {
-      const { data, error } = await (api as any).POST(`/api/sources/${id}/refresh-installation`);
+      const { data, error } = await (api as any).POST(
+        "/api/sources/{source_id}/refresh-installation",
+        { params: { path: { source_id: id } } },
+      );
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to refresh installation"));
       return data as { installation_id: string };
     },
@@ -102,6 +179,21 @@ export function SourcesPage() {
       void queryClient.invalidateQueries({ queryKey: ["sources"] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Refresh failed"),
+  });
+
+  const installMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await (api as any).GET(
+        "/api/sources/{source_id}/install-url",
+        { params: { path: { source_id: id } } },
+      );
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to get install URL"));
+      return data as { url: string };
+    },
+    onSuccess: (data) => {
+      window.location.href = data.url;
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed"),
   });
 
   return (
@@ -166,14 +258,25 @@ export function SourcesPage() {
                       Install ID: {source.installation_id}
                     </span>
                   ) : (
-                    <div className="space-y-1.5">
-                      <span className="block text-destructive">
-                        No installation ID — repos unavailable.
-                      </span>
+                    <div className="space-y-2 pt-1">
+                      <p className="text-destructive font-sans">
+                        You must complete this step before you can use this source.
+                      </p>
+                      {source.app_slug && (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs w-full"
+                          loading={installMutation.isPending}
+                          onClick={() => installMutation.mutate(source.id)}
+                        >
+                          <ExternalLink className="mr-1.5 h-3 w-3" aria-hidden />
+                          Install Repositories on GitHub
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs"
+                        className="h-7 text-xs w-full"
                         loading={refreshMutation.isPending}
                         onClick={() => refreshMutation.mutate(source.id)}
                       >
@@ -195,11 +298,13 @@ export function SourcesPage() {
 }
 
 function NewGitHubAppDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [name, setName] = useState("hosty-integration");
+  const [name, setName] = useState(generateAppName);
 
   const manifestMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.POST("/api/sources/github/manifest" as any, {});
+      const { data, error } = await api.POST("/api/sources/github/manifest" as any, {
+        body: { name } as any,
+      });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to generate manifest"));
       return data as { manifest: Record<string, unknown> };
     },
@@ -236,12 +341,24 @@ function NewGitHubAppDialog({ open, onClose }: { open: boolean; onClose: () => v
             <Label htmlFor="app-name">
               Name <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="app-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="my-github-app"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="app-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="my-github-app"
+                className="font-mono text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                title="Generate a new random name"
+                onClick={() => setName(generateAppName())}
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="org-name">Organization (on GitHub)</Label>
