@@ -3,7 +3,6 @@ import { type JsonSchema, SchemaForm } from "@/components/schema-form";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogActions,
@@ -12,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { copyToClipboard } from "@/lib/utils";
@@ -19,20 +19,23 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Boxes,
-  Check,
+  ChevronRight,
   Container,
   Copy,
+  FileCode2,
+  Github,
   GitBranch,
   Globe2,
-  Layers,
-  Package,
   Rocket,
   Search,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
 type Blueprint = components["schemas"]["BlueprintResponse"];
 type BlueprintWithMeta = Blueprint & {
   category?: string;
@@ -41,8 +44,16 @@ type BlueprintWithMeta = Blueprint & {
   description?: string;
 };
 type Accepted = components["schemas"]["StackOperationAccepted"];
-type DeployMode = "git" | "image" | "template";
+type Step = "type" | "github_app" | "repository" | "public_git" | "docker_image" | "template";
+type DomainConfig = { base_domain: string | null; sslip_fallback_ip: string | null };
 
+const BUILD_PACKS = [
+  { value: "nixpacks", label: "Nixpacks", available: false, hint: "Auto-detect build settings" },
+  { value: "dockerfile", label: "Dockerfile", available: true, hint: "Build from a Dockerfile" },
+  { value: "dockercompose", label: "Docker Compose", available: false, hint: "Multi-container setup" },
+];
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
 export function blueprintDisplayName(bp: Blueprint): string {
   const meta = bp as BlueprintWithMeta;
   if (meta.display_name) return meta.display_name;
@@ -51,18 +62,16 @@ export function blueprintDisplayName(bp: Blueprint): string {
   return bp.id
     .split("-")
     .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join(" ");
 }
 
 function inputDefaults(schema: JsonSchema): Record<string, unknown> {
-  const defaults: Record<string, unknown> = {};
-  for (const [key, field] of Object.entries(schema.properties ?? {})) {
-    if (field.default !== undefined && field.default !== null && field.default !== "") {
-      defaults[key] = field.default;
-    }
+  const d: Record<string, unknown> = {};
+  for (const [k, f] of Object.entries(schema.properties ?? {})) {
+    if (f.default !== undefined && f.default !== null && f.default !== "") d[k] = f.default;
   }
-  return defaults;
+  return d;
 }
 
 function slugFromRepo(repo: string): string {
@@ -75,176 +84,263 @@ function slugFromRepo(repo: string): string {
   return cleaned.slice(0, 32) || "my-app";
 }
 
-function validateSlug(value: string): string | null {
-  return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(value)
+function validateSlug(v: string): string | null {
+  return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(v)
     ? null
-    : "1-32 lowercase letters, digits or hyphens; no leading/trailing hyphen";
+    : "1–32 lowercase letters, digits or hyphens; no leading/trailing hyphen";
 }
 
-function MethodButton({
-  active,
+// Domain auto-generation (mirrors backend stacks_service.suggested_domain).
+// Pattern: {name}.{apps_base_domain}  ─OR─  {name}.{public_ip}.sslip.io
+function suggestedDomain(name: string, config: DomainConfig | null | undefined): string {
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!slug) return "";
+  const base = (config?.base_domain ?? "").trim().replace(/^\.+|\.+$/g, "");
+  if (base) return `${slug}.${base}`;
+  const ip = (config?.sslip_fallback_ip ?? "").trim();
+  if (ip) return `${slug}.${ip}.sslip.io`;
+  return "";
+}
+
+function domainHint(domain: string, name: string, config: DomainConfig | null | undefined): string | null {
+  if (!domain) return null;
+  if (domain !== suggestedDomain(name, config)) return null;
+  const base = (config?.base_domain ?? "").trim();
+  if (base) return `Auto-generated from your wildcard domain *.${base}`;
+  if ((config?.sslip_fallback_ip ?? "").trim())
+    return "Auto-generated via sslip.io — resolves to this server with zero DNS setup";
+  return null;
+}
+
+// ─── ResourceCard (like Coolify's x-resource-view / coolbox) ─────────────────
+function ResourceCard({
   icon: Icon,
   title,
   description,
+  badge,
+  disabled,
   onClick,
 }: {
-  active: boolean;
   icon: typeof GitBranch;
   title: string;
   description: string;
+  badge?: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      className={[
-        "flex w-full cursor-pointer items-start gap-3 rounded-md border p-3 text-left transition-colors",
-        active
-          ? "border-primary bg-primary/10 text-foreground"
-          : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
-      ].join(" ")}
+      disabled={disabled}
       onClick={onClick}
+      className={[
+        "group flex w-full cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-all",
+        disabled
+          ? "cursor-not-allowed border-border opacity-50"
+          : "border-border hover:border-primary hover:bg-primary/5 hover:shadow-sm active:scale-[0.99]",
+      ].join(" ")}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium">{title}</span>
-        <span
-          className={active ? "block text-xs text-muted-foreground" : "block text-xs text-muted-foreground"}
-        >
-          {description}
-        </span>
-      </span>
+      <div
+        className={[
+          "flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-muted transition-colors",
+          !disabled && "group-hover:border-primary/50 group-hover:bg-primary/10",
+        ].join(" ")}
+      >
+        <Icon
+          className={[
+            "h-6 w-6 transition-colors",
+            disabled ? "text-muted-foreground" : "text-muted-foreground group-hover:text-primary",
+          ].join(" ")}
+          aria-hidden
+        />
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{title}</span>
+          {badge && (
+            <Badge variant="outline" className="text-[10px] uppercase">
+              {badge}
+            </Badge>
+          )}
+        </div>
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+      </div>
     </button>
   );
 }
 
-function DeploySteps({ mode }: { mode: DeployMode }) {
-  const steps = [
-    mode === "git" ? "Repository" : mode === "image" ? "Image" : "Template",
-    "Build",
-    "Domain",
-    "Deploy",
-  ];
-  return (
-    <ol className="grid gap-2 sm:grid-cols-4">
-      {steps.map((step, index) => (
-        <li
-          key={step}
-          className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
-        >
-          <span
-            className={[
-              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-medium",
-              index === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-            ].join(" ")}
-          >
-            {index === 0 ? <Check className="h-3 w-3" aria-hidden /> : index + 1}
-          </span>
-          <span className="text-xs font-medium">{step}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function SectionTitle({
-  icon: Icon,
-  title,
-  description,
+// ─── SourceAppCard (GitHub App selection) ────────────────────────────────────
+function SourceAppCard({
+  source,
+  onClick,
 }: {
-  icon: typeof GitBranch;
-  title: string;
-  description?: string;
+  source: { id: number; name: string; app_slug?: string | null; installation_id?: string | null };
+  onClick: () => void;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="rounded-md border border-border bg-muted p-2">
-        <Icon className="h-4 w-4" aria-hidden />
+    <button
+      type="button"
+      disabled={!source.installation_id}
+      onClick={onClick}
+      className={[
+        "group flex w-full items-center gap-4 rounded-lg border bg-card py-4 px-5 text-left transition-all",
+        !source.installation_id
+          ? "cursor-not-allowed border-border opacity-60"
+          : "cursor-pointer border-border hover:border-primary hover:bg-primary/5",
+      ].join(" ")}
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted">
+        <Github className="h-5 w-5 text-muted-foreground" aria-hidden />
       </div>
-      <div>
-        <h2 className="text-base font-semibold">{title}</h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate">{source.name}</div>
+        <div className="text-sm text-muted-foreground truncate">
+          {source.app_slug ? `github.com/apps/${source.app_slug}` : "github.com"}
+        </div>
+        {!source.installation_id && (
+          <div className="mt-1 text-xs text-destructive">Not installed — visit Sources to fix</div>
+        )}
       </div>
-    </div>
+      {source.installation_id && (
+        <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+      )}
+    </button>
   );
 }
 
-function BuildPackPicker() {
+// ─── BuildPackSelect ──────────────────────────────────────────────────────────
+function BuildPackSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
-    <div className="grid gap-3">
-      <div className="rounded-md border border-primary bg-primary/10 px-3 py-2 text-foreground">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Package className="h-4 w-4 text-primary" aria-hidden />
-          Dockerfile
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">Build from the selected repository branch.</p>
-      </div>
-      <div className="rounded-md border border-dashed border-border px-3 py-2 text-muted-foreground">
-        <div className="flex items-center justify-between gap-2 text-sm font-medium">
-          <span className="flex items-center gap-2">
-            <Layers className="h-4 w-4" aria-hidden />
-            Docker Compose
-          </span>
-          <Badge variant="outline">Next</Badge>
-        </div>
-        <p className="mt-1 text-xs">Compose analyzer and service review are being wired in.</p>
-      </div>
+    <div className="space-y-1.5">
+      <Label htmlFor="build-pack">Build Pack</Label>
+      <select
+        id="build-pack"
+        value={value}
+        onChange={(e) => {
+          const bp = BUILD_PACKS.find((b) => b.value === e.target.value);
+          if (bp && !bp.available) {
+            toast.info(`${bp.label} is coming soon.`);
+            return;
+          }
+          onChange(e.target.value);
+        }}
+        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        {BUILD_PACKS.map((bp) => (
+          <option key={bp.value} value={bp.value}>
+            {bp.label}
+            {!bp.available ? " (Coming Soon)" : ""}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
-function GitDeployForm({
+// ─── EnvVarsEditor ────────────────────────────────────────────────────────────
+function EnvVarsEditor({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [devView, setDevView] = useState(true);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Environment Variables</Label>
+        <button
+          type="button"
+          onClick={() => setDevView(!devView)}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {devView ? (
+            <>
+              <ToggleRight className="h-3.5 w-3.5" aria-hidden /> Developer view
+            </>
+          ) : (
+            <>
+              <ToggleLeft className="h-3.5 w-3.5" aria-hidden /> Normal view
+            </>
+          )}
+        </button>
+      </div>
+      {devView ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            One <code className="font-mono">KEY=value</code> per line. Stored encrypted and injected
+            at runtime.
+          </p>
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={"PORT=3000\nDATABASE_URL=postgres://...\nSECRET_KEY=..."}
+            rows={8}
+            spellCheck={false}
+            className="flex w-full rounded-md border border-input bg-background px-3 py-2.5 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
+          />
+        </>
+      ) : (
+        <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+          Key-value editor coming soon — use Developer view for now.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── ConfigureForm (shared for git-based deployments) ────────────────────────
+function ConfigureForm({
+  repo,
+  defaultBranch,
+  sourceId,
   blueprint,
+  domainConfig,
   onSubmit,
   pending,
   serverError,
 }: {
-  blueprint?: Blueprint;
+  repo: string;
+  defaultBranch?: string;
+  sourceId: number | null;
+  blueprint: Blueprint;
+  domainConfig?: DomainConfig | null;
   onSubmit: (name: string, inputs: Record<string, unknown>) => Promise<void>;
   pending: boolean;
   serverError: string | null;
 }) {
-  const [sourceId, setSourceId] = useState<string>("public");
-  const [repo, setRepo] = useState("");
-  const [branch, setBranch] = useState("main");
-  const [name, setName] = useState("my-app");
-  const [domain, setDomain] = useState("");
-  const [port, setPort] = useState("3000");
-  const [envVars, setEnvVars] = useState("");
+  const [branch, setBranch] = useState(defaultBranch || "main");
+  const [buildPack, setBuildPack] = useState("dockerfile");
+  const [name, setName] = useState(() => slugFromRepo(repo));
   const [manualName, setManualName] = useState(false);
+  const [port, setPort] = useState("3000");
+  const [domain, setDomain] = useState(() => suggestedDomain(slugFromRepo(repo), domainConfig));
+  const [manualDomain, setManualDomain] = useState(false);
+  const [envVars, setEnvVars] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
-  
-  const sources = useQuery({
-    queryKey: ["sources"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/sources", {});
-      if (error || !data) return [];
-      return data as any[];
-    },
-  });
-
-  const repos = useQuery({
-    queryKey: ["sources", sourceId, "repos"],
-    enabled: sourceId !== "public",
-    retry: 1,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/sources/{source_id}/repos" as any, {
-        params: { path: { source_id: Number(sourceId) } } as any
-      });
-      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load repositories"));
-      return data as any[];
-    },
-  });
 
   useEffect(() => {
     if (!manualName && repo) setName(slugFromRepo(repo));
-  }, [manualName, repo]);
+  }, [repo, manualName]);
 
-  if (!blueprint) {
-    return <ErrorState message="Git repository deployment is not available in this build." />;
-  }
+  useEffect(() => {
+    if (defaultBranch) setBranch(defaultBranch);
+  }, [defaultBranch]);
 
-  const submit = async () => {
+  // When name changes, keep domain in sync unless user has manually set it.
+  useEffect(() => {
+    if (!manualDomain) setDomain(suggestedDomain(name, domainConfig));
+  }, [name, domainConfig, manualDomain]);
+
+  const handleSubmit = async () => {
     const slug = name.trim().toLowerCase();
     const slugError = validateSlug(slug);
     if (slugError) {
@@ -252,441 +348,112 @@ function GitDeployForm({
       return;
     }
     setNameError(null);
-    
-    // Parse env string to Record<string, string>
+
     const parsedEnv: Record<string, string> = {};
-    envVars.split("\n").forEach(line => {
-      const match = line.match(/^([^=]+)=(.*)$/);
-      if (match && match[1] && match[2] !== undefined) {
-        parsedEnv[match[1].trim()] = match[2].trim();
-      }
-    });
+    for (const line of envVars.split("\n")) {
+      const m = line.match(/^([^=]+)=(.*)/);
+      if (m && m[1]?.trim()) parsedEnv[m[1].trim()] = m[2]?.trim() ?? "";
+    }
 
     await onSubmit(slug, {
       ...inputDefaults(blueprint.inputs_schema as JsonSchema),
       repo: repo.trim(),
       branch: branch.trim() || "main",
-      internal_port: Number(port),
+      build_method: buildPack,
+      internal_port: Number(port) || 3000,
       domain: domain.trim(),
       env: parsedEnv,
-      source_id: sourceId === "public" ? null : Number(sourceId),
-    });
-  };
-
-  return (
-    <div className="overflow-hidden rounded-md border border-border grid gap-0 lg:grid-cols-[320px_1fr] min-h-[calc(100vh-12rem)]">
-      {/* ── Left panel: source / repo / deployment settings ── */}
-      <aside className="flex flex-col gap-5 border-r border-border bg-card/60 p-5 lg:overflow-y-auto">
-        <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Source
-          </p>
-          <div className="space-y-1.5">
-            <button
-              type="button"
-              onClick={() => { setSourceId("public"); setRepo(""); }}
-              className={[
-                "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
-                sourceId === "public"
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-transparent hover:border-border hover:bg-muted/50 text-muted-foreground",
-              ].join(" ")}
-            >
-              <Globe2 className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="font-medium">Public Repository</span>
-            </button>
-            {sources.data?.map((source) => (
-              <button
-                type="button"
-                key={source.id}
-                onClick={() => { setSourceId(String(source.id)); setRepo(""); }}
-                className={[
-                  "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
-                  sourceId === String(source.id)
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-transparent hover:border-border hover:bg-muted/50 text-muted-foreground",
-                ].join(" ")}
-              >
-                <GitBranch className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="font-medium">{source.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Repository
-          </p>
-          {sourceId === "public" ? (
-            <FormField label="URL" htmlFor="repo-url">
-              <Input
-                id="repo-url"
-                placeholder="https://github.com/acme/app.git"
-                autoComplete="off"
-                spellCheck={false}
-                value={repo}
-                onChange={(e) => setRepo(e.target.value)}
-              />
-            </FormField>
-          ) : (
-            <FormField label="Repository" htmlFor="repo-select">
-              <select
-                id="repo-select"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={repo}
-                disabled={repos.isPending}
-                onChange={(e) => {
-                  setRepo(e.target.value);
-                  const selected = repos.data?.find(
-                    (r) => (r.clone_url || r.name) === e.target.value,
-                  );
-                  if (selected?.default_branch) setBranch(selected.default_branch);
-                }}
-              >
-                {repos.isPending ? (
-                  <option>Loading…</option>
-                ) : repos.isError ? (
-                  <option>Error — see below</option>
-                ) : (
-                  <>
-                    <option value="">-- Select --</option>
-                    {repos.data?.map((r) => (
-                      <option key={r.clone_url || r.name} value={r.clone_url || r.name}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-              {repos.isError && (
-                <p className="mt-1 text-xs text-destructive" role="alert">
-                  {repos.error instanceof Error ? repos.error.message : "Unknown error"}{" — "}
-                  <button type="button" className="underline" onClick={() => repos.refetch()}>
-                    retry
-                  </button>
-                </p>
-              )}
-            </FormField>
-          )}
-          <FormField label="Branch" htmlFor="repo-branch">
-            <Input
-              id="repo-branch"
-              autoComplete="off"
-              spellCheck={false}
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <div className="space-y-3">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Deployment
-          </p>
-          <FormField label="Name" htmlFor="deploy-name" error={nameError ?? undefined}>
-            <Input
-              id="deploy-name"
-              autoComplete="off"
-              spellCheck={false}
-              value={name}
-              onChange={(e) => { setManualName(true); setName(e.target.value); }}
-            />
-          </FormField>
-          <FormField label="Port" htmlFor="repo-port">
-            <Input
-              id="repo-port"
-              type="number"
-              min={1}
-              max={65535}
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Domain" htmlFor="deploy-domain">
-            <Input
-              id="deploy-domain"
-              placeholder="app.example.com"
-              autoComplete="off"
-              spellCheck={false}
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <div className="mt-auto pt-2">
-          {serverError && (
-            <p className="mb-3 text-sm text-destructive" role="alert">
-              {serverError}
-            </p>
-          )}
-          <Button
-            className="w-full"
-            onClick={submit}
-            loading={pending}
-            disabled={!repo.trim() || !port.trim()}
-          >
-            <Rocket className="mr-2 h-4 w-4" aria-hidden />
-            Deploy Repository
-          </Button>
-        </div>
-      </aside>
-
-      {/* ── Right panel: full-body configuration ── */}
-      <div className="flex flex-col gap-5 p-5">
-        <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Environment Variables
-          </p>
-          <p className="mb-3 text-xs text-muted-foreground">
-            One <code className="font-mono">KEY=value</code> per line. These are injected into the
-            container at runtime and stored encrypted.
-          </p>
-          <textarea
-            id="env-vars"
-            className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2.5 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            style={{ minHeight: "calc(100vh - 26rem)", resize: "vertical" }}
-            placeholder={"PORT=3000\nDATABASE_URL=postgres://...\nSECRET_KEY=..."}
-            value={envVars}
-            onChange={(e) => setEnvVars(e.target.value)}
-            spellCheck={false}
-          />
-        </div>
-
-        <div>
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Build Pack
-          </p>
-          <BuildPackPicker />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ImageDeployForm({
-  blueprint,
-  onSubmit,
-  pending,
-  serverError,
-}: {
-  blueprint?: Blueprint;
-  onSubmit: (name: string, inputs: Record<string, unknown>) => Promise<void>;
-  pending: boolean;
-  serverError: string | null;
-}) {
-  const [name, setName] = useState("container-app");
-  const [image, setImage] = useState("");
-  const [port, setPort] = useState("3000");
-  const [domain, setDomain] = useState("");
-  const [nameError, setNameError] = useState<string | null>(null);
-
-  if (!blueprint) {
-    return <ErrorState message="Container image deployment is not available in this build." />;
-  }
-
-  const submit = async () => {
-    const slug = name.trim().toLowerCase();
-    const slugError = validateSlug(slug);
-    if (slugError) {
-      setNameError(slugError);
-      return;
-    }
-    setNameError(null);
-    await onSubmit(slug, {
-      ...inputDefaults(blueprint.inputs_schema as JsonSchema),
-      image: image.trim(),
-      internal_port: Number(port),
-      domain: domain.trim(),
+      source_id: sourceId,
     });
   };
 
   return (
     <div className="space-y-6">
-      <SectionTitle
-        icon={Container}
-        title="Container image"
-        description="Deploy an existing image from Docker Hub, GHCR, or another registry."
-      />
-      <div className="space-y-4 rounded-md border border-border bg-card p-4">
-        <FormField label="Image" htmlFor="image-ref">
+      <div>
+        <h2 className="text-lg font-bold">Configuration</h2>
+        <p className="text-sm text-muted-foreground">
+          Configure your deployment. You can change these later.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField label="Branch" htmlFor="cfg-branch">
           <Input
-            id="image-ref"
-            placeholder="ghcr.io/acme/app:latest"
-            autoComplete="off"
+            id="cfg-branch"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder="main"
             spellCheck={false}
-            value={image}
-            onChange={(event) => setImage(event.target.value)}
           />
         </FormField>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <FormField label="Deployment name" htmlFor="image-name" error={nameError ?? undefined}>
-            <Input
-              id="image-name"
-              autoComplete="off"
-              spellCheck={false}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </FormField>
-          <FormField label="App port" htmlFor="image-port">
-            <Input
-              id="image-port"
-              type="number"
-              min={1}
-              max={65535}
-              value={port}
-              onChange={(event) => setPort(event.target.value)}
-            />
-          </FormField>
-          <FormField label="Domain" htmlFor="image-domain">
-            <Input
-              id="image-domain"
-              placeholder="app.example.com"
-              autoComplete="off"
-              spellCheck={false}
-              value={domain}
-              onChange={(event) => setDomain(event.target.value)}
-            />
-          </FormField>
-        </div>
-        {serverError && (
-          <p className="text-sm text-destructive" role="alert">
-            {serverError}
-          </p>
-        )}
-        <Button onClick={submit} loading={pending} disabled={!image.trim() || !port.trim()}>
-          <Rocket className="h-4 w-4" aria-hidden />
-          Deploy
-        </Button>
+        <BuildPackSelect value={buildPack} onChange={setBuildPack} />
       </div>
-    </div>
-  );
-}
 
-function TemplateDeployForm({
-  blueprints,
-  onSubmit,
-  pending,
-  serverError,
-}: {
-  blueprints: Blueprint[];
-  onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
-  pending: boolean;
-  serverError: string | null;
-}) {
-  const templates = blueprints.filter((bp) => !["git", "raw-image"].includes(bp.id));
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Blueprint | null>(templates[0] ?? null);
-  const [name, setName] = useState("");
-  const [nameError, setNameError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (selected) {
-      setName(`${selected.id}-${Math.random().toString(36).slice(2, 6)}`);
-      setNameError(null);
-    }
-  }, [selected]);
-
-  const filtered = templates.filter((bp) => {
-    const term = query.trim().toLowerCase();
-    return !term || bp.id.includes(term) || blueprintDisplayName(bp).toLowerCase().includes(term);
-  });
-
-  if (!selected) return <ErrorState message="No one-click templates are available." />;
-
-  return (
-    <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-      <div className="space-y-3">
-        <SectionTitle icon={Boxes} title="Templates" />
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField label="Port" htmlFor="cfg-port">
           <Input
-            aria-label="Search templates"
-            placeholder="Search templates"
-            className="pl-9"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            id="cfg-port"
+            type="number"
+            min={1}
+            max={65535}
+            value={port}
+            onChange={(e) => setPort(e.target.value)}
           />
-        </div>
-        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
-          {filtered.map((bp) => {
-            const active = selected.id === bp.id;
-            const meta = bp as BlueprintWithMeta;
-            return (
-              <button
-                type="button"
-                key={bp.id}
-                className={[
-                  "flex w-full cursor-pointer items-center gap-3 rounded-md border p-3 text-left transition-colors",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
-                ].join(" ")}
-                onClick={() => setSelected(bp)}
-              >
-                <div className={active ? "text-primary-foreground" : "text-muted-foreground"}>
-                  {meta.icon ? (
-                    <img src={`/icons/${meta.icon}.svg`} className="h-6 w-6" alt="" />
-                  ) : (
-                    <Boxes className="h-5 w-5" aria-hidden />
-                  )}
-                </div>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {blueprintDisplayName(bp)}
-                  </span>
-                  <span
-                    className={
-                      active ? "block text-xs opacity-80" : "block text-xs text-muted-foreground"
-                    }
-                  >
-                    {(bp as BlueprintWithMeta).category || "Template"}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+        </FormField>
+        <div className="space-y-1.5">
+          <Label htmlFor="cfg-domain">Domain (optional)</Label>
+          <Input
+            id="cfg-domain"
+            placeholder="app.example.com"
+            value={domain}
+            onChange={(e) => {
+              setManualDomain(true);
+              setDomain(e.target.value);
+            }}
+            spellCheck={false}
+          />
+          {domainHint(domain, name, domainConfig) && (
+            <p className="text-xs text-muted-foreground">
+              {domainHint(domain, name, domainConfig)}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="rounded-md border border-border bg-card p-4">
-        <SchemaForm
-          key={selected.id}
-          schema={selected.inputs_schema as JsonSchema}
-          onSubmit={async (inputs) => {
-            const slug = name.trim().toLowerCase();
-            const slugError = validateSlug(slug);
-            if (slugError) {
-              setNameError(slugError);
-              return;
-            }
-            setNameError(null);
-            await onSubmit(selected, slug, inputs);
+      <FormField label="Deployment Name" htmlFor="cfg-name" error={nameError ?? undefined}>
+        <Input
+          id="cfg-name"
+          value={name}
+          onChange={(e) => {
+            setManualName(true);
+            setName(e.target.value);
           }}
-          submitLabel={`Deploy ${blueprintDisplayName(selected)}`}
-          pending={pending}
-          serverError={serverError}
-        >
-          <FormField label="Deployment name" htmlFor="template-name" error={nameError ?? undefined}>
-            <Input
-              id="template-name"
-              autoComplete="off"
-              spellCheck={false}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </FormField>
-        </SchemaForm>
-      </div>
+          spellCheck={false}
+        />
+      </FormField>
+
+      <EnvVarsEditor value={envVars} onChange={setEnvVars} />
+
+      {serverError && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          {serverError}
+        </p>
+      )}
+
+      <Button
+        onClick={handleSubmit}
+        loading={pending}
+        disabled={!repo.trim()}
+        className="w-full sm:w-auto"
+      >
+        <Rocket className="mr-2 h-4 w-4" aria-hidden />
+        Continue
+      </Button>
     </div>
   );
 }
 
+// ─── ShowOnceDialog ───────────────────────────────────────────────────────────
 export function ShowOnceDialog({
   secrets,
   onClose,
@@ -694,12 +461,12 @@ export function ShowOnceDialog({
   secrets: Record<string, string> | null;
   onClose: () => void;
 }) {
-  const copy = async (value: string) => {
+  const copy = async (v: string) => {
     try {
-      await copyToClipboard(value);
+      await copyToClipboard(v);
       toast.success("Copied");
     } catch {
-      toast.error("Copy failed. Select the text manually.");
+      toast.error("Copy failed — select the text manually.");
     }
   };
 
@@ -736,14 +503,152 @@ export function ShowOnceDialog({
   );
 }
 
+// ─── TemplateDeployForm ───────────────────────────────────────────────────────
+function TemplateDeployForm({
+  blueprints,
+  onSubmit,
+  pending,
+  serverError,
+}: {
+  blueprints: Blueprint[];
+  onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
+  pending: boolean;
+  serverError: string | null;
+}) {
+  const templates = blueprints.filter((bp) => !["git", "raw-image"].includes(bp.id));
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Blueprint | null>(templates[0] ?? null);
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selected) {
+      setName(`${selected.id}-${Math.random().toString(36).slice(2, 6)}`);
+      setNameError(null);
+    }
+  }, [selected]);
+
+  const filtered = templates.filter((bp) => {
+    const term = query.trim().toLowerCase();
+    return !term || bp.id.includes(term) || blueprintDisplayName(bp).toLowerCase().includes(term);
+  });
+
+  if (!selected) return <ErrorState message="No one-click templates are available." />;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+      <div className="space-y-3">
+        <h2 className="font-bold text-lg">Templates</h2>
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            aria-label="Search templates"
+            placeholder="Search templates"
+            className="pl-9"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
+          {filtered.map((bp) => {
+            const active = selected.id === bp.id;
+            const meta = bp as BlueprintWithMeta;
+            return (
+              <button
+                type="button"
+                key={bp.id}
+                onClick={() => setSelected(bp)}
+                className={[
+                  "flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
+                ].join(" ")}
+              >
+                <Boxes
+                  className={[
+                    "h-5 w-5 shrink-0",
+                    active ? "text-primary-foreground" : "text-muted-foreground",
+                  ].join(" ")}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {blueprintDisplayName(bp)}
+                  </span>
+                  <span
+                    className={[
+                      "block text-xs",
+                      active ? "opacity-80" : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {meta.category || "Template"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5">
+        <SchemaForm
+          key={selected.id}
+          schema={selected.inputs_schema as JsonSchema}
+          onSubmit={async (inputs) => {
+            const slug = name.trim().toLowerCase();
+            const slugError = validateSlug(slug);
+            if (slugError) {
+              setNameError(slugError);
+              return;
+            }
+            setNameError(null);
+            await onSubmit(selected, slug, inputs);
+          }}
+          submitLabel={`Deploy ${blueprintDisplayName(selected)}`}
+          pending={pending}
+          serverError={serverError}
+        >
+          <FormField label="Deployment name" htmlFor="template-name" error={nameError ?? undefined}>
+            <Input
+              id="template-name"
+              autoComplete="off"
+              spellCheck={false}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </FormField>
+        </SchemaForm>
+      </div>
+    </div>
+  );
+}
+
+// ─── StackCreatePage ──────────────────────────────────────────────────────────
 export function StackCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<DeployMode>("git");
+
+  // wizard state
+  const [step, setStep] = useState<Step>("type");
+  const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
+  const [selectedRepo, setSelectedRepo] = useState<{
+    name: string;
+    clone_url: string;
+    default_branch: string;
+  } | null>(null);
+  const [publicRepoUrl, setPublicRepoUrl] = useState("");
+  const [publicChecked, setPublicChecked] = useState(false);
+
+  // submit state
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [accepted, setAccepted] = useState<Accepted | null>(null);
 
+  // data queries
   const blueprints = useQuery({
     queryKey: ["stack-blueprints"],
     queryFn: async () => {
@@ -754,12 +659,47 @@ export function StackCreatePage() {
     },
   });
 
+  const sources = useQuery({
+    queryKey: ["sources"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/sources", {});
+      if (error || !data) return [];
+      return data as any[];
+    },
+  });
+
+  const domainConfig = useQuery({
+    queryKey: ["apps-base-domain"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await (api as any).GET("/api/system/apps-base-domain");
+      return (data ?? null) as DomainConfig | null;
+    },
+  });
+
+  const repos = useQuery({
+    queryKey: ["sources", selectedSourceId, "repos"],
+    enabled: step === "repository" && selectedSourceId !== null,
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await (api as any).GET("/api/sources/{source_id}/repos", {
+        params: { path: { source_id: selectedSourceId } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load repositories"));
+      return data as { name: string; clone_url: string; default_branch: string }[];
+    },
+  });
+
   const byId = useMemo(() => {
     const map = new Map<string, Blueprint>();
     for (const bp of blueprints.data ?? []) map.set(bp.id, bp);
     return map;
   }, [blueprints.data]);
 
+  const gitBlueprint = byId.get("git");
+  const imageBlueprint = byId.get("raw-image");
+
+  // ── submit ──
   const submitBlueprint = async (
     blueprint: Blueprint,
     name: string,
@@ -787,103 +727,353 @@ export function StackCreatePage() {
     }
   };
 
-  const gitBlueprint = byId.get("git");
-  const imageBlueprint = byId.get("raw-image");
+  // ── breadcrumb back navigation ──
+  const stepLabels: Partial<Record<Step, string>> = {
+    github_app: "Select GitHub App",
+    repository: "Select Repository",
+    public_git: "Public Repository",
+    docker_image: "Docker Image",
+    template: "Templates",
+  };
 
+  const goBack = () => {
+    if (step === "repository") {
+      setSelectedRepo(null);
+      setStep("github_app");
+    } else {
+      setStep("type");
+      setSelectedSourceId(null);
+      setSelectedRepo(null);
+      setPublicChecked(false);
+    }
+    setServerError(null);
+  };
+
+  // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" aria-label="Back" onClick={() => navigate("/stacks")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">New deployment</h1>
-            <p className="text-sm text-muted-foreground">
-              Deploy from Git, an image, or a template.
-            </p>
-          </div>
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Back"
+          onClick={() => (step === "type" ? navigate("/stacks") : goBack())}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Create a new Application</h1>
+          <p className="text-sm text-muted-foreground">
+            Deploy resources like applications, databases, services.
+          </p>
         </div>
       </div>
 
-      {blueprints.isPending ? (
-        <LoadingState label="Loading deployment options" />
-      ) : blueprints.isError ? (
-        <ErrorState message={blueprints.error.message} onRetry={() => blueprints.refetch()} />
-      ) : (
-        <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
-          <aside className="space-y-3">
-            <div className="rounded-md border border-border bg-card p-3">
-              <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Source</p>
-              <div className="space-y-2">
-                <MethodButton
-                  active={mode === "git"}
-                  icon={GitBranch}
-                  title="Git repository"
-                  description="Dockerfile from GitHub or any Git URL"
-                  onClick={() => {
-                    setMode("git");
-                    setServerError(null);
-                  }}
-                />
-                <MethodButton
-                  active={mode === "image"}
-                  icon={Container}
-                  title="Container image"
-                  description="Docker Hub, GHCR, private registry"
-                  onClick={() => {
-                    setMode("image");
-                    setServerError(null);
-                  }}
-                />
-                <MethodButton
-                  active={mode === "template"}
-                  icon={Boxes}
-                  title="Templates"
-                  description="Databases, WordPress, tools"
-                  onClick={() => {
-                    setMode("template");
-                    setServerError(null);
-                  }}
-                />
-              </div>
-            </div>
-          </aside>
-
-          <section className="space-y-5">
-            <DeploySteps mode={mode} />
-            {mode === "git" && (
-              <GitDeployForm
-                blueprint={gitBlueprint}
-                pending={pending}
-                serverError={serverError}
-                onSubmit={(name, inputs) => {
-                  if (!gitBlueprint) return Promise.resolve();
-                  return submitBlueprint(gitBlueprint, name, inputs);
-                }}
-              />
-            )}
-            {mode === "image" && (
-              <ImageDeployForm
-                blueprint={imageBlueprint}
-                pending={pending}
-                serverError={serverError}
-                onSubmit={(name, inputs) => {
-                  if (!imageBlueprint) return Promise.resolve();
-                  return submitBlueprint(imageBlueprint, name, inputs);
-                }}
-              />
-            )}
-            {mode === "template" && (
-              <TemplateDeployForm
-                blueprints={blueprints.data}
-                pending={pending}
-                serverError={serverError}
-                onSubmit={submitBlueprint}
-              />
-            )}
-          </section>
+      {/* Breadcrumb trail (when not on type step) */}
+      {step !== "type" && (
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => { setStep("type"); setSelectedSourceId(null); setSelectedRepo(null); }}
+            className="hover:text-foreground hover:underline"
+          >
+            New Resource
+          </button>
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          <span className="text-foreground">{stepLabels[step]}</span>
+          {step === "repository" && selectedRepo && (
+            <>
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+              <span className="text-foreground">{selectedRepo.name}</span>
+            </>
+          )}
         </div>
+      )}
+
+      {/* Loading state */}
+      {blueprints.isPending && <LoadingState label="Loading deployment options" />}
+      {blueprints.isError && (
+        <ErrorState message={blueprints.error.message} onRetry={() => blueprints.refetch()} />
+      )}
+
+      {blueprints.data && (
+        <>
+          {/* ── STEP: type selection ─────────────────────────────────────── */}
+          {step === "type" && (
+            <div className="space-y-8">
+              {/* Applications */}
+              <div>
+                <h2 className="mb-1 text-base font-semibold">Applications</h2>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Deploy resources, like Applications, Databases, Services…
+                </p>
+                <div className="grid gap-8 lg:grid-cols-2">
+                  {/* Git Based column */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      Git Based
+                    </h4>
+                    <div className="grid gap-3">
+                      <ResourceCard
+                        icon={Globe2}
+                        title="Public Repository"
+                        description="Deploy any public repository from GitHub, GitLab, Bitbucket, or any Git URL."
+                        onClick={() => { setStep("public_git"); setServerError(null); }}
+                      />
+                      <ResourceCard
+                        icon={Github}
+                        title="Private Repository (GitHub App)"
+                        description="Deploy private repositories using a connected GitHub App."
+                        onClick={() => { setStep("github_app"); setServerError(null); }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Docker Based column */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      Docker Based
+                    </h4>
+                    <div className="grid gap-3">
+                      <ResourceCard
+                        icon={Container}
+                        title="Docker Image"
+                        description="Deploy a pre-built image from Docker Hub, GHCR, or a private registry."
+                        onClick={() => { setStep("docker_image"); setServerError(null); }}
+                      />
+                      <ResourceCard
+                        icon={FileCode2}
+                        title="Dockerfile"
+                        description="Write or paste a Dockerfile directly to build and deploy."
+                        badge="Soon"
+                        disabled
+                        onClick={() => {}}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Templates */}
+              {blueprints.data.some((bp) => !["git", "raw-image"].includes(bp.id)) && (
+                <div>
+                  <h2 className="mb-1 text-base font-semibold">Services</h2>
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    One-click service templates — databases, tools, and more.
+                  </p>
+                  <ResourceCard
+                    icon={Boxes}
+                    title="One-Click Templates"
+                    description="PostgreSQL, Redis, WordPress, and other pre-configured services."
+                    onClick={() => { setStep("template"); setServerError(null); }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP: GitHub App selection ───────────────────────────────── */}
+          {step === "github_app" && (
+            <div className="space-y-4">
+              <h2 className="font-bold text-lg">Select a GitHub App</h2>
+              <p className="text-sm text-muted-foreground">
+                Deploy any public or private Git repositories through a GitHub App.
+              </p>
+
+              {sources.isPending && <LoadingState />}
+              {sources.isError && (
+                <ErrorState message="Failed to load GitHub Apps" onRetry={() => sources.refetch()} />
+              )}
+              {sources.data && sources.data.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border p-8 text-center">
+                  <Github className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" aria-hidden />
+                  <p className="font-medium">No GitHub App found.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Please create a new GitHub App first.
+                  </p>
+                  <Button
+                    className="mt-4"
+                    variant="outline"
+                    onClick={() => navigate("/sources")}
+                  >
+                    Go to Sources
+                  </Button>
+                </div>
+              )}
+              {sources.data && sources.data.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {sources.data.map((source: any) => (
+                    <SourceAppCard
+                      key={source.id}
+                      source={source}
+                      onClick={() => {
+                        setSelectedSourceId(source.id);
+                        setStep("repository");
+                        setSelectedRepo(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP: Repository selection + configure ────────────────────── */}
+          {step === "repository" && (
+            <div className="space-y-6">
+              <h2 className="font-bold text-lg">Select Repository</h2>
+
+              {repos.isPending && <LoadingState label="Loading repositories…" />}
+              {repos.isError && (
+                <div className="space-y-2">
+                  <ErrorState
+                    message={
+                      repos.error instanceof Error ? repos.error.message : "Failed to load repositories"
+                    }
+                    onRetry={() => repos.refetch()}
+                  />
+                </div>
+              )}
+
+              {repos.data && repos.data.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border p-8 text-center">
+                  <p className="font-medium">No repositories found.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Check your GitHub App configuration.
+                  </p>
+                </div>
+              )}
+
+              {repos.data && repos.data.length > 0 && (
+                <div className="space-y-6">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="repo-select">Repository</Label>
+                    <select
+                      id="repo-select"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={selectedRepo?.clone_url ?? ""}
+                      onChange={(e) => {
+                        const found = repos.data?.find((r) => r.clone_url === e.target.value);
+                        setSelectedRepo(found ?? null);
+                      }}
+                    >
+                      <option value="">— Select a repository —</option>
+                      {repos.data.map((r) => (
+                        <option key={r.clone_url} value={r.clone_url}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedRepo && gitBlueprint && (
+                    <ConfigureForm
+                      repo={selectedRepo.clone_url}
+                      defaultBranch={selectedRepo.default_branch}
+                      sourceId={selectedSourceId}
+                      blueprint={gitBlueprint}
+                      domainConfig={domainConfig.data}
+                      pending={pending}
+                      serverError={serverError}
+                      onSubmit={(name, inputs) => submitBlueprint(gitBlueprint, name, inputs)}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP: Public Git ──────────────────────────────────────────── */}
+          {step === "public_git" && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-bold text-lg">Create a new Application</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Deploy any public Git repository.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <FormField label="Repository URL (https://)" htmlFor="public-repo-url">
+                  <div className="flex gap-2">
+                    <Input
+                      id="public-repo-url"
+                      placeholder="https://github.com/acme/app"
+                      value={publicRepoUrl}
+                      onChange={(e) => {
+                        setPublicRepoUrl(e.target.value);
+                        setPublicChecked(false);
+                      }}
+                      spellCheck={false}
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!publicRepoUrl.trim()}
+                      onClick={() => setPublicChecked(true)}
+                    >
+                      Check repository
+                    </Button>
+                  </div>
+                </FormField>
+
+                {!publicChecked && (
+                  <p className="text-xs text-muted-foreground">
+                    For example application deployments, check out{" "}
+                    <a
+                      href="https://github.com/coollabsio/coolify-examples"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      Coolify Examples
+                    </a>
+                    .
+                  </p>
+                )}
+              </div>
+
+              {publicChecked && gitBlueprint && (
+                <ConfigureForm
+                  repo={publicRepoUrl}
+                  defaultBranch="main"
+                  sourceId={null}
+                  blueprint={gitBlueprint}
+                  domainConfig={domainConfig.data}
+                  pending={pending}
+                  serverError={serverError}
+                  onSubmit={(name, inputs) => submitBlueprint(gitBlueprint, name, inputs)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ── STEP: Docker Image ────────────────────────────────────────── */}
+          {step === "docker_image" && (
+            <DockerImageView
+              blueprint={imageBlueprint}
+              domainConfig={domainConfig.data}
+              pending={pending}
+              serverError={serverError}
+              onSubmit={(name, inputs) => {
+                if (!imageBlueprint) return Promise.resolve();
+                return submitBlueprint(imageBlueprint, name, inputs);
+              }}
+            />
+          )}
+
+          {/* ── STEP: Templates ──────────────────────────────────────────── */}
+          {step === "template" && (
+            <TemplateDeployForm
+              blueprints={blueprints.data}
+              pending={pending}
+              serverError={serverError}
+              onSubmit={submitBlueprint}
+            />
+          )}
+        </>
       )}
 
       <ShowOnceDialog
@@ -896,6 +1086,152 @@ export function StackCreatePage() {
           }
         }}
       />
+    </div>
+  );
+}
+
+// ─── Docker Image view ────────────────────────────────────────────────────────
+function DockerImageView({
+  blueprint,
+  domainConfig,
+  onSubmit,
+  pending,
+  serverError,
+}: {
+  blueprint?: Blueprint;
+  domainConfig?: DomainConfig | null;
+  onSubmit: (name: string, inputs: Record<string, unknown>) => Promise<void>;
+  pending: boolean;
+  serverError: string | null;
+}) {
+  const [image, setImage] = useState("");
+  const [tag, setTag] = useState("latest");
+  const [name, setName] = useState("container-app");
+  const [port, setPort] = useState("3000");
+  const [domain, setDomain] = useState(() => suggestedDomain("container-app", domainConfig));
+  const [manualDomain, setManualDomain] = useState(false);
+  const [envVars, setEnvVars] = useState("");
+
+  useEffect(() => {
+    if (!manualDomain) setDomain(suggestedDomain(name, domainConfig));
+  }, [name, domainConfig, manualDomain]);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  if (!blueprint) {
+    return <ErrorState message="Container image deployment is not available in this build." />;
+  }
+
+  const handleSubmit = async () => {
+    const slug = name.trim().toLowerCase();
+    const slugError = validateSlug(slug);
+    if (slugError) {
+      setNameError(slugError);
+      return;
+    }
+    setNameError(null);
+
+    const parsedEnv: Record<string, string> = {};
+    for (const line of envVars.split("\n")) {
+      const m = line.match(/^([^=]+)=(.*)/);
+      if (m && m[1]?.trim()) parsedEnv[m[1].trim()] = m[2]?.trim() ?? "";
+    }
+
+    await onSubmit(slug, {
+      ...inputDefaults(blueprint.inputs_schema as JsonSchema),
+      image: tag ? `${image.trim()}:${tag.trim()}` : image.trim(),
+      internal_port: Number(port) || 3000,
+      domain: domain.trim(),
+      env: parsedEnv,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-bold text-lg">Docker Image</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Deploy a pre-built image from Docker Hub, GHCR, or a private registry.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField label="Image Name" htmlFor="img-name-ref">
+          <Input
+            id="img-name-ref"
+            placeholder="ghcr.io/acme/app"
+            value={image}
+            onChange={(e) => setImage(e.target.value)}
+            spellCheck={false}
+            autoFocus
+          />
+        </FormField>
+        <FormField label="Tag (optional)" htmlFor="img-tag">
+          <Input
+            id="img-tag"
+            placeholder="latest"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            spellCheck={false}
+          />
+        </FormField>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <FormField label="Deployment Name" htmlFor="img-dep-name" error={nameError ?? undefined}>
+          <Input
+            id="img-dep-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            spellCheck={false}
+          />
+        </FormField>
+        <FormField label="Port" htmlFor="img-port">
+          <Input
+            id="img-port"
+            type="number"
+            min={1}
+            max={65535}
+            value={port}
+            onChange={(e) => setPort(e.target.value)}
+          />
+        </FormField>
+        <div className="space-y-1.5">
+          <Label htmlFor="img-domain">Domain (optional)</Label>
+          <Input
+            id="img-domain"
+            placeholder="app.example.com"
+            value={domain}
+            onChange={(e) => {
+              setManualDomain(true);
+              setDomain(e.target.value);
+            }}
+            spellCheck={false}
+          />
+          {domainHint(domain, name, domainConfig) && (
+            <p className="text-xs text-muted-foreground">
+              {domainHint(domain, name, domainConfig)}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <EnvVarsEditor value={envVars} onChange={setEnvVars} />
+
+      {serverError && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          {serverError}
+        </p>
+      )}
+
+      <Button
+        onClick={handleSubmit}
+        loading={pending}
+        disabled={!image.trim()}
+        className="w-full sm:w-auto"
+      >
+        <Rocket className="mr-2 h-4 w-4" aria-hidden />
+        Continue
+      </Button>
     </div>
   );
 }

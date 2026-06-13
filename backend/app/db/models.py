@@ -422,6 +422,8 @@ class ApiToken(Base):
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # Space-separated scope list: "read", "write", "deploy", or combinations.
+    scopes: Mapped[str] = mapped_column(String(128), nullable=False, server_default="read:write")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

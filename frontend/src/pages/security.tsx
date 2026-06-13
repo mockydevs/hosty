@@ -1,5 +1,7 @@
 import { FormField } from "@/components/form-field";
+import { SessionsCard, TwoFactorCard } from "@/components/security-cards";
 import { ErrorState, LoadingState } from "@/components/states";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -10,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import { copyToClipboard } from "@/lib/utils";
@@ -18,6 +21,12 @@ import { Key, KeyRound, Plus, ShieldAlert, Ticket, Trash2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
+
+const SCOPE_OPTIONS = [
+  { value: "read", label: "Read", description: "Read resources" },
+  { value: "write", label: "Write", description: "Create & modify resources" },
+  { value: "deploy", label: "Deploy", description: "Trigger deployments only" },
+] as const;
 
 function SshKeysTab() {
   const queryClient = useQueryClient();
@@ -196,6 +205,7 @@ function ApiTokensTab() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["read", "write"]);
   const [error, setError] = useState<string | null>(null);
   const [newToken, setNewToken] = useState<string | null>(null);
   const isCreatedToken = (value: unknown): value is { token: string } =>
@@ -215,8 +225,8 @@ function ApiTokensTab() {
 
   const createToken = useMutation({
     mutationFn: async () => {
-      const { data, error, response } = await api.POST("/api/security/tokens", {
-        body: { name },
+      const { data, error, response } = await (api as any).POST("/api/security/tokens", {
+        body: { name, scopes },
       });
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Failed to create token (${response?.status})`));
@@ -228,6 +238,7 @@ function ApiTokensTab() {
       setNewToken(data.token);
       setOpen(false);
       setName("");
+      setScopes(["read", "write"]);
       await queryClient.invalidateQueries({ queryKey: ["security", "tokens"] });
     },
     onError: (err) => setError(err.message),
@@ -246,6 +257,12 @@ function ApiTokensTab() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const toggleScope = (scope: string) => {
+    setScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -299,7 +316,7 @@ function ApiTokensTab() {
           <DialogContent>
             <DialogTitle>Generate API Token</DialogTitle>
             <DialogDescription>
-              Create a token to authenticate with the HostyPanel REST API from external scripts.
+              Create a token to authenticate with the Hosty REST API from external scripts.
             </DialogDescription>
             <form
               className="space-y-4"
@@ -316,11 +333,40 @@ function ApiTokensTab() {
                   onChange={(e) => setName(e.target.value)}
                 />
               </FormField>
+
+              <div className="space-y-2">
+                <Label>Permissions</Label>
+                <div className="grid gap-2">
+                  {SCOPE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex items-start gap-3 rounded-md border px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        id={`scope-${opt.value}`}
+                        checked={scopes.includes(opt.value)}
+                        onChange={() => toggleScope(opt.value)}
+                        className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                      />
+                      <div>
+                        <p className="text-sm font-medium leading-none">{opt.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <DialogActions>
                 <Button variant="outline" type="button" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" loading={createToken.isPending} disabled={!name}>
+                <Button
+                  type="submit"
+                  loading={createToken.isPending}
+                  disabled={!name || scopes.length === 0}
+                >
                   Generate
                 </Button>
               </DialogActions>
@@ -339,7 +385,7 @@ function ApiTokensTab() {
             <Ticket className="mb-4 h-8 w-8 text-muted-foreground/50" />
             <h4 className="font-medium">No API Tokens</h4>
             <p className="mb-4 mt-1 text-sm text-muted-foreground max-w-sm">
-              Generate tokens to interact with the HostyPanel API programmatically.
+              Generate tokens to interact with the Hosty API programmatically.
             </p>
           </CardContent>
         </Card>
@@ -349,13 +395,26 @@ function ApiTokensTab() {
             <Card key={t.id}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Ticket className="h-4 w-4 text-muted-foreground" />
                       {t.name}
                     </CardTitle>
+                    <div className="flex flex-wrap gap-1">
+                      {((t as any).scopes as string ?? "read:write")
+                        .split(/[ :]+/)
+                        .filter(Boolean)
+                        .map((s: string) => (
+                          <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {s}
+                          </Badge>
+                        ))}
+                    </div>
                     <CardDescription>
                       Created {new Date(t.created_at).toLocaleDateString()}
+                      {t.last_used_at && (
+                        <> · Used {new Date(t.last_used_at).toLocaleDateString()}</>
+                      )}
                     </CardDescription>
                   </div>
                   <Button
@@ -381,24 +440,37 @@ function ApiTokensTab() {
   );
 }
 
+function AccountSecurityTab() {
+  return (
+    <div className="space-y-4 max-w-xl">
+      <TwoFactorCard />
+      <SessionsCard />
+    </div>
+  );
+}
+
 export function SecurityPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Security</h1>
-        <p className="text-muted-foreground mt-1">Manage your keys, tokens, and credentials.</p>
+        <p className="text-muted-foreground mt-1">Manage your keys, tokens, and account security.</p>
       </div>
 
-      <Tabs defaultValue="keys" className="w-full">
+      <Tabs defaultValue="account" className="w-full">
         <TabsList className="mb-4">
-          <TabsTrigger value="keys">Private Keys</TabsTrigger>
+          <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="tokens">API Tokens</TabsTrigger>
+          <TabsTrigger value="keys">SSH Keys</TabsTrigger>
         </TabsList>
-        <TabsContent value="keys">
-          <SshKeysTab />
+        <TabsContent value="account">
+          <AccountSecurityTab />
         </TabsContent>
         <TabsContent value="tokens">
           <ApiTokensTab />
+        </TabsContent>
+        <TabsContent value="keys">
+          <SshKeysTab />
         </TabsContent>
       </Tabs>
     </div>

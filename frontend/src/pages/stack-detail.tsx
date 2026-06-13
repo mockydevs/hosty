@@ -41,6 +41,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Terminal,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -885,6 +886,7 @@ export function StackDetailPage() {
                   <TableHead>Service</TableHead>
                   <TableHead>Image</TableHead>
                   <TableHead>Port</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -903,6 +905,24 @@ export function StackDetailPage() {
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {svc.internal_port ? `${svc.internal_port}` : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title={`Open terminal for ${svc.name}`}
+                        disabled={data.status !== "ready"}
+                        onClick={() =>
+                          window.open(
+                            `/stacks/${data.id}/terminal/${svc.name}`,
+                            `terminal-${data.id}-${svc.name}`,
+                            "width=960,height=600,noopener,noreferrer",
+                          )
+                        }
+                      >
+                        <Terminal className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

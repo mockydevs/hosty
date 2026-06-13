@@ -30,6 +30,7 @@ from app.api.routes import (
     sources,
     stacks,
     system,
+    terminal,
     usage,
     users,
     webhooks,
@@ -194,6 +195,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
     app.include_router(usage.router, prefix="/api/usage", tags=["usage"])
     app.include_router(security.router, prefix="/api/security", tags=["security"])
+    app.include_router(terminal.router, prefix="/api", tags=["terminal"])
     app.include_router(backups.router, prefix="/api/backups", tags=["backups"])
     app.include_router(backups.site_router, prefix="/api/sites", tags=["backups"])
     app.include_router(backups.stack_router, prefix="/api/stacks", tags=["backups"])

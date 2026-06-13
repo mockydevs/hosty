@@ -128,13 +128,18 @@ async def delete_ssh_key(
 
 # --- API Tokens -------------------------------------------------------------------
 
+_VALID_SCOPES = frozenset({"read", "write", "deploy"})
+
+
 class ApiTokenCreate(BaseModel):
     name: str = Field(..., max_length=64)
+    scopes: list[str] = Field(default_factory=lambda: ["read", "write"])
 
 
 class ApiTokenResponse(BaseModel):
     id: int
     name: str
+    scopes: str
     created_at: datetime
     last_used_at: datetime | None
     expires_at: datetime | None
@@ -153,6 +158,7 @@ async def list_api_tokens(
         ApiTokenResponse(
             id=t.id,
             name=t.name,
+            scopes=t.scopes,
             created_at=t.created_at,
             last_used_at=t.last_used_at,
             expires_at=t.expires_at,
@@ -168,12 +174,18 @@ async def create_api_token(
     current_user: User = Depends(deps.get_current_user),
 ):
     """Generate a new API token. The raw token is only returned once."""
+    valid_scopes = [s for s in req.scopes if s in _VALID_SCOPES]
+    if not valid_scopes:
+        valid_scopes = ["read", "write"]
+    scopes_str = " ".join(sorted(set(valid_scopes)))
+
     raw_token = py_secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
     token = ApiToken(
         owner_id=current_user.id,
         name=req.name,
+        scopes=scopes_str,
         token_hash=token_hash,
     )
     db.add(token)
@@ -183,6 +195,7 @@ async def create_api_token(
     return {
         "id": token.id,
         "name": token.name,
+        "scopes": token.scopes,
         "token": f"hst_{raw_token}",
         "created_at": token.created_at,
     }
