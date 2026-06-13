@@ -409,7 +409,7 @@ function DeleteStackDialog({
         <DialogTitle>Delete {stack.name}?</DialogTitle>
         <DialogDescription>
           Stops every service and removes containers, volumes and routes. This cannot be undone.
-          Type the stack name to confirm.
+          Type the stack name <code className="select-all rounded bg-muted px-1 font-mono text-foreground">{stack.name}</code> to confirm.
         </DialogDescription>
         <Input
           aria-label="Confirm stack name"
