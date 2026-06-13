@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -41,6 +43,23 @@ def _offline_image_versions(monkeypatch):
 
     monkeypatch.setattr(image_versions, "_fetch_tags", fetch)
     image_versions.clear_cache()
+
+
+@pytest.fixture(autouse=True)
+def _offline_stack_image_locks(monkeypatch):
+    """Resolve stack image locks deterministically without registry access."""
+    from app.services import stack_images
+
+    async def lock(image: str) -> str | None:
+        ref = stack_images.parse_image_ref(image)
+        if ref.digest:
+            return f"{ref.source}@sha256:{ref.digest}"
+        if not ref.tag:
+            return None
+        digest = hashlib.sha256(ref.source.encode()).hexdigest()
+        return f"{ref.source}@sha256:{digest}"
+
+    monkeypatch.setattr(stack_images, "lock_digest", lock)
 
 
 @pytest_asyncio.fixture

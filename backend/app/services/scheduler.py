@@ -91,6 +91,10 @@ async def tick(app: FastAPI) -> int:
         await health_sweep(app)
     except Exception as exc:  # the sweep must never break backups
         log.error("health_sweep_failed", error=str(exc))
+    try:
+        await stack_image_update_sweep(app)
+    except Exception as exc:  # image update checks must never break backups
+        log.error("stack_image_update_sweep_failed", error=str(exc))
     return len(jobs)
 
 
@@ -109,6 +113,7 @@ async def loop(app: FastAPI) -> None:
 # --- health & quota sweep (Phase 11c/11d) -------------------------------------------
 
 _last_sweep_at: float | None = None
+_last_stack_image_update_at: float | None = None
 
 
 async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
@@ -219,6 +224,33 @@ async def health_sweep(app: FastAPI, *, force: bool = False) -> None:
                     await notifications.resolve(db, key)
         except Exception as exc:
             log.warning("disk_quota_sweep_failed", error=str(exc))
+
+
+async def stack_image_update_sweep(app: FastAPI, *, force: bool = False) -> int:
+    """Periodically refresh digest locks for stable stack image tracks."""
+    import time as _time
+
+    global _last_stack_image_update_at
+    settings = app.state.settings
+    if not settings.stack_image_auto_update_enabled:
+        return 0
+    interval = settings.stack_image_update_interval_seconds
+    now_mono = _time.monotonic()
+    if (
+        not force
+        and _last_stack_image_update_at is not None
+        and now_mono - _last_stack_image_update_at < interval
+    ):
+        return 0
+    _last_stack_image_update_at = now_mono
+
+    from app.services import stack_images
+
+    async with app.state.sessionmaker() as db:
+        changed = await stack_images.refresh_stable_image_locks(db)
+    if changed and getattr(app.state, "reconciler", None) is not None:
+        await app.state.reconciler.converge_all()
+    return changed
 
 
 # --- panel self-backup (Week 23) ---------------------------------------------------

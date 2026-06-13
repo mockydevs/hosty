@@ -10,6 +10,6 @@ x-hosty:
 
 services:
   web:
-    image: docker.io/library/adminer:4@sha256:ee94dcfafed929cdd6e0bc25e74ce1bf92b71e5c9a7e94e9fee5e3993e7d49dd
+    image: docker.io/library/adminer:4
     ports:
       - 8080:8080

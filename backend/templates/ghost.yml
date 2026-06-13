@@ -15,7 +15,7 @@ x-hosty:
 
 services:
   db:
-    image: docker.io/library/mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
+    image: docker.io/library/mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: ${db_password}
       MYSQL_DATABASE: ghost
@@ -25,7 +25,7 @@ services:
       - db-data:/var/lib/mysql
 
   web:
-    image: docker.io/library/ghost:5@sha256:3ffcb8f2f1f808806e7a0f694a2b130cd78652a26b4337b33fe7e249ce58665a
+    image: docker.io/library/ghost:5
     ports:
       - 2368:2368
     environment:

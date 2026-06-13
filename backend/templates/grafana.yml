@@ -10,7 +10,7 @@ x-hosty:
 
 services:
   web:
-    image: docker.io/grafana/grafana:11.5.2@sha256:8b37a2f028f164ce7b9889e1765b9d6ee23fec80f871d156fbf436d6198d32b7
+    image: docker.io/grafana/grafana:11.5.2
     ports:
       - 3000:3000
     volumes:

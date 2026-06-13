@@ -17,7 +17,7 @@ x-hosty:
 
 services:
   web:
-    image: docker.io/library/rabbitmq:3-management@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
+    image: docker.io/library/rabbitmq:3-management
     ports:
       - 15672:15672
     environment:

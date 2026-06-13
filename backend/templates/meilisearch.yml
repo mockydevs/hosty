@@ -12,7 +12,7 @@ x-hosty:
 
 services:
   web:
-    image: docker.io/getmeili/meilisearch:v1.12@sha256:c9fac23131cca4db95173d41cc50fd5639121ee381795528fdd7522d7978a7b8
+    image: docker.io/getmeili/meilisearch:v1.12
     ports:
       - 7700:7700
     environment:

@@ -115,15 +115,24 @@ async def test_blueprint_catalog(admin_client, stack_host):
     assert "internal_port" in schema["properties"]
 
 
-async def test_blueprint_catalog_keeps_pinned_templates_static(admin_client, stack_host):
-    """Pinned templates should not expose a version selector that no longer
-    changes the digest-pinned runtime image."""
+async def test_blueprint_catalog_injects_version_enum(admin_client, stack_host, monkeypatch):
+    """A version-bearing template (postgres) renders its `version` field as an
+    enum of registry series with the latest as default."""
+    from app.services import image_versions
+
+    series = {"postgres": ["17", "16", "15"], "mariadb": ["11.4", "11.2"]}
+
+    async def fake_series(repo, *, default, http=None):
+        return series.get(repo, [default])
+
+    monkeypatch.setattr(image_versions, "available_series", fake_series)
     resp = await admin_client.get("/api/stacks/blueprints")
     assert resp.status_code == 200
     catalog = {bp["id"]: bp for bp in resp.json()}
 
-    assert "version" not in catalog["postgres"]["inputs_schema"]["properties"]
-    assert "version" not in catalog["mongodb"]["inputs_schema"]["properties"]
+    version = catalog["postgres"]["inputs_schema"]["properties"]["version"]
+    assert version["enum"] == ["17", "16", "15"]
+    assert version["default"] == "17"
     # A blueprint without dynamic versions is untouched (no enum on free text).
     assert "enum" not in catalog["raw-image"]["inputs_schema"]["properties"]["image"]
 
@@ -138,6 +147,8 @@ async def test_create_stack_happy_path(admin_client, stack_host):
     assert stack["observed_generation"] == stack["generation"] == 1
     web = stack["services"][0]
     assert web["name"] == "web" and web["is_web"]
+    assert web["image"] == "ghcr.io/org/web:v1"
+    assert web["image_digest"].startswith("ghcr.io/org/web:v1@sha256:")
     assert 20100 <= web["host_port"] <= 29999
     assert stack["endpoints"][0]["domain"] == "app.example.com"
 
@@ -170,10 +181,8 @@ async def test_create_dynamic_postgres_template(admin_client, stack_host):
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["name"] == "db"
-    assert service["image"] == (
-        "docker.io/library/postgres:16"
-        "@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171"
-    )
+    assert service["image"] == "docker.io/library/postgres:16"
+    assert service["image_digest"].startswith("docker.io/library/postgres:16@sha256:")
     assert service["internal_port"] == 5432
     assert service["host_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/var/lib/postgresql/data"
@@ -192,10 +201,8 @@ async def test_create_dynamic_mongodb_template(admin_client, stack_host):
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["name"] == "db"
-    assert service["image"] == (
-        "docker.io/library/mongo:7.0"
-        "@sha256:8ecb514b00bdcc0bde67ef4e6c330385377a9dc68e24ee94e28c07c891647348"
-    )
+    assert service["image"] == "docker.io/library/mongo:7.0"
+    assert service["image_digest"].startswith("docker.io/library/mongo:7.0@sha256:")
     assert service["internal_port"] == 27017
     assert service["host_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/data/db"
@@ -213,10 +220,8 @@ async def test_create_dynamic_uptime_kuma_template(admin_client, stack_host):
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["name"] == "web"
-    assert service["image"] == (
-        "docker.io/louislam/uptime-kuma:1"
-        "@sha256:3d632903e6af34139a37f18055c4f1bfd9b7205ae1138f1e5e8940ddc1d176f9"
-    )
+    assert service["image"] == "docker.io/louislam/uptime-kuma:1"
+    assert service["image_digest"].startswith("docker.io/louislam/uptime-kuma:1@sha256:")
     assert service["internal_port"] == 3001
     assert service["host_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/app/data"
@@ -266,6 +271,36 @@ async def test_dynamic_templates_allocate_distinct_ports(admin_client, stack_hos
     first_stack = (await admin_client.get(f"/api/stacks/{first_payload['stack']['id']}")).json()
     second_stack = (await admin_client.get(f"/api/stacks/{second_payload['stack']['id']}")).json()
     assert first_stack["services"][0]["host_port"] != second_stack["services"][0]["host_port"]
+
+
+async def test_stable_image_refresh_updates_digest_lock(admin_client, stack_host, app, monkeypatch):
+    from app.services import stack_images
+
+    body = {
+        "name": "postgres-test",
+        "blueprint_id": "postgres",
+        "inputs": {"version": "16", "database": "postgres", "user": "postgres"},
+    }
+    payload, _ = await create_stack_ok(admin_client, body)
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    old_digest = stack["services"][0]["image_digest"]
+
+    async def newer_digest(image: str) -> str | None:
+        ref = stack_images.parse_image_ref(image)
+        return f"{ref.source}@sha256:" + "c" * 64
+
+    monkeypatch.setattr(stack_images, "lock_digest", newer_digest)
+    async with app.state.sessionmaker() as db:
+        assert await stack_images.refresh_stable_image_locks(db) == 1
+
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    assert stack["generation"] == 2
+    assert stack["status"] == "converging"
+    assert stack["services"][0]["image"] == "docker.io/library/postgres:16"
+    assert stack["services"][0]["image_digest"] != old_digest
+    assert stack["services"][0]["image_digest"] == (
+        "docker.io/library/postgres:16@sha256:" + "c" * 64
+    )
 
 
 async def test_create_failure_degrades_then_next_cycle_heals(admin_client, stack_host, app):

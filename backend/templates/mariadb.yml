@@ -10,6 +10,11 @@ x-hosty:
     - root_password
     - db_password
   inputs:
+    version:
+      type: "string"
+      default: "11.4"
+      description: "MariaDB version (e.g. 10.11, 11.4)"
+      versions_from: "mariadb"
     database:
       type: "string"
       default: "mariadb"
@@ -21,7 +26,7 @@ x-hosty:
 
 services:
   db:
-    image: docker.io/library/mariadb:11.4@sha256:1b46b73d4b629022dfa29e6db3bb0d63b5df714fc3bfbe5057d63d76d8f6054b
+    image: docker.io/library/mariadb:${version}
     ports:
       - 3306:3306
     environment:

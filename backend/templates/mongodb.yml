@@ -9,6 +9,11 @@ x-hosty:
   secrets:
     - root_password
   inputs:
+    version:
+      type: "string"
+      default: "7.0"
+      description: "MongoDB version (e.g. 6.0, 7.0)"
+      versions_from: "mongo"
     username:
       type: "string"
       default: "root"
@@ -16,7 +21,7 @@ x-hosty:
 
 services:
   db:
-    image: docker.io/library/mongo:7.0@sha256:8ecb514b00bdcc0bde67ef4e6c330385377a9dc68e24ee94e28c07c891647348
+    image: docker.io/library/mongo:${version}
     ports:
       - 27017:27017
     environment:

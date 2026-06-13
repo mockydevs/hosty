@@ -8,9 +8,15 @@ x-hosty:
     - db
   secrets:
     - password
+  inputs:
+    version:
+      type: "string"
+      default: "7.2"
+      description: "Redis version (e.g. 7.0, 7.2)"
+      versions_from: "redis"
 services:
   db:
-    image: docker.io/library/redis:7.2@sha256:747f1f4078d700806f83d427550a9d8c4d89dd3bf6491449c748c83ad285036e
+    image: docker.io/library/redis:${version}
     ports:
       - 6379:6379
     environment:

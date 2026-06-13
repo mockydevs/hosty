@@ -26,7 +26,7 @@ from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec
 from app.domain.validate import SpecValidationError
 from app.orchestration.blueprints import get_blueprint
 from app.orchestration.blueprints.base import Allocation, Blueprint
-from app.services import caddy, ports
+from app.services import caddy, ports, stack_images
 
 log = structlog.get_logger("hosty.stacks")
 
@@ -298,12 +298,14 @@ async def persist_rendered(
     db: AsyncSession, stack: Stack, spec: StackSpec, settings: Settings
 ) -> None:
     """Write the rendered spec as child rows (env encrypted at rest)."""
+    image_locks = await stack_images.resolve_stack_image_locks(spec)
     for svc in spec.services:
         db.add(
             StackService(
                 stack_id=stack.id,
                 name=svc.name,
                 image=svc.image,
+                image_digest=image_locks.get(svc.name),
                 build_repo=svc.build_repo,
                 build_branch=svc.build_branch,
                 internal_port=svc.internal_port,

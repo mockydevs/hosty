@@ -19,7 +19,7 @@ def write_template(tmp_path, text: str):
     return path
 
 
-def test_builtin_template_images_are_fully_qualified_and_digest_pinned():
+def test_builtin_template_images_are_fully_qualified_stable_sources():
     templates_dir = Path(__file__).resolve().parent.parent / "templates"
     image_refs: list[tuple[str, str, str]] = []
     for path in sorted(templates_dir.glob("*.yml")):
@@ -32,7 +32,8 @@ def test_builtin_template_images_are_fully_qualified_and_digest_pinned():
     assert image_refs
     for template, service, image in image_refs:
         assert image.startswith("docker.io/"), f"{template}:{service} uses unqualified {image}"
-        assert "@sha256:" in image, f"{template}:{service} is not digest pinned"
+        assert "@sha256:" not in image, f"{template}:{service} hard-codes a runtime digest"
+        assert ":latest" not in image, f"{template}:{service} uses floating latest"
 
 
 def test_compose_blueprint_metadata_drives_json_schema_title(tmp_path):
