@@ -1,4 +1,5 @@
 import { type JsonSchema, SchemaForm, schemaFields } from "@/components/schema-form";
+import { blueprintDisplayName } from "@/pages/stack-create";
 /** Stacks (v2/M4): the schema-driven form renderer — blueprint inputs JSON
  * Schema → fields, validation, value coercion, secret handling. */
 import { render, screen } from "@testing-library/react";
@@ -56,6 +57,23 @@ describe("schemaFields", () => {
     expect(field("env").kind).toBe("map");
     expect(field("memory_mb").kind).toBe("number");
     expect(field("memory_mb").schema.maximum).toBe(1048576);
+  });
+});
+
+describe("blueprintDisplayName", () => {
+  it("prefers backend display metadata over generated schema titles", () => {
+    expect(
+      blueprintDisplayName({
+        id: "postgres",
+        version: 1,
+        category: "Databases",
+        icon: "postgres",
+        display_name: "PostgreSQL",
+        description: "Deploy PostgreSQL",
+        inputs_schema: { title: "PostgresInputs" },
+        actions: [],
+      }),
+    ).toBe("PostgreSQL");
   });
 });
 

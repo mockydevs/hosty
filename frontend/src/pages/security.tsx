@@ -197,6 +197,11 @@ function ApiTokensTab() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [newToken, setNewToken] = useState<string | null>(null);
+  const isCreatedToken = (value: unknown): value is { token: string } =>
+    typeof value === "object" &&
+    value !== null &&
+    "token" in value &&
+    typeof (value as { token?: unknown }).token === "string";
 
   const tokens = useQuery({
     queryKey: ["security", "tokens"],
@@ -215,6 +220,7 @@ function ApiTokensTab() {
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Failed to create token (${response?.status})`));
       }
+      if (!isCreatedToken(data)) throw new Error("Invalid token response");
       return data;
     },
     onSuccess: async (data: { token: string }) => {

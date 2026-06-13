@@ -134,6 +134,25 @@ async def test_create_stack_happy_path(admin_client, stack_host):
     )
 
 
+async def test_create_dynamic_postgres_template(admin_client, stack_host):
+    body = {
+        "name": "postgres-test",
+        "blueprint_id": "postgres",
+        "inputs": {"version": "16", "database": "postgres", "user": "postgres"},
+    }
+    payload, op = await create_stack_ok(admin_client, body)
+    assert op["status"] == "succeeded", op
+    assert payload["show_once"]["db_password"]
+
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    service = stack["services"][0]
+    assert service["name"] == "db"
+    assert service["image"] == "postgres:16"
+    assert service["internal_port"] == 5432
+    assert service["host_port"] is not None
+    assert stack["volumes"][0]["mount_path"] == "/var/lib/postgresql/data"
+
+
 async def test_create_failure_degrades_then_next_cycle_heals(admin_client, stack_host, app):
     stack_host.fail_control.add("start")
     resp = await admin_client.post("/api/stacks", json=CREATE_BODY)

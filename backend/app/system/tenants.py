@@ -15,8 +15,10 @@ useradd, so the panel always knows exactly which host uids belong to whom.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.system import runner
 
@@ -155,6 +157,20 @@ async def uid_of(name: str) -> int:
         raise TenantOperationError(f"Unparseable uid for {name}: {result.stdout!r}") from exc
 
 
+def _user_bus_ready(uid: int) -> bool:
+    return Path(f"/run/user/{uid}/bus").is_socket()
+
+
+async def _wait_for_user_manager(uid: int, *, attempts: int = 40, delay: float = 0.25) -> None:
+    """`loginctl enable-linger` can return before the tenant's user manager
+    has created its D-Bus socket. Quadlet reload/start needs that manager."""
+    for _ in range(attempts):
+        if _user_bus_ready(uid):
+            return
+        await asyncio.sleep(delay)
+    raise TenantOperationError(f"tenant user manager did not become ready for uid {uid}")
+
+
 async def provision(name: str, *, subuid_start: int, subuid_count: int) -> TenantInfo:
     """Create the tenant user with its subid ranges and lingering user
     manager. Idempotent: an existing user only has the (idempotent)
@@ -168,9 +184,11 @@ async def provision(name: str, *, subuid_start: int, subuid_count: int) -> Tenan
     # Lingering keeps the tenant's systemd user instance (and thus their
     # containers) running without a login session, across reboots.
     await _run_or_raise(build_linger_argv(name, enable=True), "enable-linger")
+    uid = await uid_of(name)
+    await _wait_for_user_manager(uid)
     return TenantInfo(
         linux_user=name,
-        uid=await uid_of(name),
+        uid=uid,
         subuid_start=subuid_start,
         subuid_count=subuid_count,
     )

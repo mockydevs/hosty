@@ -2,18 +2,46 @@
 
 from __future__ import annotations
 
-import os
-import yaml
+import re
 from pathlib import Path
-from pydantic import BaseModel, Field, create_model
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from app.domain.specs import ServiceSpec, StackSpec, VolumeSpec
-from app.orchestration.blueprints.base import ActionHandler, Allocation, Blueprint, StackHealth
+from app.domain.validate import SpecValidationError
+from app.orchestration.blueprints.base import ActionHandler, Allocation, StackHealth
+
+_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-?])(.*?))?\}")
+_BARE_VAR_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _substitute(value: object, subs: dict[str, str]) -> str:
+    text = str(value)
+
+    def braced(match: re.Match[str]) -> str:
+        key = match.group(1)
+        op = match.group(2)
+        fallback = match.group(3) or ""
+        current = subs.get(key)
+        if op in (":-", "-"):
+            return current if current not in (None, "") else fallback
+        if op in (":?", "?"):
+            if current not in (None, ""):
+                return current
+            if fallback:
+                return fallback
+            raise SpecValidationError(f"Missing required template variable {key!r}")
+        return current if current is not None else ""
+
+    text = _VAR_RE.sub(braced, text)
+    return _BARE_VAR_RE.sub(lambda match: subs.get(match.group(1), ""), text)
+
 
 class ComposeBlueprint:
     def __init__(self, yaml_path: Path):
         self.yaml_path = yaml_path
-        with open(yaml_path, "r") as f:
+        with open(yaml_path) as f:
             self.raw_data = yaml.safe_load(f)
 
         self.id = self.yaml_path.stem
@@ -25,9 +53,9 @@ class ComposeBlueprint:
         self.display_name = hosty_meta.get("name", self.id)
         self.description = hosty_meta.get("description", f"Deploy {self.id}")
         
-        self._secrets = hosty_meta.get("secrets", [])
+        self._secrets = list(hosty_meta.get("secrets", []))
         self._inputs_def = hosty_meta.get("inputs", {})
-        self._ports = hosty_meta.get("ports", []) # list of service names that need ports
+        self._ports = list(hosty_meta.get("ports", [])) # list of service names that need ports
         self._InputsModel = self._build_inputs_model()
 
     def _build_inputs_model(self) -> type[BaseModel]:
@@ -36,7 +64,7 @@ class ComposeBlueprint:
             type_ = str
             if spec.get("type") == "boolean":
                 type_ = bool
-            elif spec.get("type") == "number":
+            elif spec.get("type") in ("number", "integer"):
                 type_ = int
             
             field_kwargs = {}
@@ -49,7 +77,11 @@ class ComposeBlueprint:
             
             fields[key] = (type_, Field(**field_kwargs))
             
-        return create_model(f"{self.id.capitalize()}Inputs", **fields)
+        return create_model(
+            f"{self.id.capitalize()}Inputs",
+            __config__=ConfigDict(title=self.display_name),
+            **fields,
+        )
 
     def inputs(self) -> type[BaseModel]:
         return self._InputsModel
@@ -73,21 +105,13 @@ class ComposeBlueprint:
             subs[k] = str(v)
 
         for svc_name, svc_data in services_data.items():
-            # Basic substitution for environment and image
-            # In a real implementation we would recursively substitute
-            # For this pivot, we handle simple string replacements
-            
-            image = svc_data.get("image", "hosty-build-target")
-            for k, v in subs.items():
-                image = image.replace(f"${{{k}}}", v).replace(f"${k}", v)
+            image = _substitute(svc_data.get("image", "hosty-build-target"), subs)
 
             build_repo = None
             build_branch = None
             raw_build = svc_data.get("build")
             if raw_build and isinstance(raw_build, str):
-                build_str = raw_build
-                for k, v in subs.items():
-                    build_str = build_str.replace(f"${{{k}}}", v).replace(f"${k}", v)
+                build_str = _substitute(raw_build, subs)
                 
                 if "#" in build_str:
                     build_repo, build_branch = build_str.split("#", 1)
@@ -104,17 +128,13 @@ class ComposeBlueprint:
             elif isinstance(raw_env, dict):
                 env_vars = dict(raw_env)
 
-            for ek, ev in env_vars.items():
-                if isinstance(ev, str):
-                    for k, v in subs.items():
-                        ev = ev.replace(f"${{{k}}}", v).replace(f"${k}", v)
-                env_vars[ek] = ev
+            env_vars = {str(ek): _substitute(ev, subs) for ek, ev in env_vars.items()}
                 
             internal_port = None
             if svc_data.get("ports"):
                 # Simplistic port parsing
                 p = str(svc_data["ports"][0])
-                internal_port = int(p.split(":")[-1])
+                internal_port = int(p.rsplit(":", 1)[-1].split("/", 1)[0])
             elif svc_name in alloc.ports:
                 # If they asked for a port but didn't list it in compose
                 # This could be improved, but usually internal_port is defined
@@ -159,7 +179,7 @@ class ComposeBlueprint:
         return None
 
     def health(self, observed_active: dict[str, bool]) -> StackHealth:
-        for svc_name in self.raw_data.get("services", {}).keys():
+        for svc_name in self.raw_data.get("services", {}):
             if not observed_active.get(svc_name):
                 return StackHealth(healthy=False, detail=f"{svc_name} service is not running")
         return StackHealth(healthy=True)

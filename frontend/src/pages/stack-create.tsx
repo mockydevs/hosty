@@ -35,6 +35,11 @@ type BlueprintWithMeta = Blueprint & {
 };
 type Accepted = components["schemas"]["StackOperationAccepted"];
 
+export function blueprintDisplayName(bp: Blueprint): string {
+  const meta = bp as BlueprintWithMeta;
+  return meta.display_name || (bp.inputs_schema as JsonSchema).title || bp.id;
+}
+
 function BlueprintPicker({
   blueprints,
   onPick,
@@ -88,7 +93,7 @@ function BlueprintPicker({
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold leading-none tracking-tight text-base">
-                          {meta.display_name || schema.title || bp.id}
+                          {blueprintDisplayName(bp)}
                         </h3>
                         <Badge variant="secondary" className="text-[10px]">
                           v{bp.version}
@@ -232,9 +237,7 @@ export function StackCreatePage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {selected
-            ? `New ${(selected.inputs_schema as JsonSchema).title ?? selected.id} stack`
-            : "New stack"}
+          {selected ? `New ${blueprintDisplayName(selected)} stack` : "New stack"}
         </h1>
       </div>
 

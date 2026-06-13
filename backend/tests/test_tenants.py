@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.system import tenants
+from app.system import runner, tenants
 
 
 @pytest.mark.parametrize("name", ["hosty-t-1", "hosty-t-42", "hosty-t-9999999999"])
@@ -102,3 +102,50 @@ def test_builders_reject_injection_through_name():
     ):
         with pytest.raises(tenants.InvalidTenantUserError):
             builder("--root=/tmp")
+
+
+async def test_provision_waits_for_lingering_user_manager(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+    ready_checks = 0
+
+    async def fake_run(argv, **kwargs):
+        calls.append(tuple(argv))
+        if argv[:2] == ["id", "-u"]:
+            return runner.CommandResult(tuple(argv), 0, "5007\n", "", 0.01)
+        return runner.CommandResult(tuple(argv), 0, "", "", 0.01)
+
+    def fake_ready(uid: int) -> bool:
+        nonlocal ready_checks
+        assert uid == 5007
+        ready_checks += 1
+        return ready_checks == 2
+
+    async def fake_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(tenants.runner, "run", fake_run)
+    monkeypatch.setattr(tenants, "_user_bus_ready", fake_ready)
+    monkeypatch.setattr(tenants.asyncio, "sleep", fake_sleep)
+
+    info = await tenants.provision("hosty-t-7", subuid_start=1_000_000, subuid_count=65536)
+
+    assert info.uid == 5007
+    assert ready_checks == 2
+    assert calls[-1] == ("id", "-u", "hosty-t-7")
+
+
+async def test_provision_fails_if_user_manager_never_starts(monkeypatch):
+    async def fake_run(argv, **kwargs):
+        if argv[:2] == ["id", "-u"]:
+            return runner.CommandResult(tuple(argv), 0, "5007\n", "", 0.01)
+        return runner.CommandResult(tuple(argv), 0, "", "", 0.01)
+
+    async def fake_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(tenants.runner, "run", fake_run)
+    monkeypatch.setattr(tenants, "_user_bus_ready", lambda uid: False)
+    monkeypatch.setattr(tenants.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(tenants.TenantOperationError, match="user manager"):
+        await tenants.provision("hosty-t-7", subuid_start=1_000_000, subuid_count=65536)
