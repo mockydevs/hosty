@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.db.models import App, StackService
+from app.db.models import App
 
 
 class NoFreePortError(AppError):
@@ -27,9 +27,8 @@ class NoFreePortError(AppError):
 
 
 def _used_port_columns():
-    """Every column that holds an allocated loopback port. M4 adds
-    StackService.host_port; M6 drops App.host_port."""
-    return [App.host_port, StackService.host_port]
+    """Every column that holds an allocated loopback port. M6 drops App.host_port."""
+    return [App.host_port]
 
 
 async def used_host_ports(db: AsyncSession) -> set[int]:

@@ -376,9 +376,6 @@ class WordPressBlueprint:
     def inputs(self) -> type[WordPressInputs]:
         return WordPressInputs
 
-    def ports_needed(self, inputs: WordPressInputs) -> list[str]:
-        return [WEB, ADMINER, FILES]
-
     def secrets_needed(self, inputs: WordPressInputs) -> list[str]:
         return [DB_PASSWORD_SECRET]
 
@@ -404,7 +401,6 @@ class WordPressBlueprint:
                 image=_wp_image(inputs.php_version),
                 env=tuple(sorted(web_env.items())),
                 internal_port=80,
-                host_port=alloc.ports[WEB],
                 is_web=True,
             ),
             ServiceSpec(
@@ -416,18 +412,17 @@ class WordPressBlueprint:
                 name=ADMINER,
                 image=ADMINER_IMAGE,
                 internal_port=8080,
-                host_port=alloc.ports[ADMINER],
             ),
             ServiceSpec(
                 name=FILES,
                 image=FILES_IMAGE,
                 internal_port=80,
-                host_port=alloc.ports[FILES],
             ),
         )
         return StackSpec(
             name=name,
             tenant=alloc.tenant,
+            loopback_ip=alloc.loopback_ip,
             services=services,
             volumes=(
                 VolumeSpec(name="html", service=WEB, mount_path="/var/www/html"),

@@ -217,14 +217,15 @@ def test_adminer_pool_render_snapshot():
 # --- v2 stack routes (ADR-013, M2) --------------------------------------------------
 
 
-def _stack_spec():
+def _stack_spec() -> StackSpec:
     from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec
 
     return StackSpec(
         name="blog",
         tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
         services=(
-            ServiceSpec(name="web", image="nginx:1.27", internal_port=80, host_port=20001),
+            ServiceSpec(name="web", image="nginx:1.27", internal_port=80),
             ServiceSpec(name="db", image="mariadb:11"),
         ),
         endpoints=(
@@ -238,8 +239,8 @@ def test_routes_for_stack_maps_endpoints_to_host_ports():
     from app.services.caddy import StackRoute, routes_for_stack
 
     assert routes_for_stack(_stack_spec(), suspended=False) == [
-        StackRoute(domain="blog.example.com", upstream="127.0.0.1:20001"),
-        StackRoute(domain="www.blog.example.com", upstream="127.0.0.1:20001", internal_tls=True),
+        StackRoute(domain="blog.example.com", upstream="127.1.0.1:80"),
+        StackRoute(domain="www.blog.example.com", upstream="127.1.0.1:80", internal_tls=True),
     ]
 
 

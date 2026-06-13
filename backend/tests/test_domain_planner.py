@@ -165,12 +165,14 @@ def project(desired: list[StackSpec]) -> Observed:
 # --- spec builders -----------------------------------------------------------------
 
 
-def web(name: str = "web", image: str = "nginx:1.27", host_port: int = 20001, **kw) -> ServiceSpec:
-    return ServiceSpec(name=name, image=image, internal_port=80, host_port=host_port, **kw)
+def web(**overrides) -> ServiceSpec:
+    base = dict(name="web", image="nginx:1.27", internal_port=80, is_web=True)
+    base.update(overrides)
+    return ServiceSpec(**base)
 
 
 def stack(name: str = "blog", **overrides) -> StackSpec:
-    base = dict(name=name, tenant="hosty-t-7", services=(web(),))
+    base = dict(name=name, tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(web(),))
     base.update(overrides)
     return StackSpec(**base)
 
@@ -247,7 +249,7 @@ def test_delete_of_stopped_remnants_skips_stop_but_still_syncs_units():
     [
         stack(services=(web(image="nginx:1.28"),)),  # image change
         stack(services=(web(env=(("KEY", "v"),)),)),  # env change
-        stack(services=(web(host_port=20002),)),  # port change
+        stack(services=(web(internal_port=8080),)),  # port change
     ],
 )
 def test_spec_change_rewrites_and_restarts(changed):
@@ -473,6 +475,7 @@ def stack_specs(draw, name: str) -> StackSpec:
     return StackSpec(
         name=name,
         tenant=draw(st.sampled_from(TENANTS)),
+        loopback_ip="127.1.0.1",
         services=services,
         volumes=volumes,
         suspended=draw(st.booleans()),

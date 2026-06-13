@@ -108,11 +108,10 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         "Label=hosty.managed=1",
     ]
     if service.internal_port is not None:
-        # Loopback by default (a bare publish bypasses the host firewall). An
-        # explicitly EXPOSED service binds 0.0.0.0 so it is reachable on the
-        # server's public IP — opt-in external access (e.g. a database link).
-        bind = "0.0.0.0" if service.exposed else "127.0.0.1"
-        lines.append(f"PublishPort={bind}:{service.host_port}:{service.internal_port}")
+        # Loopback IP derived from stack ID by default. An explicitly EXPOSED
+        # service binds 0.0.0.0 so it is reachable on the server's public IP.
+        bind = "0.0.0.0" if service.exposed else stack.loopback_ip
+        lines.append(f"PublishPort={bind}:{service.internal_port}:{service.internal_port}")
     if service.env:
         lines.append(f"EnvironmentFile={env_file_path(stack.tenant, stack.name, service.name)}")
     # A volume mounted by exactly one service across the stack gets `:U` so

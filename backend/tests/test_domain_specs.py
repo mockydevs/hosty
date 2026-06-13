@@ -18,13 +18,13 @@ from app.domain.validate import SpecValidationError
 
 
 def make_service(**overrides) -> ServiceSpec:
-    base = dict(name="web", image="nginx:1.27", internal_port=80, host_port=20001, is_web=True)
+    base = dict(name="web", image="nginx:1.27", internal_port=80, is_web=True)
     base.update(overrides)
     return ServiceSpec(**base)
 
 
 def make_stack(**overrides) -> StackSpec:
-    base = dict(name="blog", tenant="hosty-t-7", services=(make_service(),))
+    base = dict(name="blog", tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(make_service(),))
     base.update(overrides)
     return StackSpec(**base)
 
@@ -51,19 +51,10 @@ def test_exposed_requires_a_published_port():
         ServiceSpec(name="db", image="redis:7", exposed=True)  # no port → rejected
 
 
-def test_service_ports_come_together():
-    make_service(internal_port=None, host_port=None)  # both absent is fine
-    with pytest.raises(SpecValidationError, match="come together"):
-        make_service(host_port=None)
-    with pytest.raises(SpecValidationError, match="come together"):
-        make_service(internal_port=None)
-
 
 def test_service_port_values_validated():
     with pytest.raises(SpecValidationError):
         make_service(internal_port=0)
-    with pytest.raises(SpecValidationError):
-        make_service(host_port=70000)
 
 
 @pytest.mark.parametrize(("field", "bad"), [("memory_mb", 8), ("memory_mb", 2_000_000)])
@@ -177,14 +168,14 @@ def test_stack_rejects_duplicate_endpoint_domains():
 
 
 def test_stack_rejects_endpoint_to_unknown_service():
-    with pytest.raises(SpecValidationError, match="unknown service"):
+    with pytest.raises(SpecValidationError, match="missing service"):
         make_stack(endpoints=(EndpointSpec(domain="a.example.com", service="ghost"),))
 
 
 def test_stack_rejects_endpoint_to_portless_service():
-    services = (make_service(internal_port=None, host_port=None),)
+    services = (make_service(internal_port=None),)
     endpoints = (EndpointSpec(domain="a.example.com", service="web"),)
-    with pytest.raises(SpecValidationError, match="publishes no port"):
+    with pytest.raises(SpecValidationError, match="no internal_port"):
         make_stack(services=services, endpoints=endpoints)
 
 
@@ -203,7 +194,6 @@ def test_spec_hash_is_stable_and_short():
         {"image": "nginx:1.28"},
         {"env": (("K", "v"),)},
         {"internal_port": 81},
-        {"host_port": 20009},
         {"memory_mb": 256},
         {"cpu_percent": 50},
     ],

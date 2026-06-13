@@ -75,7 +75,7 @@ async def _stack_files_service(db: AsyncSession, stack_id: int) -> StackService:
             )
         )
     ).scalar_one_or_none()
-    if row is None or row.host_port is None:
+    if row is None or row.internal_port is None:
         raise NotFoundError("Stack has no file manager")
     return row
 
@@ -186,7 +186,7 @@ async def _session_target(
             raise UnauthorizedError("File manager session is no longer authorized")
         svc = await _stack_files_service(db, stack.id)
         session_scope = f"{STACK_SESSION_PREFIX}{stack.id}:{user.id}:{user.token_version}"
-        return f"127.0.0.1:{svc.host_port}", None, session_scope, needs_cookie, user
+        return f"{stack.loopback_ip}:{svc.internal_port}", None, session_scope, needs_cookie, user
 
     prefix = TICKET_PREFIX if scope.startswith(TICKET_PREFIX) else SESSION_PREFIX
     if not scope.startswith(prefix):

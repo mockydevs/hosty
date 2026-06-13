@@ -66,7 +66,7 @@ class ServiceSpec:
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
-        if self.exposed and self.host_port is None:
+        if self.exposed and self.internal_port is None:
             raise SpecValidationError(
                 f"Service {self.name!r}: cannot expose a service that publishes no port"
             )
@@ -85,12 +85,7 @@ class ServiceSpec:
             raise SpecValidationError("Service env must be sorted (canonical form)")
         if self.internal_port is not None:
             validate_port(self.internal_port)
-        if self.host_port is not None:
-            validate_port(self.host_port)
-        if (self.internal_port is None) != (self.host_port is None):
-            raise SpecValidationError(
-                f"Service {self.name!r}: internal_port and host_port come together"
-            )
+
         if self.memory_mb is not None and not 16 <= int(self.memory_mb) <= 1_048_576:
             raise SpecValidationError(f"Service {self.name!r}: invalid memory_mb")
         if self.cpu_percent is not None and not 1 <= int(self.cpu_percent) <= 6400:
@@ -117,6 +112,7 @@ class StackSpec:
 
     name: str
     tenant: str  # tenant linux user (hosty-t-<id>)
+    loopback_ip: str  # e.g., 127.1.0.1
     services: tuple[ServiceSpec, ...]
     volumes: tuple[VolumeSpec, ...] = ()
     endpoints: tuple[EndpointSpec, ...] = ()
@@ -155,16 +151,14 @@ class StackSpec:
             raise SpecValidationError(f"Stack {self.name!r}: duplicate endpoint domains")
         by_name = {s.name: s for s in self.services}
         for endpoint in self.endpoints:
-            target = by_name.get(endpoint.service)
-            if target is None:
+            if endpoint.service not in known:
                 raise SpecValidationError(
-                    f"Stack {self.name!r}: endpoint {endpoint.domain!r} routes to "
-                    f"unknown service {endpoint.service!r}"
+                    f"Endpoint {endpoint.domain!r} targets missing service {endpoint.service!r}"
                 )
-            if target.host_port is None:
+            target = next(s for s in self.services if s.name == endpoint.service)
+            if target.internal_port is None:
                 raise SpecValidationError(
-                    f"Stack {self.name!r}: endpoint {endpoint.domain!r} routes to "
-                    f"service {endpoint.service!r} which publishes no port"
+                    f"Endpoint {endpoint.domain!r} targets service {endpoint.service!r} which has no internal_port"
                 )
 
     @property

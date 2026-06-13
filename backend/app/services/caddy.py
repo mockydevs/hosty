@@ -164,7 +164,7 @@ def routes_for_stack(spec: StackSpec, *, suspended: bool) -> list[StackRoute]:
     return [
         StackRoute(
             domain=endpoint.domain,
-            upstream=f"127.0.0.1:{services_by_name[endpoint.service].host_port}",
+            upstream=f"{spec.loopback_ip}:{services_by_name[endpoint.service].internal_port}",
             internal_tls=endpoint.behind_cloudflare,
             suspended=suspended,
         )

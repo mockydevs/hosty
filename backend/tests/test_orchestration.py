@@ -197,7 +197,8 @@ def make_spec(owner_id: int, *, suspended: bool = False) -> StackSpec:
     return StackSpec(
         name="blog",
         tenant=f"hosty-t-{owner_id}",
-        services=(ServiceSpec(name="web", image="nginx:1.27", internal_port=80, host_port=20001),),
+        loopback_ip="127.1.0.1",
+        services=(ServiceSpec(name="web", image="nginx:1.27", internal_port=80),),
         volumes=(VolumeSpec(name="content", service="web", mount_path="/var/www"),),
         suspended=suspended,
     )

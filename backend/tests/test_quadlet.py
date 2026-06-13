@@ -16,13 +16,13 @@ def full_stack() -> StackSpec:
     return StackSpec(
         name="blog",
         tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
         services=(
             ServiceSpec(
                 name="web",
                 image="docker.io/library/nginx:1.27@sha256:" + "a" * 64,
                 env=(("APP_ENV", "prod"), ("WP_HOME", "https://blog.example.com")),
                 internal_port=80,
-                host_port=20001,
                 memory_mb=512,
                 cpu_percent=150,
                 is_web=True,
@@ -57,7 +57,7 @@ def test_container_unit_snapshot_full():
         "LogDriver=journald\n"
         "Label=hosty.stack=blog\n"
         "Label=hosty.managed=1\n"
-        "PublishPort=127.0.0.1:20001:80\n"
+        "PublishPort=127.1.0.1:80:80\n"
         "EnvironmentFile=/home/hosty-t-7/stacks/blog/env/web.env\n"
         "Volume=/home/hosty-t-7/stacks/blog/volumes/content:/var/www/html:U\n"
         "PodmanArgs=--memory=512m --cpus=1.5\n"
@@ -110,6 +110,7 @@ def test_volume_chown_flag_only_for_single_owner_volumes():
     stack = StackSpec(
         name="wp",
         tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
         services=(
             ServiceSpec(name="web", image="docker.io/library/wordpress:6@sha256:" + "a" * 64),
             ServiceSpec(name="files", image="docker.io/filebrowser/filebrowser:v2"),
@@ -136,17 +137,18 @@ def test_exposed_service_binds_all_interfaces():
     """An exposed service publishes on 0.0.0.0 (reachable on the public IP);
     the default stays loopback-only."""
     base = dict(
-        name="db", image="docker.io/library/postgres:16", internal_port=5432, host_port=20104
+        name="db", image="docker.io/library/postgres:16", internal_port=5432
     )
     stack = StackSpec(
         name="pg",
         tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
         services=(ServiceSpec(**base, exposed=True),),
     )
-    assert "PublishPort=0.0.0.0:20104:5432\n" in quadlet.container_unit(stack, stack.services[0])
+    assert "PublishPort=0.0.0.0:5432:5432\n" in quadlet.container_unit(stack, stack.services[0])
 
-    loopback = StackSpec(name="pg", tenant="hosty-t-7", services=(ServiceSpec(**base),))
-    assert "PublishPort=127.0.0.1:20104:5432\n" in quadlet.container_unit(
+    loopback = StackSpec(name="pg", tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(ServiceSpec(**base),))
+    assert "PublishPort=127.1.0.1:5432:5432\n" in quadlet.container_unit(
         loopback, loopback.services[0]
     )
 
@@ -235,4 +237,4 @@ def test_injection_cannot_reach_unit_text():
     with pytest.raises(SpecValidationError):
         VolumeSpec(name="data", service="web", mount_path="/data/../../etc")
     with pytest.raises(SpecValidationError):
-        StackSpec(name="blog\n", tenant="hosty-t-7", services=(ServiceSpec("web", "nginx"),))
+        StackSpec(name="blog\n", tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(ServiceSpec("web", "nginx"),))

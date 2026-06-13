@@ -24,13 +24,12 @@ from app.domain.specs import StackSpec
 class Allocation:
     """Panel-allocated resources the blueprint may consume while rendering.
 
-    `ports`: service name -> loopback host port (allocated for every service
-    the blueprint DECLARED in `ports_needed`). `secrets`: generated secret
-    values keyed by the blueprint's declared secret names — shown once to
-    the user, then only stored encrypted."""
+    `loopback_ip`: the virtual IP derived from the stack ID for conflict-free
+    port binding on the host loopback interface. `secrets`: generated secret
+    values keyed by the blueprint's declared secret names."""
 
     tenant: str
-    ports: dict[str, int] = field(default_factory=dict)
+    loopback_ip: str
     secrets: dict[str, str] = field(default_factory=dict)
 
 
@@ -88,9 +87,6 @@ class Blueprint(Protocol):
         the schema drives the create wizard — no per-blueprint UI code."""
         ...
 
-    def ports_needed(self, inputs: BaseModel) -> list[str]:
-        """Service names that publish a loopback port (allocated by panel)."""
-        ...
 
     def secrets_needed(self, inputs: BaseModel) -> list[str]:
         """Names of secrets the panel must generate before render."""

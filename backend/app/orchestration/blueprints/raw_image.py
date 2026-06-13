@@ -48,9 +48,6 @@ class RawImageBlueprint:
     def inputs(self) -> type[RawImageInputs]:
         return RawImageInputs
 
-    def ports_needed(self, inputs: RawImageInputs) -> list[str]:
-        return [WEB_SERVICE]
-
     def secrets_needed(self, inputs: RawImageInputs) -> list[str]:
         return []
 
@@ -60,7 +57,6 @@ class RawImageBlueprint:
             image=inputs.image,
             env=tuple(sorted(inputs.env.items())),
             internal_port=inputs.internal_port,
-            host_port=alloc.ports[WEB_SERVICE],
             memory_mb=inputs.memory_mb,
             cpu_percent=inputs.cpu_percent,
             is_web=True,
@@ -83,6 +79,7 @@ class RawImageBlueprint:
         return StackSpec(
             name=name,
             tenant=alloc.tenant,
+            loopback_ip=alloc.loopback_ip,
             services=(service,),
             volumes=volumes,
             endpoints=endpoints,

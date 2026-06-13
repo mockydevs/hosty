@@ -65,7 +65,7 @@ def with_auto_domain(spec: StackSpec, settings: Settings) -> StackSpec:
     generated."""
     if spec.endpoints:
         return spec
-    web = next((s for s in spec.services if s.is_web and s.host_port is not None), None)
+    web = next((s for s in spec.services if s.is_web and s.internal_port is not None), None)
     if web is None:
         return spec
     domain = suggested_domain(spec.name, settings)
@@ -130,13 +130,13 @@ def spec_for(
     return StackSpec(
         name=stack.name,
         tenant=tenant_for(stack.owner_id),
+        loopback_ip=stack.loopback_ip,
         services=tuple(
             ServiceSpec(
                 name=svc.name,
                 image=svc.image_digest or svc.image,
                 env=tuple(sorted(decrypt_env(svc, settings).items())),
                 internal_port=svc.internal_port,
-                host_port=svc.host_port,
                 memory_mb=svc.memory_mb,
                 cpu_percent=svc.cpu_percent,
                 is_web=svc.is_web,
@@ -275,25 +275,11 @@ async def allocate(
     blueprint: Blueprint,
     inputs,
     *,
-    owner_id: int,
+    stack: Stack,
 ) -> Allocation:
-    """Ports (from the shared loopback ledger) + generated secrets for one
-    render. Ports are reserved for ALL declared services up front; the
-    UNIQUE constraint still arbitrates concurrent racers at commit."""
-    allocated: dict[str, int] = {}
-    taken = await ports.used_host_ports(db)
-    for service_name in blueprint.ports_needed(inputs):
-        port = None
-        for candidate in range(settings.app_port_min, settings.app_port_max + 1):
-            if candidate not in taken:
-                port = candidate
-                break
-        if port is None:
-            raise ports.NoFreePortError("No free loopback ports left on this server")
-        taken.add(port)
-        allocated[service_name] = port
+    """Generated secrets and loopback IP for one render."""
     secrets = {name: generate_secret() for name in blueprint.secrets_needed(inputs)}
-    return Allocation(tenant=tenant_for(owner_id), ports=allocated, secrets=secrets)
+    return Allocation(tenant=tenant_for(stack.owner_id), loopback_ip=stack.loopback_ip, secrets=secrets)
 
 
 async def persist_rendered(
@@ -311,7 +297,6 @@ async def persist_rendered(
                 build_repo=svc.build_repo,
                 build_branch=svc.build_branch,
                 internal_port=svc.internal_port,
-                host_port=svc.host_port,
                 env_encrypted=encrypt_env(dict(svc.env), settings),
                 memory_mb=svc.memory_mb,
                 cpu_percent=svc.cpu_percent,
@@ -374,7 +359,7 @@ def connection_links(
     if not meta:
         return []
     target = next((s for s in services if s.name == meta.get("service")), None)
-    if target is None or target.host_port is None or target.internal_port is None:
+    if target is None or target.internal_port is None:
         return []
     env = decrypt_env(target, settings)
     scheme = str(meta["scheme"])
@@ -395,9 +380,9 @@ def connection_links(
                 target.internal_port,
                 database,
             ),
-            host_uri=_build_uri(scheme, user, password, "127.0.0.1", target.host_port, database),
+            host_uri=_build_uri(scheme, user, password, stack.loopback_ip, target.internal_port, database),
             public_uri=(
-                _build_uri(scheme, user, password, public_ip, target.host_port, database)
+                _build_uri(scheme, user, password, public_ip, target.internal_port, database)
                 if target.publicly_exposed and public_ip
                 else None
             ),

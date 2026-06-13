@@ -102,12 +102,11 @@ services:
     spec = blueprint.render(
         "pg",
         inputs,
-        Allocation(tenant="hosty-t-7", ports={"db": 20100}, secrets={"db_password": "secret"}),
+        Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1", secrets={"db_password": "secret"}),
     )
 
     assert spec.services[0].image == "docker.io/library/postgres:16"
     assert spec.services[0].internal_port == 5432
-    assert spec.services[0].host_port == 20100
     assert dict(spec.services[0].env) == {
         "POSTGRES_DB": "app",
         "POSTGRES_INITDB_ARGS": "123",
@@ -132,7 +131,7 @@ services:
         )
     )
     spec = blueprint.render(
-        "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7")
+        "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1")
     )
     assert spec.volumes[0].mount_path == "/usr/share/nginx/html"
 
@@ -158,7 +157,7 @@ services:
     )
     with pytest.raises(SpecValidationError, match="local build context"):
         blueprint.render(
-            "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7")
+            "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1")
         )
 
 
@@ -180,7 +179,7 @@ services:
         blueprint.render(
             "app",
             blueprint.inputs().model_validate({}),
-            Allocation(tenant="hosty-t-7", ports={}, secrets={}),
+            Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1", secrets={}),
         )
 
 
@@ -224,13 +223,12 @@ services:
     spec = blueprint.render(
         "app",
         inputs,
-        Allocation(tenant="hosty-t-7", ports={"web": 20100}),
+        Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1"),
     )
 
     service = spec.services[0]
     assert service.build_repo == "https://github.com/example/app.git"
     assert service.build_branch == "main"
     assert service.internal_port == 3000
-    assert service.host_port == 20100
     assert service.is_web is True
     assert spec.endpoints[0].domain == "app.example.com"

@@ -215,6 +215,16 @@ class Stack(Base):
         DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
 
+    @property
+    def loopback_ip(self) -> str:
+        """Virtual IP derived from the stack ID for conflict-free port binding."""
+        import ipaddress
+
+        if not self.id:
+            raise ValueError("Stack must have an ID to derive its loopback IP")
+        base = int(ipaddress.IPv4Address("127.1.0.0"))
+        return str(ipaddress.IPv4Address(base + self.id))
+
 
 class StackService(Base):
     """One container of a stack (v2). Rendered by the blueprint at create/
@@ -232,7 +242,6 @@ class StackService(Base):
     build_repo: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     build_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     internal_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    host_port: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
     env_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     memory_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cpu_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)

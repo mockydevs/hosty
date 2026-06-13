@@ -291,7 +291,7 @@ async def stack_adminer_session(
     if stack.status != "ready":
         raise ConflictError(f"Stack is {stack.status}; wait until it is ready")
     adminer_svc = await _stack_service(db, stack.id, WP_ADMINER_SERVICE)
-    if adminer_svc.host_port is None:
+    if adminer_svc.internal_port is None:
         raise NotFoundError("Stack has no Adminer endpoint")
     await _stack_service(db, stack.id, WP_DB_SERVICE)
     ticket = adminer_service.issue_token(
@@ -353,10 +353,10 @@ async def _stack_adminer_upstream(
     ):
         raise UnauthorizedError("Adminer session is no longer authorized")
     svc = await _stack_service(db, stack.id, WP_ADMINER_SERVICE)
-    if svc.host_port is None:
+    if svc.internal_port is None:
         raise UnauthorizedError("Adminer session is no longer authorized")
     session_scope = f"{STACK_SESSION_PREFIX}{stack.id}:{user.id}:{user.token_version}"
-    return f"127.0.0.1:{svc.host_port}", session_scope
+    return f"{stack.loopback_ip}:{svc.internal_port}", session_scope
 
 
 @proxy_router.api_route("/adminer{path:path}", methods=["GET", "POST"], include_in_schema=False)

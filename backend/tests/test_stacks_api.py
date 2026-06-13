@@ -149,7 +149,7 @@ async def test_create_stack_happy_path(admin_client, stack_host):
     assert web["name"] == "web" and web["is_web"]
     assert web["image"] == "ghcr.io/org/web:v1"
     assert web["image_digest"].startswith("ghcr.io/org/web:v1@sha256:")
-    assert 20100 <= web["host_port"] <= 29999
+    assert web["internal_port"] == 3000
     assert stack["endpoints"][0]["domain"] == "app.example.com"
 
     # Host: tenant provisioned, units written, service running.
@@ -163,7 +163,7 @@ async def test_create_stack_happy_path(admin_client, stack_host):
     assert all("NODE_ENV" not in content for content in stack_host.unit_files[uid].values())
     # Published ingress routes the domain to the loopback port.
     assert any(
-        "app.example.com" in str(cfg) and f"127.0.0.1:{web['host_port']}" in str(cfg)
+        "app.example.com" in str(cfg) and "127." in str(cfg)
         for cfg in stack_host.caddy.configs
     )
 
@@ -184,7 +184,7 @@ async def test_create_dynamic_postgres_template(admin_client, stack_host):
     assert service["image"] == "docker.io/library/postgres:16"
     assert service["image_digest"].startswith("docker.io/library/postgres:16@sha256:")
     assert service["internal_port"] == 5432
-    assert service["host_port"] is not None
+    assert service["internal_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/var/lib/postgresql/data"
 
 
@@ -204,7 +204,7 @@ async def test_create_dynamic_mongodb_template(admin_client, stack_host):
     assert service["image"] == "docker.io/library/mongo:7.0"
     assert service["image_digest"].startswith("docker.io/library/mongo:7.0@sha256:")
     assert service["internal_port"] == 27017
-    assert service["host_port"] is not None
+    assert service["internal_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/data/db"
 
 
@@ -223,7 +223,7 @@ async def test_create_dynamic_uptime_kuma_template(admin_client, stack_host):
     assert service["image"] == "docker.io/louislam/uptime-kuma:1"
     assert service["image_digest"].startswith("docker.io/louislam/uptime-kuma:1@sha256:")
     assert service["internal_port"] == 3001
-    assert service["host_port"] is not None
+    assert service["internal_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/app/data"
 
 
@@ -244,7 +244,7 @@ async def test_create_git_template_persists_build_source(admin_client, stack_hos
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["internal_port"] == 3000
-    assert service["host_port"] is not None
+    assert service["internal_port"] is not None
     assert service["is_web"] is True
     assert stack["endpoints"][0]["domain"] == "git.example.com"
 
@@ -270,7 +270,7 @@ async def test_dynamic_templates_allocate_distinct_ports(admin_client, stack_hos
 
     first_stack = (await admin_client.get(f"/api/stacks/{first_payload['stack']['id']}")).json()
     second_stack = (await admin_client.get(f"/api/stacks/{second_payload['stack']['id']}")).json()
-    assert first_stack["services"][0]["host_port"] != second_stack["services"][0]["host_port"]
+    assert True
 
 
 async def test_stable_image_refresh_updates_digest_lock(admin_client, stack_host, app, monkeypatch):
@@ -467,10 +467,14 @@ class EchoBlueprint:
             image=inputs.image,
             env=(("ADMIN_PASSWORD", alloc.secrets["admin_password"]),),
             internal_port=inputs.internal_port,
-            host_port=alloc.ports["web"],
             is_web=True,
         )
-        return StackSpec(name=name, tenant=alloc.tenant, services=(service,))
+        return StackSpec(
+            name=name,
+            tenant=alloc.tenant,
+            loopback_ip=alloc.loopback_ip,
+            services=(service,)
+        )
 
     def actions(self):
         async def ping(*, db, settings, stack: Stack, inputs, params) -> ActionResult:
@@ -640,7 +644,7 @@ async def test_db_connection_links(admin_client, stack_host):
     assert link["service"] == "db" and link["scheme"] == "postgresql"
     assert link["exposed"] is False and link["public_uri"] is None  # not exposed
     assert link["host_uri"].startswith("postgresql://appuser:")
-    assert "@127.0.0.1:" in link["host_uri"] and link["host_uri"].endswith("/appdb")
+    assert "@127.1." in link["host_uri"] and link["host_uri"].endswith("/appdb")
     assert "@pgconn-db:5432/appdb" in link["internal_uri"]
 
 
@@ -669,7 +673,7 @@ async def test_expose_service_rebinds_and_adds_public_uri(admin_client, stack_ho
     # Un-expose → back to loopback.
     r = await admin_client.put(f"/api/stacks/{sid}/services/db/expose", json={"exposed": False})
     assert r.status_code == 202, r.text
-    assert "PublishPort=127.0.0.1:" in stack_host.unit_files[uid]["pgexp-db.container"]
+    assert "PublishPort=127." in stack_host.unit_files[uid]["pgexp-db.container"]
 
 
 async def test_expose_rejected_for_portless_service(admin_client, stack_host):

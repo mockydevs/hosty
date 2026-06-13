@@ -142,9 +142,6 @@ class ComposeBlueprint:
             for key, repo in self._version_inputs.items()
         }
 
-    def ports_needed(self, inputs: BaseModel) -> list[str]:
-        return self._ports
-
     def secrets_needed(self, inputs: BaseModel) -> list[str]:
         return self._secrets
 
@@ -216,19 +213,12 @@ class ComposeBlueprint:
                         f"Service {svc_name!r} has an invalid container port {p!r}"
                     ) from exc
 
-            host_port = alloc.ports.get(svc_name)
-            if host_port is not None and internal_port is None:
-                raise SpecValidationError(
-                    f"Service {svc_name!r} requests a Hosty port but declares no container port"
-                )
-
             services.append(
                 ServiceSpec(
                     name=svc_name,
                     image=image,
                     env=tuple(sorted(env_vars.items())),
                     internal_port=internal_port,
-                    host_port=host_port,
                     is_web=svc_name == self._web_service,
                     build_repo=build_repo,
                     build_branch=build_branch,
@@ -262,6 +252,7 @@ class ComposeBlueprint:
         return StackSpec(
             name=name,
             tenant=alloc.tenant,
+            loopback_ip=alloc.loopback_ip,
             services=tuple(services),
             volumes=tuple(volumes),
             endpoints=endpoints,

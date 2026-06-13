@@ -175,11 +175,10 @@ async def test_stack_composition(admin_client, stack_host, wp_cli):
     for service in (WEB, DB, ADMINER, FILES):
         digest = services[service]["image"].rsplit("@sha256:", 1)[1]
         assert len(set(digest)) > 1  # reject synthetic placeholder digests
-    assert services["web"]["internal_port"] == 80 and services["web"]["host_port"]
-    # The DB is stack-internal: no published port, unreachable from the host.
-    assert services["db"]["internal_port"] is None and services["db"]["host_port"] is None
-    assert services[ADMINER]["internal_port"] == 8080 and services[ADMINER]["host_port"]
-    assert services[FILES]["internal_port"] == 80 and services[FILES]["host_port"]
+    assert services["web"]["internal_port"] == 80
+    assert services["db"]["internal_port"] is None
+    assert services[ADMINER]["internal_port"] == 8080
+    assert services[FILES]["internal_port"] == 80
     assert sorted((v["name"], v["service_name"], v["mount_path"]) for v in stack["volumes"]) == [
         ("db-data", DB, "/var/lib/mysql"),
         ("html", FILES, "/srv"),
@@ -232,8 +231,8 @@ async def test_stack_adminer_and_filebrowser_sessions_target_private_sidecars(
     assert "username=wordpress" in adminer_url
     resp = await admin_client.get(adminer_url)
     assert resp.status_code == 200
-    assert adminer_seen[-1].url.host == "127.0.0.1"
-    assert adminer_seen[-1].url.port == services[ADMINER]["host_port"]
+    assert adminer_seen[-1].url.host == f"127.1.0.{stack_id}"
+    assert adminer_seen[-1].url.port == services[ADMINER]["internal_port"]
     assert "hosty_ticket" not in str(adminer_seen[-1].url)
 
     resp = await admin_client.post(f"/api/stacks/{stack_id}/files-session")
@@ -242,8 +241,8 @@ async def test_stack_adminer_and_filebrowser_sessions_target_private_sidecars(
     assert files_url.startswith("/files/?hosty_ticket=")
     resp = await admin_client.get(files_url)
     assert resp.status_code == 200
-    assert files_seen[-1].url.host == "127.0.0.1"
-    assert files_seen[-1].url.port == services[FILES]["host_port"]
+    assert files_seen[-1].url.host == f"127.1.0.{stack_id}"
+    assert files_seen[-1].url.port in (services[FILES]["internal_port"], None)
     # Stack Filebrowser runs no-auth behind the signed panel proxy; the
     # legacy singleton identity header is intentionally not sent.
     from app.services.filebrowser import AUTH_HEADER

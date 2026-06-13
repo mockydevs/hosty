@@ -56,7 +56,6 @@ class StackServiceResponse(BaseModel):
     build_repo: str | None
     build_branch: str | None
     internal_port: int | None
-    host_port: int | None
     memory_mb: int | None
     cpu_percent: int | None
     is_web: bool
@@ -320,16 +319,6 @@ async def create_stack(
     if existing is not None:
         raise ConflictError("A stack already uses this name")
 
-    alloc = await stacks_service.allocate(db, settings, blueprint, inputs, owner_id=user.id)
-    try:
-        spec = blueprint.render(name, inputs, alloc)
-        # Web stacks created without a domain get a generated one (wildcard
-        # base or sslip.io) so they are reachable by default; editable later.
-        spec = stacks_service.with_auto_domain(spec, settings)
-    except SpecValidationError as exc:
-        raise StackValidationError(str(exc)) from exc
-    await _refuse_domain_conflicts(db, [ep.domain for ep in spec.endpoints])
-
     stack = Stack(
         owner_id=user.id,
         name=name,
@@ -340,6 +329,17 @@ async def create_stack(
     )
     db.add(stack)
     await db.flush()
+
+    alloc = await stacks_service.allocate(db, settings, blueprint, inputs, stack=stack)
+    try:
+        spec = blueprint.render(name, inputs, alloc)
+        # Web stacks created without a domain get a generated one (wildcard
+        # base or sslip.io) so they are reachable by default; editable later.
+        spec = stacks_service.with_auto_domain(spec, settings)
+    except SpecValidationError as exc:
+        raise StackValidationError(str(exc)) from exc
+    await _refuse_domain_conflicts(db, [ep.domain for ep in spec.endpoints])
+
     await stacks_service.persist_rendered(db, stack, spec, settings)
     op = Operation(
         kind="create_stack",
@@ -417,7 +417,7 @@ async def set_stack_domain(
         raise ConflictError("Stack is being deleted")
     settings = _settings(request)
     services, _, endpoints = await stacks_service.stack_children(db, stack.id)
-    web = next((s for s in services if s.is_web and s.host_port is not None), None)
+    web = next((s for s in services if s.is_web and s.internal_port is not None), None)
     if web is None:
         raise StackValidationError("This stack has no web-facing service to route a domain to")
 
@@ -590,7 +590,7 @@ async def set_service_exposure(
     svc = next((s for s in services if s.name == service_name), None)
     if svc is None:
         raise NotFoundError("Service not found")
-    if svc.host_port is None:
+    if svc.internal_port is None:
         raise StackValidationError("This service publishes no port to expose")
 
     svc.publicly_exposed = body.exposed

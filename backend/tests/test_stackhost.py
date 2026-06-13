@@ -40,6 +40,7 @@ def spec(name="blog", services=("web",)) -> StackSpec:
     return StackSpec(
         name=name,
         tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
         services=tuple(
             ServiceSpec(name=svc, image="nginx:1.27", env=(("K", "v"),)) for svc in services
         ),
@@ -59,6 +60,7 @@ def test_sync_tracks_and_removes_build_units(rooted):
     built = StackSpec(
         name="blog",
         tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
         services=(
             ServiceSpec(
                 name="web",
