@@ -45,6 +45,12 @@ def test_service_env_entries_validated():
         ServiceSpec(name="web", image="nginx", env=(("OK", "a\nb"),))
 
 
+def test_exposed_requires_a_published_port():
+    make_service(exposed=True)  # has host_port → fine
+    with pytest.raises(SpecValidationError, match="publishes no port"):
+        ServiceSpec(name="db", image="redis:7", exposed=True)  # no port → rejected
+
+
 def test_service_ports_come_together():
     make_service(internal_port=None, host_port=None)  # both absent is fine
     with pytest.raises(SpecValidationError, match="come together"):

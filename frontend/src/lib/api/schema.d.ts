@@ -1052,6 +1052,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{stack_id}/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stack Connections
+         * @description Copy-paste DB connection URIs (internal / host-loopback / public) for a
+         *     stack's database service. Owner-scoped — the URIs embed the credentials.
+         */
+        get: operations["stack_connections_api_stacks__stack_id__connections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/services/{service_name}/expose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Service Exposure
+         * @description Toggle public reachability of a service's published port. Exposed →
+         *     the port binds 0.0.0.0 (reachable on the server's public IP); otherwise
+         *     loopback-only. Flips the unit's PublishPort and re-converges.
+         */
+        put: operations["set_service_exposure_api_stacks__stack_id__services__service_name__expose_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operations": {
         parameters: {
             query?: never;
@@ -2241,6 +2284,21 @@ export interface components {
             /** Name Servers */
             name_servers: string[];
         };
+        /** ConnectionLinkResponse */
+        ConnectionLinkResponse: {
+            /** Service */
+            service: string;
+            /** Scheme */
+            scheme: string;
+            /** Exposed */
+            exposed: boolean;
+            /** Internal Uri */
+            internal_uri: string;
+            /** Host Uri */
+            host_uri: string;
+            /** Public Uri */
+            public_uri: string | null;
+        };
         /** CreateAppRequest */
         CreateAppRequest: {
             /** Name */
@@ -2443,6 +2501,11 @@ export interface components {
             default_ttl: number;
             /** Cloudflare Enabled */
             cloudflare_enabled: boolean;
+        };
+        /** ExposeServiceRequest */
+        ExposeServiceRequest: {
+            /** Exposed */
+            exposed: boolean;
         };
         /** FailedLoginResponse */
         FailedLoginResponse: {
@@ -3059,6 +3122,8 @@ export interface components {
             cpu_percent: number | null;
             /** Is Web */
             is_web: boolean;
+            /** Publicly Exposed */
+            publicly_exposed: boolean;
         };
         /** StackVolumeResponse */
         StackVolumeResponse: {
@@ -5527,6 +5592,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StackLogsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stack_connections_api_stacks__stack_id__connections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionLinkResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_service_exposure_api_stacks__stack_id__services__service_name__expose_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                service_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExposeServiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackOperationAccepted"];
                 };
             };
             /** @description Validation Error */

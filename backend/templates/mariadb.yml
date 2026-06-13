@@ -6,6 +6,12 @@ x-hosty:
   description: "MariaDB is a community-developed, commercially supported fork of the MySQL relational database management system."
   ports:
     - db
+  connection:
+    scheme: mysql
+    service: db
+    user_env: MARIADB_USER
+    password_env: MARIADB_PASSWORD
+    database_env: MARIADB_DATABASE
   secrets:
     - root_password
     - db_password

@@ -31,9 +31,11 @@ import { StackStatusBadge, isSettling } from "@/pages/stacks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  Copy,
   Database,
   ExternalLink,
   FolderOpen,
+  Globe,
   Play,
   RefreshCw,
   RotateCcw,
@@ -554,6 +556,146 @@ function EndpointsCard({
   );
 }
 
+type ConnectionLink = components["schemas"]["ConnectionLinkResponse"];
+
+function ConnRow({ label, uri }: { label: string; uri: string }) {
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(uri);
+      toast.success("Connection string copied");
+    } catch {
+      toast.error("Copy failed — select the text manually");
+    }
+  };
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 truncate rounded-md border border-border bg-muted/40 px-2 py-1.5 font-mono text-xs">
+          {uri}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Copy ${label} connection string`}
+          onClick={copy}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionsCard({
+  stack,
+  onOperation,
+}: {
+  stack: Stack;
+  onOperation: (operationId: number) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState<ConnectionLink | null>(null);
+
+  const links = useQuery({
+    queryKey: ["stack", stack.id, "connections"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/stacks/{stack_id}/connections", {
+        params: { path: { stack_id: stack.id } },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load connections"));
+      return data;
+    },
+  });
+
+  const expose = useMutation({
+    mutationFn: async ({ service, exposed }: { service: string; exposed: boolean }) => {
+      const { data, error } = await api.PUT(
+        "/api/stacks/{stack_id}/services/{service_name}/expose",
+        { params: { path: { stack_id: stack.id, service_name: service } }, body: { exposed } },
+      );
+      if (error || !data) throw new Error(apiErrorMessage(error, "Could not change exposure"));
+      return data;
+    },
+    onSuccess: async (data) => {
+      setConfirming(null);
+      onOperation(data.operation_id);
+      toast.success("Updating exposure…");
+      await queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  // Only databases with connection metadata produce links.
+  if (links.isPending || links.isError || (links.data?.length ?? 0) === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Database className="h-4 w-4 text-muted-foreground" aria-hidden /> Connection
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {links.data?.map((link) => (
+          <div key={link.service} className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">{link.service}</span>
+                {link.exposed ? (
+                  <Badge variant="success">Public</Badge>
+                ) : (
+                  <Badge variant="secondary">Internal only</Badge>
+                )}
+              </div>
+              <Button
+                variant={link.exposed ? "outline" : "default"}
+                size="sm"
+                loading={expose.isPending}
+                onClick={() =>
+                  link.exposed
+                    ? expose.mutate({ service: link.service, exposed: false })
+                    : setConfirming(link)
+                }
+              >
+                <Globe className="h-3.5 w-3.5" aria-hidden />
+                {link.exposed ? "Make private" : "Expose publicly"}
+              </Button>
+            </div>
+            <ConnRow label="From another stack (internal network)" uri={link.internal_uri} />
+            <ConnRow label="From code on this server (loopback)" uri={link.host_uri} />
+            {link.public_uri && <ConnRow label="From anywhere (public)" uri={link.public_uri} />}
+          </div>
+        ))}
+      </CardContent>
+
+      <Dialog open={confirming !== null} onClose={() => setConfirming(null)}>
+        <DialogContent>
+          <DialogTitle>Expose this database to the internet?</DialogTitle>
+          <DialogDescription>
+            The port will bind your server's public IP — anyone who can reach it with the password
+            can connect. Make sure the password is strong. You can make it private again at any
+            time.
+          </DialogDescription>
+          <DialogActions>
+            <Button variant="ghost" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              loading={expose.isPending}
+              onClick={() =>
+                confirming && expose.mutate({ service: confirming.service, exposed: true })
+              }
+            >
+              Expose publicly
+            </Button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 export function StackDetailPage() {
   const { stackId } = useParams();
   const location = useLocation();
@@ -670,6 +812,7 @@ export function StackDetailPage() {
         <EndpointsCard stack={data} onOperation={setOperationId} />
       </div>
 
+      <ConnectionsCard stack={data} onOperation={setOperationId} />
       <ActionsCard stack={data} actions={actions} />
       <StackToolsCard stack={data} />
       <StackBackupsCard stack={data} onOperation={setOperationId} />

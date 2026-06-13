@@ -618,3 +618,78 @@ async def test_set_stack_domain_refuses_conflict(admin_client, stack_host):
         f"/api/stacks/{other['stack']['id']}/domain", json={"domain": "app.example.com"}
     )
     assert r.status_code == 409
+
+
+# --- external DB connection links + expose toggle --------------------------------------
+
+PG_CONN_BODY = {
+    "name": "pgconn",
+    "blueprint_id": "postgres",
+    "inputs": {"version": "16", "database": "appdb", "user": "appuser"},
+}
+
+
+async def test_db_connection_links(admin_client, stack_host):
+    payload, op = await create_stack_ok(admin_client, PG_CONN_BODY)
+    assert op["status"] == "succeeded", op
+    sid = payload["stack"]["id"]
+    links = (await admin_client.get(f"/api/stacks/{sid}/connections")).json()
+    assert len(links) == 1
+    link = links[0]
+    assert link["service"] == "db" and link["scheme"] == "postgresql"
+    assert link["exposed"] is False and link["public_uri"] is None  # not exposed
+    assert link["host_uri"].startswith("postgresql://appuser:")
+    assert "@127.0.0.1:" in link["host_uri"] and link["host_uri"].endswith("/appdb")
+    assert "@pgconn-db:5432/appdb" in link["internal_uri"]
+
+
+async def test_expose_service_rebinds_and_adds_public_uri(admin_client, stack_host, settings):
+    settings.public_ip = "203.0.113.9"
+    payload, _ = await create_stack_ok(admin_client, {**PG_CONN_BODY, "name": "pgexp"})
+    sid = payload["stack"]["id"]
+    assert (await admin_client.get(f"/api/stacks/{sid}/connections")).json()[0][
+        "public_uri"
+    ] is None
+
+    r = await admin_client.put(f"/api/stacks/{sid}/services/db/expose", json={"exposed": True})
+    assert r.status_code == 202, r.text
+
+    stack = (await admin_client.get(f"/api/stacks/{sid}")).json()
+    db_svc = next(s for s in stack["services"] if s["name"] == "db")
+    assert db_svc["publicly_exposed"] is True
+    # The unit was rewritten to bind all interfaces.
+    uid = stack_host.users["hosty-t-1"]
+    assert "PublishPort=0.0.0.0:" in stack_host.unit_files[uid]["pgexp-db.container"]
+    # Connection now offers a public URI on the server IP.
+    link = (await admin_client.get(f"/api/stacks/{sid}/connections")).json()[0]
+    assert link["exposed"] is True
+    assert link["public_uri"] is not None and "@203.0.113.9:" in link["public_uri"]
+
+    # Un-expose → back to loopback.
+    r = await admin_client.put(f"/api/stacks/{sid}/services/db/expose", json={"exposed": False})
+    assert r.status_code == 202, r.text
+    assert "PublishPort=127.0.0.1:" in stack_host.unit_files[uid]["pgexp-db.container"]
+
+
+async def test_expose_rejected_for_portless_service(admin_client, stack_host):
+    # WordPress db is internal (no published port) → cannot be exposed.
+    body = {
+        "name": "wpx",
+        "blueprint_id": "wordpress",
+        "inputs": {
+            "domain": "wpx.example.com",
+            "title": "T",
+            "admin_user": "adm",
+            "admin_email": "a@b.co",
+        },
+    }
+    payload, _ = await create_stack_ok(admin_client, body)
+    sid = payload["stack"]["id"]
+    r = await admin_client.put(f"/api/stacks/{sid}/services/db/expose", json={"exposed": True})
+    assert r.status_code == 422
+
+
+async def test_non_db_stack_has_no_connection_links(admin_client, stack_host):
+    payload, _ = await create_stack_ok(admin_client)  # raw-image, no connection meta
+    sid = payload["stack"]["id"]
+    assert (await admin_client.get(f"/api/stacks/{sid}/connections")).json() == []

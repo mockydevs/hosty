@@ -6,6 +6,12 @@ x-hosty:
   description: "Deploy a PostgreSQL database."
   ports:
     - db
+  connection:
+    scheme: postgresql
+    service: db
+    user_env: POSTGRES_USER
+    password_env: POSTGRES_PASSWORD
+    database_env: POSTGRES_DB
   secrets:
     - db_password
   inputs:

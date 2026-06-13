@@ -6,6 +6,9 @@ x-hosty:
   description: "Redis is an open source, in-memory data structure store, used as a database, cache, and message broker."
   ports:
     - db
+  connection:
+    scheme: redis
+    service: db
   secrets:
     - password
   inputs:

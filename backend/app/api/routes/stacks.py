@@ -60,6 +60,7 @@ class StackServiceResponse(BaseModel):
     memory_mb: int | None
     cpu_percent: int | None
     is_web: bool
+    publicly_exposed: bool
 
 
 class StackVolumeResponse(BaseModel):
@@ -127,6 +128,19 @@ class StackActionResponse(BaseModel):
 class StackLogsResponse(BaseModel):
     service: str
     logs: str
+
+
+class ConnectionLinkResponse(BaseModel):
+    service: str
+    scheme: str
+    exposed: bool
+    internal_uri: str  # other containers on the stack network
+    host_uri: str  # code on this server / other stacks (loopback)
+    public_uri: str | None  # from anywhere, when exposed + a public IP is set
+
+
+class ExposeServiceRequest(BaseModel):
+    exposed: bool
 
 
 def _settings(request: Request):
@@ -521,3 +535,66 @@ async def stack_logs(
         tail=tail,
     )
     return StackLogsResponse(service=chosen.name, logs=logs)
+
+
+@router.get("/{stack_id}/connections", response_model=list[ConnectionLinkResponse])
+async def stack_connections(
+    request: Request,
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Copy-paste DB connection URIs (internal / host-loopback / public) for a
+    stack's database service. Owner-scoped — the URIs embed the credentials."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    links = stacks_service.connection_links(stack, services, _settings(request))
+    return [
+        ConnectionLinkResponse(
+            service=link.service,
+            scheme=link.scheme,
+            exposed=link.exposed,
+            internal_uri=link.internal_uri,
+            host_uri=link.host_uri,
+            public_uri=link.public_uri,
+        )
+        for link in links
+    ]
+
+
+@router.put(
+    "/{stack_id}/services/{service_name}/expose",
+    response_model=StackOperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def set_service_exposure(
+    request: Request,
+    stack_id: int,
+    service_name: str,
+    body: ExposeServiceRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Toggle public reachability of a service's published port. Exposed →
+    the port binds 0.0.0.0 (reachable on the server's public IP); otherwise
+    loopback-only. Flips the unit's PublishPort and re-converges."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    svc = next((s for s in services if s.name == service_name), None)
+    if svc is None:
+        raise NotFoundError("Service not found")
+    if svc.host_port is None:
+        raise StackValidationError("This service publishes no port to expose")
+
+    svc.publicly_exposed = body.exposed
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack), operation_id=op.id)

@@ -2996,6 +2996,125 @@
         }
       }
     },
+    "/api/stacks/{stack_id}/connections": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Stack Connections",
+        "description": "Copy-paste DB connection URIs (internal / host-loopback / public) for a\nstack's database service. Owner-scoped \u2014 the URIs embed the credentials.",
+        "operationId": "stack_connections_api_stacks__stack_id__connections_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectionLinkResponse"
+                  },
+                  "title": "Response Stack Connections Api Stacks  Stack Id  Connections Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/services/{service_name}/expose": {
+      "put": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Set Service Exposure",
+        "description": "Toggle public reachability of a service's published port. Exposed \u2192\nthe port binds 0.0.0.0 (reachable on the server's public IP); otherwise\nloopback-only. Flips the unit's PublishPort and re-converges.",
+        "operationId": "set_service_exposure_api_stacks__stack_id__services__service_name__expose_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          },
+          {
+            "name": "service_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Service Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExposeServiceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackOperationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/operations": {
       "get": {
         "tags": [
@@ -6794,6 +6913,51 @@
         ],
         "title": "CloudflareZoneResponse"
       },
+      "ConnectionLinkResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "scheme": {
+            "type": "string",
+            "title": "Scheme"
+          },
+          "exposed": {
+            "type": "boolean",
+            "title": "Exposed"
+          },
+          "internal_uri": {
+            "type": "string",
+            "title": "Internal Uri"
+          },
+          "host_uri": {
+            "type": "string",
+            "title": "Host Uri"
+          },
+          "public_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service",
+          "scheme",
+          "exposed",
+          "internal_uri",
+          "host_uri",
+          "public_uri"
+        ],
+        "title": "ConnectionLinkResponse"
+      },
       "CreateAppRequest": {
         "properties": {
           "name": {
@@ -7402,6 +7566,19 @@
           "cloudflare_enabled"
         ],
         "title": "DnsMetaResponse"
+      },
+      "ExposeServiceRequest": {
+        "properties": {
+          "exposed": {
+            "type": "boolean",
+            "title": "Exposed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exposed"
+        ],
+        "title": "ExposeServiceRequest"
       },
       "FailedLoginResponse": {
         "properties": {
@@ -9046,6 +9223,10 @@
           "is_web": {
             "type": "boolean",
             "title": "Is Web"
+          },
+          "publicly_exposed": {
+            "type": "boolean",
+            "title": "Publicly Exposed"
           }
         },
         "type": "object",
@@ -9059,7 +9240,8 @@
           "host_port",
           "memory_mb",
           "cpu_percent",
-          "is_web"
+          "is_web",
+          "publicly_exposed"
         ],
         "title": "StackServiceResponse"
       },

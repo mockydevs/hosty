@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import secrets as pysecrets
+from urllib.parse import quote
 
 import structlog
 from sqlalchemy import select
@@ -141,6 +142,7 @@ def spec_for(
                 is_web=svc.is_web,
                 build_repo=svc.build_repo,
                 build_branch=svc.build_branch,
+                exposed=svc.publicly_exposed,
             )
             for svc in sorted(services, key=lambda s: s.name)
         ),
@@ -334,6 +336,73 @@ async def persist_rendered(
                 behind_cloudflare=ep.behind_cloudflare,
             )
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class ConnectionLink:
+    """A copy-paste connection URI for a stack's DB service, at each scope.
+    `public_uri` is present only when the service is publicly exposed AND a
+    public IP is configured."""
+
+    service: str
+    scheme: str
+    exposed: bool
+    internal_uri: str  # other containers on the stack network
+    host_uri: str  # code on this server / other stacks (loopback)
+    public_uri: str | None  # from anywhere (server public IP), when exposed
+
+
+def _build_uri(scheme: str, user: str, password: str, host: str, port: int, database: str) -> str:
+    if user:
+        auth = f"{quote(user, safe='')}:{quote(password, safe='')}@"
+    elif password:
+        auth = f":{quote(password, safe='')}@"
+    else:
+        auth = ""
+    path = f"/{quote(database, safe='')}" if database else ""
+    return f"{scheme}://{auth}{host}:{port}{path}"
+
+
+def connection_links(
+    stack: Stack, services: list[StackService], settings: Settings
+) -> list[ConnectionLink]:
+    """Connection URIs for a stack's DB service, derived from the blueprint's
+    `connection` metadata + the service's resolved env. Empty when the
+    blueprint declares no connection or the service publishes no port."""
+    blueprint = get_blueprint(stack.blueprint_id)
+    meta = getattr(blueprint, "connection_meta", lambda: None)()
+    if not meta:
+        return []
+    target = next((s for s in services if s.name == meta.get("service")), None)
+    if target is None or target.host_port is None or target.internal_port is None:
+        return []
+    env = decrypt_env(target, settings)
+    scheme = str(meta["scheme"])
+    user = env.get(meta.get("user_env", ""), "")
+    password = env.get(meta.get("password_env", ""), "")
+    database = env.get(meta.get("database_env", ""), "")
+    public_ip = (settings.public_ip or "").strip()
+    return [
+        ConnectionLink(
+            service=target.name,
+            scheme=scheme,
+            exposed=target.publicly_exposed,
+            internal_uri=_build_uri(
+                scheme,
+                user,
+                password,
+                f"{stack.name}-{target.name}",
+                target.internal_port,
+                database,
+            ),
+            host_uri=_build_uri(scheme, user, password, "127.0.0.1", target.host_port, database),
+            public_uri=(
+                _build_uri(scheme, user, password, public_ip, target.host_port, database)
+                if target.publicly_exposed and public_ip
+                else None
+            ),
+        )
+    ]
 
 
 def get_blueprint_or_422(blueprint_id: str) -> Blueprint:

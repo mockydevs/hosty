@@ -6,6 +6,12 @@ x-hosty:
   description: "MySQL is an open-source relational database management system."
   ports:
     - db
+  connection:
+    scheme: mysql
+    service: db
+    user_env: MYSQL_USER
+    password_env: MYSQL_PASSWORD
+    database_env: MYSQL_DATABASE
   secrets:
     - root_password
     - db_password

@@ -6,6 +6,11 @@ x-hosty:
   description: "MongoDB is a source-available cross-platform document-oriented database program."
   ports:
     - db
+  connection:
+    scheme: mongodb
+    service: db
+    user_env: MONGO_INITDB_ROOT_USERNAME
+    password_env: MONGO_INITDB_ROOT_PASSWORD
   secrets:
     - root_password
   inputs:

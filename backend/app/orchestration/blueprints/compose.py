@@ -82,6 +82,12 @@ class ComposeBlueprint:
             raise SpecValidationError("x-hosty.inputs must be a mapping")
         self._web_service = hosty_meta.get("web")
         self._domain_input = hosty_meta.get("domain_input")
+        # Optional connection metadata: how to build a `scheme://user:pass@
+        # host:port/db` link for a DB service (services/stacks.connection_links).
+        conn = hosty_meta.get("connection")
+        if conn is not None and not isinstance(conn, dict):
+            raise SpecValidationError("x-hosty.connection must be a mapping")
+        self._connection = conn
         # Inputs that should render as a registry-sourced version dropdown:
         # `versions_from: <docker repo>` on the input. The list of series is
         # fetched + cached at form-render time (services/image_versions.py).
@@ -121,6 +127,11 @@ class ComposeBlueprint:
 
     def inputs(self) -> type[BaseModel]:
         return self._InputsModel
+
+    def connection_meta(self) -> dict | None:
+        """How to render a DB connection link: {scheme, service, user_env?,
+        password_env?, database_env?}. None for stacks with no DB endpoint."""
+        return self._connection
 
     def version_inputs(self) -> dict[str, tuple[str, str]]:
         """input name -> (docker repo, default version) for fields that

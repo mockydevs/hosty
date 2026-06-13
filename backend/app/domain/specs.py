@@ -59,9 +59,17 @@ class ServiceSpec:
     is_web: bool = False
     build_repo: str | None = None
     build_branch: str | None = None
+    # When True the published port binds 0.0.0.0 (reachable on the server's
+    # public IP) instead of loopback-only — opt-in external access for e.g. a
+    # database. Requires a published port.
+    exposed: bool = False
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
+        if self.exposed and self.host_port is None:
+            raise SpecValidationError(
+                f"Service {self.name!r}: cannot expose a service that publishes no port"
+            )
         if self.build_repo:
             validate_git_repo(self.build_repo)
             if self.build_branch:
@@ -180,6 +188,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "env": list(service.env),
         "internal_port": service.internal_port,
         "host_port": service.host_port,
+        "exposed": service.exposed,  # flips the PublishPort bind → unit changes
         "memory_mb": service.memory_mb,
         "cpu_percent": service.cpu_percent,
         "build_repo": service.build_repo,
