@@ -308,7 +308,7 @@ async def persist_rendered(
             StackVolume(
                 stack_id=stack.id,
                 name=vol.name,
-                service_name=vol.service_name,
+                service_name=vol.service,
                 mount_path=vol.mount_path,
             )
         )
