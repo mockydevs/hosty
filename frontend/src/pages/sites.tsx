@@ -142,7 +142,7 @@ export function CreateSiteDialog({
               {...form.register("php_version")}
             >
               {PHP_VERSIONS.map((v) => (
-                <option key={v} value={v}>
+                <option key={v} value={v} className="bg-background text-foreground">
                   PHP {v}
                 </option>
               ))}

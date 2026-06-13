@@ -337,7 +337,7 @@ export function SchemaForm({
                   onChange={(e) => set(field.name, e.target.value)}
                 >
                   {options.map((opt) => (
-                    <option key={opt} value={opt}>
+                    <option key={opt} value={opt} className="bg-background text-foreground">
                       {opt}
                     </option>
                   ))}

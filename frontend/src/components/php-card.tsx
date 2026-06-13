@@ -90,7 +90,7 @@ export function PhpCard({ site }: { site: Site }) {
             onChange={(e) => switchVersion.mutate(e.target.value)}
           >
             {PHP_VERSIONS.map((v) => (
-              <option key={v} value={v}>
+              <option key={v} value={v} className="bg-background text-foreground">
                 PHP {v}
               </option>
             ))}
