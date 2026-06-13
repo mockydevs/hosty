@@ -99,7 +99,7 @@ function MethodButton({
       className={[
         "flex w-full cursor-pointer items-start gap-3 rounded-md border p-3 text-left transition-colors",
         active
-          ? "border-primary bg-primary text-primary-foreground"
+          ? "border-primary bg-primary/10 text-foreground"
           : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
       ].join(" ")}
       onClick={onClick}
@@ -108,7 +108,7 @@ function MethodButton({
       <span className="min-w-0">
         <span className="block text-sm font-medium">{title}</span>
         <span
-          className={active ? "block text-xs opacity-80" : "block text-xs text-muted-foreground"}
+          className={active ? "block text-xs text-muted-foreground" : "block text-xs text-muted-foreground"}
         >
           {description}
         </span>
@@ -170,13 +170,13 @@ function SectionTitle({
 
 function BuildPackPicker() {
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      <div className="rounded-md border border-primary bg-primary px-3 py-2 text-primary-foreground">
+    <div className="grid gap-3">
+      <div className="rounded-md border border-primary bg-primary/10 px-3 py-2 text-foreground">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <Package className="h-4 w-4" aria-hidden />
+          <Package className="h-4 w-4 text-primary" aria-hidden />
           Dockerfile
         </div>
-        <p className="mt-1 text-xs opacity-80">Build from the selected repository branch.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Build from the selected repository branch.</p>
       </div>
       <div className="rounded-md border border-dashed border-border px-3 py-2 text-muted-foreground">
         <div className="flex items-center justify-between gap-2 text-sm font-medium">
