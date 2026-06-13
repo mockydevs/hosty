@@ -203,12 +203,12 @@ function LogsCard({ stack }: { stack: Stack }) {
           {stack.services.length > 1 && (
             <select
               aria-label="Service"
-              className="flex h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground [color-scheme:light_dark] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-8 rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={service}
               onChange={(e) => setService(e.target.value)}
             >
               {stack.services.map((s) => (
-                <option key={s.name} value={s.name} className="bg-background text-foreground">
+                <option key={s.name} value={s.name}>
                   {s.name}
                 </option>
               ))}

@@ -78,7 +78,12 @@ def env_file_text(service: ServiceSpec) -> str:
     return "".join(f"{key}={value}\n" for key, value in service.env)
 
 
-
+def _volume_owner_counts(stack: StackSpec) -> dict[str, int]:
+    """volume name -> how many services in the stack mount it."""
+    counts: dict[str, int] = {}
+    for volume in stack.volumes:
+        counts[volume.name] = counts.get(volume.name, 0) + 1
+    return counts
 
 
 def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
@@ -107,9 +112,17 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         lines.append(f"PublishPort=127.0.0.1:{service.host_port}:{service.internal_port}")
     if service.env:
         lines.append(f"EnvironmentFile={env_file_path(stack.tenant, stack.name, service.name)}")
+    # A volume mounted by exactly one service across the stack gets `:U` so
+    # podman chowns its host dir to the UID the container runs as: rootless
+    # images that drop privileges (postgres→999, mariadb→999, …) cannot write
+    # a tenant-owned bind mount otherwise, and crash on first start. SHARED
+    # volumes (e.g. WordPress `html` mounted by both `web` and `files`) are
+    # left alone — `:U` would thrash ownership between the two containers.
+    exclusive = {name for name, count in _volume_owner_counts(stack).items() if count == 1}
     for volume in stack.volumes_for(service.name):
         host_dir = volume_host_dir(stack.tenant, stack.name, volume.name)
-        lines.append(f"Volume={host_dir}:{volume.mount_path}")
+        suffix = ":U" if volume.name in exclusive else ""
+        lines.append(f"Volume={host_dir}:{volume.mount_path}{suffix}")
     podman_args: list[str] = []
     if service.memory_mb is not None:
         podman_args.append(f"--memory={int(service.memory_mb)}m")

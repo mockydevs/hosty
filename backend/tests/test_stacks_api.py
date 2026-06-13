@@ -380,16 +380,15 @@ async def test_logs(admin_client, stack_host, monkeypatch):
     stack_id = payload["stack"]["id"]
     calls: list[tuple] = []
 
-    async def journal(user, unit, *, uid, tail=200):
-        calls.append((user, unit, uid, tail))
+    async def journal(user, unit, *, tail=200):
+        calls.append((user, unit, tail))
         return f"journal of {unit}"
 
     monkeypatch.setattr(systemd_user_mod, "journal", journal)
     resp = await admin_client.get(f"/api/stacks/{stack_id}/logs?tail=50")
     assert resp.status_code == 200
     assert resp.json() == {"service": "web", "logs": "journal of blog-web.service"}
-    # The tenant's real uid (from the ledger) is passed for the journal field match.
-    assert calls == [("hosty-t-1", "blog-web.service", stack_host.users["hosty-t-1"], 50)]
+    assert calls == [("hosty-t-1", "blog-web.service", 50)]
 
     assert (await admin_client.get(f"/api/stacks/{stack_id}/logs?service=nope")).status_code == 404
 
