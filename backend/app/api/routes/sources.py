@@ -74,8 +74,15 @@ async def github_manifest(
     user: User = Depends(get_current_user),
 ) -> Any:
     """Returns the manifest JSON for creating a GitHub App via the manifest flow."""
-    host = request.headers.get("host", "localhost:8000")
-    protocol = "https" if "localhost" not in host else "http"
+    # Respect X-Forwarded-Proto from a TLS-terminating proxy; otherwise use the
+    # actual scheme of the incoming request so we never upgrade HTTP→HTTPS.
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    protocol = forwarded_proto.split(",")[0].strip() if forwarded_proto else request.url.scheme
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or "localhost:8000"
+    )
     base_url = f"{protocol}://{host}"
 
     manifest = {
