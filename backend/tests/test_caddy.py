@@ -239,8 +239,8 @@ def test_routes_for_stack_maps_endpoints_to_host_ports():
     from app.services.caddy import StackRoute, routes_for_stack
 
     assert routes_for_stack(_stack_spec(), suspended=False) == [
-        StackRoute(domain="blog.example.com", upstream="127.1.0.1:80"),
-        StackRoute(domain="www.blog.example.com", upstream="127.1.0.1:80", internal_tls=True),
+        StackRoute(domain="blog.example.com", upstream="127.1.0.1:20080"),
+        StackRoute(domain="www.blog.example.com", upstream="127.1.0.1:20080", internal_tls=True),
     ]
 
 

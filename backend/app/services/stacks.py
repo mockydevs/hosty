@@ -23,7 +23,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.db.models import Stack, StackEndpoint, StackService, StackVolume, User
-from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec
+from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec, derive_host_port
 from app.domain.validate import SpecValidationError
 from app.orchestration.blueprints import get_blueprint
 from app.orchestration.blueprints.base import Allocation, Blueprint
@@ -308,7 +308,7 @@ async def persist_rendered(
             StackVolume(
                 stack_id=stack.id,
                 name=vol.name,
-                service_name=vol.service,
+                service_name=vol.service_name,
                 mount_path=vol.mount_path,
             )
         )
@@ -380,9 +380,13 @@ def connection_links(
                 target.internal_port,
                 database,
             ),
-            host_uri=_build_uri(scheme, user, password, stack.loopback_ip, target.internal_port, database),
+            host_uri=_build_uri(
+                scheme, user, password, stack.loopback_ip, derive_host_port(target.internal_port), database
+            ),
             public_uri=(
-                _build_uri(scheme, user, password, public_ip, target.internal_port, database)
+                _build_uri(
+                    scheme, user, password, public_ip, derive_host_port(target.internal_port), database
+                )
                 if target.publicly_exposed and public_ip
                 else None
             ),

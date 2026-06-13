@@ -57,7 +57,7 @@ def test_container_unit_snapshot_full():
         "LogDriver=journald\n"
         "Label=hosty.stack=blog\n"
         "Label=hosty.managed=1\n"
-        "PublishPort=127.1.0.1:80:80\n"
+        "PublishPort=127.1.0.1:20080:80\n"
         "EnvironmentFile=/home/hosty-t-7/stacks/blog/env/web.env\n"
         "Volume=/home/hosty-t-7/stacks/blog/volumes/content:/var/www/html:U\n"
         "PodmanArgs=--memory=512m --cpus=1.5\n"

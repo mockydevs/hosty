@@ -12,8 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from app.domain.specs import StackSpec
+from app.domain.specs import StackSpec, derive_host_port
 
 import httpx
 import structlog
@@ -164,7 +163,7 @@ def routes_for_stack(spec: StackSpec, *, suspended: bool) -> list[StackRoute]:
     return [
         StackRoute(
             domain=endpoint.domain,
-            upstream=f"{spec.loopback_ip}:{services_by_name[endpoint.service].internal_port}",
+            upstream=f"{spec.loopback_ip}:{derive_host_port(services_by_name[endpoint.service].internal_port)}",
             internal_tls=endpoint.behind_cloudflare,
             suspended=suspended,
         )

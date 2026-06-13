@@ -221,3 +221,6 @@ class ObservedStack:
 
 # Observed world: stack name -> ObservedStack
 Observed = dict[str, ObservedStack]
+
+def derive_host_port(internal_port: int) -> int:
+    return internal_port + 20000 if internal_port < 1024 else internal_port
