@@ -1,0 +1,142 @@
+services:
+  # =============================================================================
+  # Main Application (Direct Database Connection)
+  # =============================================================================
+  app:
+    image: wuodtobias/mocky-digital-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mocky-app
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - APP_PORT=${APP_PORT:-3000}
+      # Direct database connection
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL_DIRECT=${DATABASE_URL_DIRECT}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - SITE_URL=${SITE_URL}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+      - CRON_SECRET=${CRON_SECRET}
+      - MAILCOW_API_URL=${MAILCOW_API_URL}
+      - MAILCOW_API_KEY=${MAILCOW_API_KEY}
+      - MAILCOW_WEBMAIL_URL=${MAILCOW_WEBMAIL_URL}
+      - MAILCOW_MAIL_HOST=${MAILCOW_MAIL_HOST}
+      - MAILCOW_MAIL_HOST_IPV4=${MAILCOW_MAIL_HOST_IPV4}
+      # Encrypts mailcow API keys stored on MailServer rows (multi-node).
+      # Falls back to NEXTAUTH_SECRET if unset; changing it orphans stored keys.
+      - MAIL_SERVER_ENCRYPTION_KEY=${MAIL_SERVER_ENCRYPTION_KEY}
+      - MAIL_SSH_HOST=${MAIL_SSH_HOST}
+      - MAIL_SSH_PORT=${MAIL_SSH_PORT}
+      - MAIL_SSH_USER=${MAIL_SSH_USER}
+      - MAIL_SSH_KEY=${MAIL_SSH_KEY}
+      - MAIL_SSH_KEY_PASSPHRASE=${MAIL_SSH_KEY_PASSPHRASE}
+      # Cloudflare DNS auto-provisioning for customer domains
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      # Customer portal session cookies (falls back to NEXTAUTH_SECRET)
+      - PORTAL_SESSION_SECRET=${PORTAL_SESSION_SECRET}
+      # MTA-STS policy serving for customer domains
+      - MTA_STS_HOST=${MTA_STS_HOST}
+      - MTA_STS_MODE=${MTA_STS_MODE:-testing}
+      # Renewal dunning windows (days after renewalDate)
+      - EMAIL_RENEWAL_GRACE_DAYS=${EMAIL_RENEWAL_GRACE_DAYS:-14}
+      - EMAIL_RENEWAL_EXPIRE_DAYS=${EMAIL_RENEWAL_EXPIRE_DAYS:-45}
+      - EMAIL_AUTO_DELETE=${EMAIL_AUTO_DELETE:-false}
+      # M-Pesa webhook/callback auth (Daraja creds live in Admin → Settings → M-Pesa)
+      - MPESA_CALLBACK_TOKEN=${MPESA_CALLBACK_TOKEN}
+      - MPESA_WEBHOOK_SECRET=${MPESA_WEBHOOK_SECRET}
+      - MOCKY_MPESA_LICENSE_SIGNING_SECRET=${MOCKY_MPESA_LICENSE_SIGNING_SECRET}
+      - INTERNAL_RENEWAL_ALERT_EMAIL=${INTERNAL_RENEWAL_ALERT_EMAIL:-maildon254@gmail.com}
+      - N8N_CHAT_WEBHOOK_URL=${N8N_CHAT_WEBHOOK_URL}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN}
+      - WHATSAPP_APP_SECRET=${WHATSAPP_APP_SECRET}
+      - WHATSAPP_GRAPH_API_VERSION=${WHATSAPP_GRAPH_API_VERSION:-v22.0}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
+      # TEMPORARILY DISABLED: CloudFront - uncomment when resolved with Amazon
+      # - AWS_CLOUDFRONT_DOMAIN=${AWS_CLOUDFRONT_DOMAIN}
+      # - AWS_CLOUDFRONT_DISTRIBUTION_ID=${AWS_CLOUDFRONT_DISTRIBUTION_ID}
+      - CDN_ENABLED=${CDN_ENABLED}
+      - CDN_PROVIDER=${CDN_PROVIDER:-aws}
+      - CDN_IMAGE_OPTIMIZATION=${CDN_IMAGE_OPTIMIZATION}
+      - CDN_CACHE_CONTROL=${CDN_CACHE_CONTROL}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:?Admin username is required}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:?Admin email is required}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Admin password is required}
+      - ADMIN_NAME=${ADMIN_NAME:?Admin name is required}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_TTL=${REDIS_TTL}
+      - DISABLE_GOOGLE_ANALYTICS=true
+    restart: unless-stopped
+    depends_on:
+      - redis
+    networks:
+      - coolify
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 30s
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # =============================================================================
+  # Migration Helper (For Safe Deployments)
+  # =============================================================================
+  migrate:
+    image: wuodtobias/mocky-digital-app:latest
+    profiles:
+      - migration
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL_DIRECT=${DATABASE_URL_DIRECT}
+    command: ["sh", "-c", "./node_modules/.bin/prisma migrate deploy"]
+    exclude_from_hc: true
+    networks:
+      - coolify
+
+  # =============================================================================
+  # Redis Cache
+  # =============================================================================
+  redis:
+    image: redis:alpine
+    container_name: mocky-redis
+    restart: unless-stopped
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - coolify
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  redis_data:
+
+
+networks:
+  coolify:
+    external: true

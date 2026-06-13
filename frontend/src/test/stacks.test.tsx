@@ -75,6 +75,21 @@ describe("blueprintDisplayName", () => {
       }),
     ).toBe("PostgreSQL");
   });
+
+  it("does not show generated Inputs model names as blueprint names", () => {
+    expect(
+      blueprintDisplayName({
+        id: "uptime-kuma",
+        version: 1,
+        category: "Monitoring",
+        icon: "activity",
+        display_name: "",
+        description: "Deploy Uptime Kuma",
+        inputs_schema: { title: "Uptime-kumaInputs" },
+        actions: [],
+      }),
+    ).toBe("Uptime Kuma");
+  });
 });
 
 describe("SchemaForm", () => {

@@ -7,11 +7,13 @@ from collections.abc import AsyncIterator
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import utcnow
 from app.core.errors import AppError, ForbiddenError, NotFoundError, UnauthorizedError
-from app.core.security import decode_access_token
-from app.db.models import Site, User
+from app.core.security import decode_access_token, hash_token
+from app.db.models import ApiToken, Site, User
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -40,7 +42,11 @@ async def get_current_user(
     if credentials is None:
         raise UnauthorizedError("Not authenticated")
     settings = request.app.state.settings
-    payload = decode_access_token(credentials.credentials, secret=settings.secret_key)
+    raw_token = credentials.credentials
+    if raw_token.startswith("hst_"):
+        return await _get_api_token_user(request, db, raw_token)
+
+    payload = decode_access_token(raw_token, secret=settings.secret_key)
     user = await db.get(User, int(payload["sub"]))
     if user is None:
         raise UnauthorizedError("User no longer exists")
@@ -66,6 +72,25 @@ async def get_current_user(
         raise UnauthorizedError("Account suspended — contact your administrator")
     if user.must_change_password and request.url.path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
         raise PasswordChangeRequiredError("Change your temporary password to continue")
+    return user
+
+
+async def _get_api_token_user(request: Request, db: AsyncSession, bearer_token: str) -> User:
+    token_hash = hash_token(bearer_token.removeprefix("hst_"))
+    row = (
+        await db.execute(select(ApiToken).where(ApiToken.token_hash == token_hash))
+    ).scalar_one_or_none()
+    if row is None:
+        raise UnauthorizedError("Invalid API token")
+    user = await db.get(User, row.owner_id)
+    if user is None:
+        raise UnauthorizedError("API token owner no longer exists")
+    if user.suspended:
+        raise UnauthorizedError("Account suspended — contact your administrator")
+    if user.must_change_password and request.url.path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
+        raise PasswordChangeRequiredError("Change your temporary password to continue")
+    row.last_used_at = utcnow()
+    await db.commit()
     return user
 
 

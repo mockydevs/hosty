@@ -375,6 +375,7 @@ grammar and test patterns are salvaged).
 - [x] Blueprint #0 `raw-image`: image + port + env + volumes (covers Django/Next.js/anything)
 - [x] Stacks API: CRUD + actions + logs, owner-scoped (404-not-403), `max_stacks` quota in plans/users/quotas + admin routes (`api/routes/stacks.py`; reconciler fully wired: DB-backed desired state, ingress sync, status projection; deletion = convergence toward absence)
 - [x] Stacks UI: list with convergence-driven status pills, create wizard rendered from the blueprint inputs JSON Schema (zero per-blueprint UI code), detail page (services, endpoints, journald logs, actions with confirm + show-once, type-to-confirm delete)
+- [ ] GitHub-sourced deployments: connect GitHub, list private repos, discover Compose/Dockerfile, analyze policy, deploy via StackSpec — detailed tasklist in [docs/GITHUB-STACKS-PLAN.md](docs/GITHUB-STACKS-PLAN.md)
 - [ ] **Milestone: a client deploys a Next.js image with custom domain + HTTPS from the UI** — FakeHost API suite + Vitest green; run the e2e on the dev VM with the other queued VM gates (M0 spike, M2 round-trip, M3 reconcile)
 
 ### M5 — WordPress blueprint (the moat, at full parity)

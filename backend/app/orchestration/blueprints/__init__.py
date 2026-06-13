@@ -5,12 +5,14 @@ built-ins."""
 from pathlib import Path
 
 from app.orchestration.blueprints import raw_image as _raw_image
+from app.orchestration.blueprints import wordpress as _wordpress
 from app.orchestration.blueprints.base import get_blueprint, list_blueprints, register
 from app.orchestration.blueprints.compose import ComposeBlueprint
 
 __all__ = ["get_blueprint", "list_blueprints", "register"]
 
 register(_raw_image.RawImageBlueprint())
+register(_wordpress.WordPressBlueprint())
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "templates"
 if TEMPLATES_DIR.exists():

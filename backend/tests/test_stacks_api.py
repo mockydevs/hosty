@@ -153,6 +153,63 @@ async def test_create_dynamic_postgres_template(admin_client, stack_host):
     assert stack["volumes"][0]["mount_path"] == "/var/lib/postgresql/data"
 
 
+async def test_create_dynamic_mongodb_template(admin_client, stack_host):
+    body = {
+        "name": "mongodb-test",
+        "blueprint_id": "mongodb",
+        "inputs": {"version": "7.0", "username": "root"},
+    }
+    payload, op = await create_stack_ok(admin_client, body)
+    assert op["status"] == "succeeded", op
+    assert payload["show_once"]["root_password"]
+
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    service = stack["services"][0]
+    assert service["name"] == "db"
+    assert service["image"] == "mongo:7.0"
+    assert service["internal_port"] == 27017
+    assert service["host_port"] is not None
+    assert stack["volumes"][0]["mount_path"] == "/data/db"
+
+
+async def test_create_dynamic_uptime_kuma_template(admin_client, stack_host):
+    body = {
+        "name": "uptime-kuma-test",
+        "blueprint_id": "uptime-kuma",
+        "inputs": {},
+    }
+    payload, op = await create_stack_ok(admin_client, body)
+    assert op["status"] == "succeeded", op
+
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    service = stack["services"][0]
+    assert service["name"] == "web"
+    assert service["image"] == "louislam/uptime-kuma:1"
+    assert service["internal_port"] == 3001
+    assert service["host_port"] is not None
+    assert stack["volumes"][0]["mount_path"] == "/app/data"
+
+
+async def test_dynamic_templates_allocate_distinct_ports(admin_client, stack_host):
+    first = {
+        "name": "postgres-test",
+        "blueprint_id": "postgres",
+        "inputs": {"version": "16", "database": "postgres", "user": "postgres"},
+    }
+    second = {
+        "name": "mongodb-test",
+        "blueprint_id": "mongodb",
+        "inputs": {"version": "7.0", "username": "root"},
+    }
+
+    first_payload, _ = await create_stack_ok(admin_client, first)
+    second_payload, _ = await create_stack_ok(admin_client, second)
+
+    first_stack = (await admin_client.get(f"/api/stacks/{first_payload['stack']['id']}")).json()
+    second_stack = (await admin_client.get(f"/api/stacks/{second_payload['stack']['id']}")).json()
+    assert first_stack["services"][0]["host_port"] != second_stack["services"][0]["host_port"]
+
+
 async def test_create_failure_degrades_then_next_cycle_heals(admin_client, stack_host, app):
     stack_host.fail_control.add("start")
     resp = await admin_client.post("/api/stacks", json=CREATE_BODY)

@@ -26,9 +26,9 @@ from app.services import mariadb, quotas
 
 WP_ADMINER_SERVICE = "adminer"
 WP_DB_SERVICE = "db"
-WP_DB_NAME = "DB_NAME"
-WP_DB_USER = "DB_USER"
-WP_DB_PASSWORD = "DB_PASSWORD"
+WP_DB_NAME = "wordpress"
+WP_DB_USER = "wordpress"
+WP_DB_PASSWORD = "MARIADB_PASSWORD"
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 

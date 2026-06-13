@@ -37,7 +37,14 @@ type Accepted = components["schemas"]["StackOperationAccepted"];
 
 export function blueprintDisplayName(bp: Blueprint): string {
   const meta = bp as BlueprintWithMeta;
-  return meta.display_name || (bp.inputs_schema as JsonSchema).title || bp.id;
+  if (meta.display_name) return meta.display_name;
+  const schemaTitle = (bp.inputs_schema as JsonSchema).title;
+  if (schemaTitle && !schemaTitle.endsWith("Inputs")) return schemaTitle;
+  return bp.id
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function BlueprintPicker({
