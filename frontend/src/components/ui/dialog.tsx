@@ -9,9 +9,10 @@ interface DialogProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }
 
-export function Dialog({ open, onClose, children }: DialogProps) {
+export function Dialog({ open, onClose, children, className }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function Dialog({ open, onClose, children }: DialogProps) {
       className={cn(
         "m-auto w-full max-w-md rounded-lg border border-border bg-card p-0 text-card-foreground shadow-lg",
         "backdrop:bg-black/50",
+        className,
       )}
     >
       {children}

@@ -146,9 +146,17 @@ export function SourcesPage() {
                     </Button>
                   </div>
                 </CardTitle>
-                <CardDescription className="font-mono text-xs text-muted-foreground">
-                  App ID: {source.app_id}
-                  {source.installation_id && ` · Install: ${source.installation_id}`}
+                <CardDescription className="font-mono text-xs text-muted-foreground space-y-0.5">
+                  <span className="block">App ID: {source.app_id}</span>
+                  {source.installation_id ? (
+                    <span className="block text-green-500">
+                      Install ID: {source.installation_id}
+                    </span>
+                  ) : (
+                    <span className="block text-destructive">
+                      No installation ID — repos unavailable. Re-register the app.
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -190,8 +198,8 @@ function NewGitHubAppDialog({ open, onClose }: { open: boolean; onClose: () => v
   });
 
   return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={open} onClose={onClose} className="max-w-2xl">
+      <DialogContent>
         <DialogTitle>New GitHub App</DialogTitle>
         <DialogDescription>
           This is required if you would like to get full integration (commit / pull request

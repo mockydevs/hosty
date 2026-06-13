@@ -226,11 +226,12 @@ function GitDeployForm({
   const repos = useQuery({
     queryKey: ["sources", sourceId, "repos"],
     enabled: sourceId !== "public",
+    retry: 1,
     queryFn: async () => {
       const { data, error } = await api.GET("/api/sources/{source_id}/repos" as any, {
         params: { path: { source_id: Number(sourceId) } } as any
       });
-      if (error || !data) return [];
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load repositories"));
       return data as any[];
     },
   });
@@ -327,13 +328,43 @@ function GitDeployForm({
                 id="repo-select"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={repo}
-                onChange={(e) => setRepo(e.target.value)}
+                onChange={(e) => {
+                  setRepo(e.target.value);
+                  const selected = repos.data?.find(
+                    (r) => (r.clone_url || r.name) === e.target.value,
+                  );
+                  if (selected?.default_branch) setBranch(selected.default_branch);
+                }}
+                disabled={repos.isPending}
               >
-                <option value="">-- Select --</option>
-                {repos.data?.map((r) => (
-                  <option key={r.clone_url || r.name} value={r.clone_url || r.name}>{r.name}</option>
-                ))}
+                {repos.isPending ? (
+                  <option>Loading repositories…</option>
+                ) : repos.isError ? (
+                  <option>Failed to load — see error below</option>
+                ) : (
+                  <>
+                    <option value="">-- Select --</option>
+                    {repos.data?.map((r) => (
+                      <option key={r.clone_url || r.name} value={r.clone_url || r.name}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
+              {repos.isError && (
+                <p className="mt-1.5 text-xs text-destructive" role="alert">
+                  {repos.error instanceof Error ? repos.error.message : "Unknown error"}
+                  {" — "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => repos.refetch()}
+                  >
+                    retry
+                  </button>
+                </p>
+              )}
             </FormField>
           )}
 
