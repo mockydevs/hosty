@@ -6,6 +6,8 @@ x-hosty:
   description: "Ghost is a powerful app for new-media creators to publish, share, and grow a business around their content."
   ports:
     - web
+  web: web  # mark the web service → routed on its domain (HTTPS via Caddy)
+  domain_input: domain  # the user-entered domain becomes the public endpoint
   secrets:
     - db_password
   inputs:

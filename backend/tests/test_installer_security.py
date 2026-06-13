@@ -27,6 +27,16 @@ def test_docker_daemon_is_hardened_in_provisioner():
     assert '"no-new-privileges": true' in provision
 
 
+def test_provisioner_enables_rootless_userns_prerequisite():
+    """Rootless tenant containers need unprivileged user namespaces; Ubuntu
+    24.04 / hardened VPS kernels block them, killing every `podman run`. The
+    provisioner must allow + persist them (regression guard)."""
+    provision = (ROOT / "installer" / "provision.sh").read_text(encoding="utf-8")
+    assert "kernel.apparmor_restrict_unprivileged_userns = 0" in provision
+    assert "user.max_user_namespaces" in provision
+    assert "sysctl -e -p /etc/sysctl.d/99-hosty-rootless.conf" in provision
+
+
 def test_service_trusts_proxy_headers_from_localhost_only():
     unit = (ROOT / "installer" / "systemd" / "hosty.service").read_text(encoding="utf-8")
     # Panel binds all interfaces for direct http://IP:8800 access; forwarded

@@ -6,6 +6,7 @@ x-hosty:
   description: "NocoDB is an open source #NoCode platform that turns any database into a smart spreadsheet."
   ports:
     - web
+  web: web  # mark the web service → auto-generated external URL + HTTPS via Caddy
   secrets:
     - db_password
     - jwt_secret

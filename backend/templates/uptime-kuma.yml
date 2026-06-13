@@ -6,6 +6,7 @@ x-hosty:
   description: "A fancy self-hosted monitoring tool."
   ports:
     - web
+  web: web  # mark the web service → auto-generated external URL + HTTPS via Caddy
 
 services:
   web:

@@ -237,6 +237,20 @@ apt-get install -qy podman uidmap passt slirp4netns crun \
 # /etc/containers/systemd/users/<uid>/ (root-owned, tenant-executed).
 install -d -m 0755 /etc/containers/systemd/users
 
+# Rootless containers REQUIRE unprivileged user namespaces. Ubuntu 24.04 ships
+# kernel.apparmor_restrict_unprivileged_userns=1, and many VPS/hardened kernels
+# disable userns outright — either makes every tenant container's "podman run"
+# die immediately ("control process exited with error code") while native
+# (non-container) sites keep working. Allow userns + a generous count, and
+# persist it across reboots. `-e` ignores keys this kernel does not expose.
+cat > /etc/sysctl.d/99-hosty-rootless.conf <<'SYSCTL'
+# HostyPanel: rootless Podman prerequisites (v2/M0, ADR-013).
+user.max_user_namespaces = 28633
+kernel.unprivileged_userns_clone = 1
+kernel.apparmor_restrict_unprivileged_userns = 0
+SYSCTL
+sysctl -e -p /etc/sysctl.d/99-hosty-rootless.conf >/dev/null 2>&1 || true
+
 log "Site directories"
 install -d -o root -g root -m 0711 /var/www
 # Upgrade existing sites to the same tenant boundary used for new sites.
