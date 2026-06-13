@@ -85,7 +85,7 @@ services:
         Allocation(tenant="hosty-t-7", ports={"db": 20100}, secrets={"db_password": "secret"}),
     )
 
-    assert spec.services[0].image == "postgres:16"
+    assert spec.services[0].image == "docker.io/library/postgres:16"
     assert spec.services[0].internal_port == 5432
     assert spec.services[0].host_port == 20100
     assert dict(spec.services[0].env) == {

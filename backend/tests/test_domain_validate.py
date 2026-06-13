@@ -10,20 +10,23 @@ from app.domain import validate as v
 
 
 @pytest.mark.parametrize(
-    "image",
+    ("image", "expected"),
     [
-        "nginx",
-        "nginx:1.27-alpine",
-        "library/nginx:latest",
-        "docker.io/library/nginx:1.27",
-        "ghcr.io/acme/app:v1.2.3",
-        "registry.example.com:5000/team/app:tag",
-        "nginx@sha256:" + "a" * 64,
-        "docker.io/library/nginx:1.27@sha256:" + "0" * 64,
+        ("nginx", "docker.io/library/nginx"),
+        ("nginx:1.27-alpine", "docker.io/library/nginx:1.27-alpine"),
+        ("library/nginx:latest", "docker.io/library/nginx:latest"),
+        ("docker.io/library/nginx:1.27", "docker.io/library/nginx:1.27"),
+        ("ghcr.io/acme/app:v1.2.3", "ghcr.io/acme/app:v1.2.3"),
+        ("registry.example.com:5000/team/app:tag", "registry.example.com:5000/team/app:tag"),
+        ("nginx@sha256:" + "a" * 64, "docker.io/library/nginx@sha256:" + "a" * 64),
+        (
+            "docker.io/library/nginx:1.27@sha256:" + "0" * 64,
+            "docker.io/library/nginx:1.27@sha256:" + "0" * 64,
+        ),
     ],
 )
-def test_valid_image_refs(image):
-    assert v.validate_image_ref(image) == image
+def test_valid_image_refs(image, expected):
+    assert v.validate_image_ref(image) == expected
 
 
 @pytest.mark.parametrize(

@@ -9,11 +9,6 @@ x-hosty:
   secrets:
     - db_password
   inputs:
-    version:
-      type: "string"
-      default: "16"
-      description: "PostgreSQL version (e.g. 15, 16)"
-      versions_from: "postgres"
     database:
       type: "string"
       default: "postgres"
@@ -25,7 +20,7 @@ x-hosty:
 
 services:
   db:
-    image: postgres:${version}
+    image: docker.io/library/postgres:16@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171
     ports:
       - 5432:5432
     environment:

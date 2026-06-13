@@ -105,25 +105,15 @@ async def test_blueprint_catalog(admin_client, stack_host):
     assert "internal_port" in schema["properties"]
 
 
-async def test_blueprint_catalog_injects_version_enum(admin_client, stack_host, monkeypatch):
-    """A version-bearing template (postgres) renders its `version` field as an
-    enum of registry series with the latest as default — the create wizard
-    gets a dropdown with no per-blueprint code."""
-    from app.services import image_versions
-
-    series = {"postgres": ["17", "16", "15"], "mariadb": ["11.4", "11.2"]}
-
-    async def fake_series(repo, *, default, http=None):
-        return series.get(repo, [default])
-
-    monkeypatch.setattr(image_versions, "available_series", fake_series)
+async def test_blueprint_catalog_keeps_pinned_templates_static(admin_client, stack_host):
+    """Pinned templates should not expose a version selector that no longer
+    changes the digest-pinned runtime image."""
     resp = await admin_client.get("/api/stacks/blueprints")
     assert resp.status_code == 200
     catalog = {bp["id"]: bp for bp in resp.json()}
 
-    version = catalog["postgres"]["inputs_schema"]["properties"]["version"]
-    assert version["enum"] == ["17", "16", "15"]
-    assert version["default"] == "17"  # genuine latest leads
+    assert "version" not in catalog["postgres"]["inputs_schema"]["properties"]
+    assert "version" not in catalog["mongodb"]["inputs_schema"]["properties"]
     # A blueprint without dynamic versions is untouched (no enum on free text).
     assert "enum" not in catalog["raw-image"]["inputs_schema"]["properties"]["image"]
 
@@ -170,7 +160,10 @@ async def test_create_dynamic_postgres_template(admin_client, stack_host):
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["name"] == "db"
-    assert service["image"] == "postgres:16"
+    assert service["image"] == (
+        "docker.io/library/postgres:16"
+        "@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171"
+    )
     assert service["internal_port"] == 5432
     assert service["host_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/var/lib/postgresql/data"
@@ -189,7 +182,10 @@ async def test_create_dynamic_mongodb_template(admin_client, stack_host):
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["name"] == "db"
-    assert service["image"] == "mongo:7.0"
+    assert service["image"] == (
+        "docker.io/library/mongo:7.0"
+        "@sha256:8ecb514b00bdcc0bde67ef4e6c330385377a9dc68e24ee94e28c07c891647348"
+    )
     assert service["internal_port"] == 27017
     assert service["host_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/data/db"
@@ -207,7 +203,10 @@ async def test_create_dynamic_uptime_kuma_template(admin_client, stack_host):
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
     assert service["name"] == "web"
-    assert service["image"] == "louislam/uptime-kuma:1"
+    assert service["image"] == (
+        "docker.io/louislam/uptime-kuma:1"
+        "@sha256:3d632903e6af34139a37f18055c4f1bfd9b7205ae1138f1e5e8940ddc1d176f9"
+    )
     assert service["internal_port"] == 3001
     assert service["host_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/app/data"

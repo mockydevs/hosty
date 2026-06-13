@@ -40,10 +40,37 @@ class SpecValidationError(ValueError):
     """A value failed the domain grammar before reaching any host surface."""
 
 
+def qualify_image(image: str) -> str:
+    """Normalize a short Docker image name to a fully-qualified registry
+    reference.  Rootless podman with ``short-name-mode=enforcing`` (the
+    default on Ubuntu 24.04 / RHEL 9+) will refuse to pull an unqualified
+    name when there is no TTY to prompt for a registry choice — which is
+    exactly the case inside a systemd user-unit.
+
+    Rules (matching ``docker pull`` semantics):
+
+    * ``redis:7.2``              → ``docker.io/library/redis:7.2``
+    * ``louislam/uptime-kuma:1`` → ``docker.io/louislam/uptime-kuma:1``
+    * ``ghcr.io/org/app:v1``     → unchanged (already qualified)
+    * ``docker.io/library/x:1``  → unchanged
+    """
+    # Split off the tag/digest suffix so we only inspect the name part.
+    name_part = image.split("@", 1)[0]
+    first, has_slash, _ = name_part.partition("/")
+    if not has_slash:
+        # Bare name like ``redis`` or ``redis:7.2`` → Docker Hub official.
+        return f"docker.io/library/{image}"
+    if "." in first or ":" in first or first == "localhost":
+        # Already has a registry hostname (e.g. ``ghcr.io/...``).
+        return image
+    # User namespace like ``louislam/uptime-kuma:1`` → Docker Hub.
+    return f"docker.io/{image}"
+
+
 def validate_image_ref(image: str) -> str:
     if not isinstance(image, str) or len(image) > 512 or not IMAGE_RE.fullmatch(image):
         raise SpecValidationError(f"Invalid image reference: {image!r}")
-    return image
+    return qualify_image(image)
 
 
 def validate_git_repo(repo: str) -> str:

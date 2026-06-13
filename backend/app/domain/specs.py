@@ -67,7 +67,9 @@ class ServiceSpec:
             if self.build_branch:
                 validate_git_ref(self.build_branch)
         else:
-            validate_image_ref(self.image)
+            # validate_image_ref validates AND qualifies (e.g. redis:7.2 →
+            # docker.io/library/redis:7.2); frozen dataclass needs __setattr__.
+            object.__setattr__(self, "image", validate_image_ref(self.image))
         for key, value in self.env:
             validate_env_key(key)
             validate_env_value(key, value)

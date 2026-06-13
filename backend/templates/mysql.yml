@@ -10,11 +10,6 @@ x-hosty:
     - root_password
     - db_password
   inputs:
-    version:
-      type: "string"
-      default: "8.0"
-      description: "MySQL version (e.g. 8.0, 8.4)"
-      versions_from: "mysql"
     database:
       type: "string"
       default: "mysql"
@@ -26,7 +21,7 @@ x-hosty:
 
 services:
   db:
-    image: mysql:${version}
+    image: docker.io/library/mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
     ports:
       - 3306:3306
     environment:

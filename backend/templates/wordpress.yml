@@ -26,7 +26,7 @@ x-hosty:
 
 services:
   db:
-    image: mariadb:10.11
+    image: docker.io/library/mariadb:10.11@sha256:5a5c675881ef3fd1c1da9b0a3bfd6ee82edbe39cd9e32e06be18034c37235e0e
     environment:
       MARIADB_ROOT_PASSWORD: ${db_password}
       MARIADB_DATABASE: wordpress
@@ -36,7 +36,7 @@ services:
       - db-data:/var/lib/mysql
 
   web:
-    image: wordpress:latest
+    image: docker.io/library/wordpress:latest@sha256:0d8895d6940b5f05ff68342a8feeb6aa31e2ae8f5c6cbe7851e36d57aff8af4b
     ports:
       - 80:80
     environment:

@@ -36,7 +36,7 @@ def test_ps_argv():
 
 
 def test_pull_and_digest_argv():
-    assert podman.build_pull_argv(5001, "nginx:1.27")[-1] == "nginx:1.27"
+    assert podman.build_pull_argv(5001, "nginx:1.27")[-1] == "docker.io/library/nginx:1.27"
     argv = podman.build_image_digest_argv(5001, "nginx:1.27")
     assert argv[3:5] == ["image", "inspect"]
     with pytest.raises(SpecValidationError):

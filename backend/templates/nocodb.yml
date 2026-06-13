@@ -9,15 +9,9 @@ x-hosty:
   secrets:
     - db_password
     - jwt_secret
-  inputs:
-    version:
-      type: "string"
-      default: "latest"
-      description: "NocoDB version"
-
 services:
   db:
-    image: postgres:15
+    image: docker.io/library/postgres:15@sha256:c2ca90969ca293925ab474466e837689cc712321afdd9e4640bd0cf942fdca3a
     environment:
       POSTGRES_DB: nocodb
       POSTGRES_USER: nocodb
@@ -26,7 +20,7 @@ services:
       - db-data:/var/lib/postgresql/data
 
   web:
-    image: nocodb/nocodb:${version}
+    image: docker.io/nocodb/nocodb:latest@sha256:46f325fc066e36ccfb80c41608cd8661e86d2610ad4567fda06eac2209235fcf
     ports:
       - 8080:8080
     environment:
