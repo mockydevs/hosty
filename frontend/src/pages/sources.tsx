@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, Plus, Trash2, Zap } from "lucide-react";
+import { Github, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -91,6 +91,19 @@ export function SourcesPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Delete failed"),
   });
 
+  const refreshMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await (api as any).POST(`/api/sources/${id}/refresh-installation`);
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to refresh installation"));
+      return data as { installation_id: string };
+    },
+    onSuccess: (data) => {
+      toast.success(`Installation ID updated: ${data.installation_id}`);
+      void queryClient.invalidateQueries({ queryKey: ["sources"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Refresh failed"),
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -146,16 +159,28 @@ export function SourcesPage() {
                     </Button>
                   </div>
                 </CardTitle>
-                <CardDescription className="font-mono text-xs text-muted-foreground space-y-0.5">
+                <CardDescription className="font-mono text-xs text-muted-foreground space-y-1">
                   <span className="block">App ID: {source.app_id}</span>
                   {source.installation_id ? (
                     <span className="block text-green-500">
                       Install ID: {source.installation_id}
                     </span>
                   ) : (
-                    <span className="block text-destructive">
-                      No installation ID — repos unavailable. Re-register the app.
-                    </span>
+                    <div className="space-y-1.5">
+                      <span className="block text-destructive">
+                        No installation ID — repos unavailable.
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        loading={refreshMutation.isPending}
+                        onClick={() => refreshMutation.mutate(source.id)}
+                      >
+                        <RefreshCw className="mr-1.5 h-3 w-3" aria-hidden />
+                        Refresh Installation
+                      </Button>
+                    </div>
                   )}
                 </CardDescription>
               </CardHeader>

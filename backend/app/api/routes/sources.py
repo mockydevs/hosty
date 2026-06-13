@@ -127,12 +127,39 @@ async def github_callback(
     data = resp.json()
     app_name = body.name or data.get("slug") or data.get("name") or "github-app"
 
+    # Prefer the installation_id from the redirect URL; if absent (GitHub doesn't
+    # always include it when the installation step is separate), fetch it via the
+    # GitHub API using the freshly-created app's JWT.
+    installation_id = body.installation_id
+    if not installation_id:
+        now = int(time.time())
+        try:
+            app_jwt = pyjwt.encode(
+                {"iat": now - 60, "exp": now + 540, "iss": str(data["id"])},
+                data["pem"],
+                algorithm="RS256",
+            )
+            async with httpx.AsyncClient() as gh:
+                inst_resp = await gh.get(
+                    "https://api.github.com/app/installations",
+                    headers={
+                        "Authorization": f"Bearer {app_jwt}",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                )
+            if inst_resp.status_code == 200:
+                installations = inst_resp.json()
+                if installations:
+                    installation_id = str(installations[0]["id"])
+        except Exception:
+            pass  # leave installation_id as None; user can re-register or install manually
+
     source = GitSource(
         owner_id=user.id,
         name=app_name,
         provider="github",
         app_id=str(data["id"]),
-        installation_id=body.installation_id,
+        installation_id=installation_id,
         client_id=data["client_id"],
         client_secret_encrypted=encrypt_secret(data["client_secret"], settings.secret_key),
         private_key_encrypted=encrypt_secret(data["pem"], settings.secret_key),
@@ -142,6 +169,52 @@ async def github_callback(
     await db.commit()
     await db.refresh(source)
     return {"status": "ok", "source_id": source.id}
+
+
+@router.post("/{source_id}/refresh-installation")
+async def refresh_installation(
+    source_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+) -> Any:
+    """Re-fetch the installation ID from GitHub for a source that is missing one."""
+    source = await db.get(GitSource, source_id)
+    if not source or source.owner_id != user.id:
+        raise NotFoundError("Source not found")
+
+    settings = request.app.state.settings
+    private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+    now = int(time.time())
+    app_jwt = pyjwt.encode(
+        {"iat": now - 60, "exp": now + 540, "iss": source.app_id},
+        private_key,
+        algorithm="RS256",
+    )
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.github.com/app/installations",
+            headers={
+                "Authorization": f"Bearer {app_jwt}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+        )
+
+    if resp.status_code != 200:
+        raise ConflictError(f"Could not fetch installations from GitHub: {resp.text[:200]}")
+
+    installations = resp.json()
+    if not installations:
+        raise ConflictError(
+            "No installations found for this GitHub App. "
+            "Install it at https://github.com/settings/apps."
+        )
+
+    source.installation_id = str(installations[0]["id"])
+    await db.commit()
+    await db.refresh(source)
+    return {"status": "ok", "installation_id": source.installation_id}
 
 
 @router.get("/{source_id}/repos")
