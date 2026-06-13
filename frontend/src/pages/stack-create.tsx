@@ -27,6 +27,12 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type Blueprint = components["schemas"]["BlueprintResponse"];
+type BlueprintWithMeta = Blueprint & {
+  category?: string;
+  icon?: string;
+  display_name?: string;
+  description?: string;
+};
 type Accepted = components["schemas"]["StackOperationAccepted"];
 
 function BlueprintPicker({
@@ -36,26 +42,56 @@ function BlueprintPicker({
   blueprints: Blueprint[];
   onPick: (bp: Blueprint) => void;
 }) {
+  const categories = Array.from(
+    new Set(blueprints.map((bp) => (bp as BlueprintWithMeta).category || "Other")),
+  );
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {blueprints.map((bp) => {
-        const schema = bp.inputs_schema as JsonSchema;
+    <div className="space-y-8">
+      {categories.map((category) => {
+        const categoryBlueprints = blueprints.filter(
+          (bp) => ((bp as BlueprintWithMeta).category || "Other") === category,
+        );
         return (
-          <Card key={bp.id}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden />
-                {schema.title ?? bp.id}
-              </CardTitle>
-              <CardDescription>{schema.description ?? `Deploy ${bp.id}`}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between">
-              <Badge variant="outline">v{bp.version}</Badge>
-              <Button size="sm" onClick={() => onPick(bp)}>
-                Choose
-              </Button>
-            </CardContent>
-          </Card>
+          <div key={category} className="space-y-4">
+            <h2 className="text-xl font-semibold tracking-tight">{category}</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {categoryBlueprints.map((bp) => {
+                const schema = bp.inputs_schema as JsonSchema;
+                const meta = bp as BlueprintWithMeta;
+                return (
+                  <Card
+                    key={bp.id}
+                    className="cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => onPick(bp)}
+                  >
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden />
+                        {meta.display_name || schema.title || bp.id}
+                      </CardTitle>
+                      <CardDescription>
+                        {meta.description || schema.description || `Deploy ${bp.id}`}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between">
+                      <Badge variant="outline">v{bp.version}</Badge>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPick(bp);
+                        }}
+                      >
+                        Choose
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </div>

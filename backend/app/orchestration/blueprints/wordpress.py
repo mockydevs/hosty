@@ -257,6 +257,10 @@ async def _web_service(db: AsyncSession, stack: Stack) -> StackService:
 class WordPressBlueprint:
     id = "wordpress"
     version = 1
+    category = "Applications"
+    icon = "wordpress"
+    display_name = "WordPress"
+    description = "Deploy a fully containerized WordPress instance with MariaDB, Adminer, and Filebrowser."
 
     def inputs(self) -> type[WordPressInputs]:
         return WordPressInputs

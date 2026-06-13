@@ -40,6 +40,10 @@ class RawImageInputs(BaseModel):
 class RawImageBlueprint:
     id = "raw-image"
     version = 1
+    category = "Docker Based"
+    icon = "docker"
+    display_name = "Docker Image"
+    description = "Deploy an existing Docker Image from any Registry, without Git."
 
     def inputs(self) -> type[RawImageInputs]:
         return RawImageInputs

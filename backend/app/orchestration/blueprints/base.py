@@ -77,6 +77,10 @@ class BackupHooks:
 class Blueprint(Protocol):
     id: str
     version: int
+    category: str
+    icon: str
+    display_name: str
+    description: str
 
     def inputs(self) -> type[BaseModel]:
         """Pydantic model describing the user-supplied inputs. Field

@@ -38,6 +38,10 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 class BlueprintResponse(BaseModel):
     id: str
     version: int
+    category: str
+    icon: str
+    display_name: str
+    description: str
     inputs_schema: dict[str, Any]
     actions: list[str]
 
@@ -187,6 +191,10 @@ async def get_blueprints() -> Any:
         BlueprintResponse(
             id=bp.id,
             version=bp.version,
+            category=bp.category,
+            icon=bp.icon,
+            display_name=bp.display_name,
+            description=bp.description,
             inputs_schema=bp.inputs().model_json_schema(),
             actions=sorted(bp.actions()),
         )
