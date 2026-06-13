@@ -274,60 +274,68 @@ function GitDeployForm({
   };
 
   return (
-    <div className="space-y-6">
-      <SectionTitle
-        icon={GitBranch}
-        title="Git repository"
-        description="Connect a repository, configure environment, and deploy."
-      />
-
-      <div className="space-y-6 rounded-md border border-border bg-card p-6">
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">1. Select Source</h3>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card 
-              className={`cursor-pointer ${sourceId === "public" ? "border-primary bg-primary/10" : "hover:bg-muted/50"}`}
-              onClick={() => setSourceId("public")}
+    <div className="overflow-hidden rounded-md border border-border grid gap-0 lg:grid-cols-[320px_1fr] min-h-[calc(100vh-12rem)]">
+      {/* ── Left panel: source / repo / deployment settings ── */}
+      <aside className="flex flex-col gap-5 border-r border-border bg-card/60 p-5 lg:overflow-y-auto">
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Source
+          </p>
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              onClick={() => { setSourceId("public"); setRepo(""); }}
+              className={[
+                "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
+                sourceId === "public"
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-transparent hover:border-border hover:bg-muted/50 text-muted-foreground",
+              ].join(" ")}
             >
-              <CardContent className="p-4 text-center">
-                <Globe2 className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                <div className="font-medium">Public Repository</div>
-              </CardContent>
-            </Card>
+              <Globe2 className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="font-medium">Public Repository</span>
+            </button>
             {sources.data?.map((source) => (
-              <Card 
+              <button
+                type="button"
                 key={source.id}
-                className={`cursor-pointer ${sourceId === String(source.id) ? "border-primary bg-primary/10" : "hover:bg-muted/50"}`}
-                onClick={() => setSourceId(String(source.id))}
+                onClick={() => { setSourceId(String(source.id)); setRepo(""); }}
+                className={[
+                  "flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
+                  sourceId === String(source.id)
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-transparent hover:border-border hover:bg-muted/50 text-muted-foreground",
+                ].join(" ")}
               >
-                <CardContent className="p-4 text-center">
-                  <GitBranch className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                  <div className="font-medium">{source.name}</div>
-                </CardContent>
-              </Card>
+                <GitBranch className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="font-medium">{source.name}</span>
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">2. Repository & Branch</h3>
+        <div className="space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Repository
+          </p>
           {sourceId === "public" ? (
-            <FormField label="Repository URL" htmlFor="repo-url">
+            <FormField label="URL" htmlFor="repo-url">
               <Input
                 id="repo-url"
                 placeholder="https://github.com/acme/app.git"
                 autoComplete="off"
                 spellCheck={false}
                 value={repo}
-                onChange={(event) => setRepo(event.target.value)}
+                onChange={(e) => setRepo(e.target.value)}
               />
             </FormField>
           ) : (
-            <FormField label="Select Repository" htmlFor="repo-select">
+            <FormField label="Repository" htmlFor="repo-select">
               <select
                 id="repo-select"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={repo}
+                disabled={repos.isPending}
                 onChange={(e) => {
                   setRepo(e.target.value);
                   const selected = repos.data?.find(
@@ -335,12 +343,11 @@ function GitDeployForm({
                   );
                   if (selected?.default_branch) setBranch(selected.default_branch);
                 }}
-                disabled={repos.isPending}
               >
                 {repos.isPending ? (
-                  <option>Loading repositories…</option>
+                  <option>Loading…</option>
                 ) : repos.isError ? (
-                  <option>Failed to load — see error below</option>
+                  <option>Error — see below</option>
                 ) : (
                   <>
                     <option value="">-- Select --</option>
@@ -353,94 +360,105 @@ function GitDeployForm({
                 )}
               </select>
               {repos.isError && (
-                <p className="mt-1.5 text-xs text-destructive" role="alert">
-                  {repos.error instanceof Error ? repos.error.message : "Unknown error"}
-                  {" — "}
-                  <button
-                    type="button"
-                    className="underline"
-                    onClick={() => repos.refetch()}
-                  >
+                <p className="mt-1 text-xs text-destructive" role="alert">
+                  {repos.error instanceof Error ? repos.error.message : "Unknown error"}{" — "}
+                  <button type="button" className="underline" onClick={() => repos.refetch()}>
                     retry
                   </button>
                 </p>
               )}
             </FormField>
           )}
-
           <FormField label="Branch" htmlFor="repo-branch">
             <Input
               id="repo-branch"
               autoComplete="off"
               spellCheck={false}
               value={branch}
-              onChange={(event) => setBranch(event.target.value)}
+              onChange={(e) => setBranch(e.target.value)}
             />
           </FormField>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">3. Configuration</h3>
-          <FormField label="Environment Variables (.env format)" htmlFor="env-vars">
-            <textarea
-              id="env-vars"
-              className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="PORT=3000&#10;DATABASE_URL=postgres://..."
-              value={envVars}
-              onChange={(e) => setEnvVars(e.target.value)}
-              spellCheck={false}
-            />
-          </FormField>
-
-          <BuildPackPicker />
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <FormField label="App port" htmlFor="repo-port">
-              <Input
-                id="repo-port"
-                type="number"
-                min={1}
-                max={65535}
-                value={port}
-                onChange={(event) => setPort(event.target.value)}
-              />
-            </FormField>
-            <FormField label="Deployment name" htmlFor="deploy-name" error={nameError ?? undefined}>
-              <Input
-                id="deploy-name"
-                autoComplete="off"
-                spellCheck={false}
-                value={name}
-                onChange={(event) => {
-                  setManualName(true);
-                  setName(event.target.value);
-                }}
-              />
-            </FormField>
-            <FormField label="Domain" htmlFor="deploy-domain">
-              <Input
-                id="deploy-domain"
-                placeholder="app.example.com"
-                autoComplete="off"
-                spellCheck={false}
-                value={domain}
-                onChange={(event) => setDomain(event.target.value)}
-              />
-            </FormField>
-          </div>
-        </div>
-
-        {serverError && (
-          <p className="text-sm text-destructive" role="alert">
-            {serverError}
+        <div className="space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Deployment
           </p>
-        )}
+          <FormField label="Name" htmlFor="deploy-name" error={nameError ?? undefined}>
+            <Input
+              id="deploy-name"
+              autoComplete="off"
+              spellCheck={false}
+              value={name}
+              onChange={(e) => { setManualName(true); setName(e.target.value); }}
+            />
+          </FormField>
+          <FormField label="Port" htmlFor="repo-port">
+            <Input
+              id="repo-port"
+              type="number"
+              min={1}
+              max={65535}
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Domain" htmlFor="deploy-domain">
+            <Input
+              id="deploy-domain"
+              placeholder="app.example.com"
+              autoComplete="off"
+              spellCheck={false}
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+            />
+          </FormField>
+        </div>
 
-        <div className="flex justify-end pt-4">
-          <Button onClick={submit} loading={pending} disabled={!repo.trim() || !port.trim()}>
+        <div className="mt-auto pt-2">
+          {serverError && (
+            <p className="mb-3 text-sm text-destructive" role="alert">
+              {serverError}
+            </p>
+          )}
+          <Button
+            className="w-full"
+            onClick={submit}
+            loading={pending}
+            disabled={!repo.trim() || !port.trim()}
+          >
             <Rocket className="mr-2 h-4 w-4" aria-hidden />
             Deploy Repository
           </Button>
+        </div>
+      </aside>
+
+      {/* ── Right panel: full-body configuration ── */}
+      <div className="flex flex-col gap-5 p-5">
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Environment Variables
+          </p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            One <code className="font-mono">KEY=value</code> per line. These are injected into the
+            container at runtime and stored encrypted.
+          </p>
+          <textarea
+            id="env-vars"
+            className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2.5 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            style={{ minHeight: "calc(100vh - 26rem)", resize: "vertical" }}
+            placeholder={"PORT=3000\nDATABASE_URL=postgres://...\nSECRET_KEY=..."}
+            value={envVars}
+            onChange={(e) => setEnvVars(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
+
+        <div>
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Build Pack
+          </p>
+          <BuildPackPicker />
         </div>
       </div>
     </div>
