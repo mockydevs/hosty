@@ -11,6 +11,8 @@ and apps.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 from datetime import datetime
 from typing import Any
 
@@ -22,11 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, is_admin
 from app.core.errors import ConflictError, NotFoundError
-from app.db.models import App, Operation, Site, Stack, StackEndpoint, User
+from app.core.secrets import decrypt_secret
+from app.db.models import App, GitSource, Operation, Site, Stack, StackEndpoint, User
 from app.domain.validate import SpecValidationError, validate_domain_name, validate_slug
 from app.orchestration.blueprints import list_blueprints
 from app.orchestration.blueprints.base import ActionResult, Blueprint
-from app.services import image_versions, quotas, tenancy
+from app.services import image_versions, quotas, tenancy, git
 from app.services import stacks as stacks_service
 from app.services.stacks import StackValidationError
 from app.system import quadlet, systemd_user
@@ -91,12 +94,16 @@ class StackResponse(BaseModel):
     services: list[StackServiceResponse]
     volumes: list[StackVolumeResponse]
     endpoints: list[StackEndpointResponse]
+    inputs: dict[str, Any]
 
 
 class CreateStackRequest(BaseModel):
     name: str = Field(min_length=1, max_length=32)
     blueprint_id: str = Field(min_length=1, max_length=32)
     inputs: dict[str, Any] = Field(default_factory=dict)
+
+class SetStackEnvRequest(BaseModel):
+    env: dict[str, str]
 
 
 class DeleteStackRequest(BaseModel):
@@ -129,6 +136,18 @@ class StackLogsResponse(BaseModel):
     logs: str
 
 
+class GitAnalyzeRequest(BaseModel):
+    repo: str
+    branch: str
+
+
+class GitAnalyzeResponse(BaseModel):
+    has_dockerfile: bool
+    has_compose: bool
+    compose_services: list[str]
+    env_keys: list[str]
+
+
 class ConnectionLinkResponse(BaseModel):
     service: str
     scheme: str
@@ -146,8 +165,9 @@ def _settings(request: Request):
     return request.app.state.settings
 
 
-async def stack_response(db: AsyncSession, stack: Stack) -> StackResponse:
+async def stack_response(db: AsyncSession, stack: Stack, request: Request) -> StackResponse:
     services, volumes, endpoints = await stacks_service.stack_children(db, stack.id)
+    inputs = stacks_service.decrypt_inputs(stack, request.app.state.settings)
     return StackResponse(
         id=stack.id,
         name=stack.name,
@@ -161,6 +181,7 @@ async def stack_response(db: AsyncSession, stack: Stack) -> StackResponse:
         services=[StackServiceResponse.model_validate(s) for s in services],
         volumes=[StackVolumeResponse.model_validate(v) for v in volumes],
         endpoints=[StackEndpointResponse.model_validate(e) for e in endpoints],
+        inputs=inputs,
     )
 
 
@@ -246,6 +267,65 @@ async def get_blueprints() -> Any:
     ]
 
 
+@router.post("/git/analyze", response_model=GitAnalyzeResponse)
+async def analyze_git_repo(
+    body: GitAnalyzeRequest,
+    user: User = Depends(get_current_user),
+) -> GitAnalyzeResponse:
+    try:
+        result = await git.analyze_repo(body.repo, body.branch)
+        return GitAnalyzeResponse(
+            has_dockerfile=result.has_dockerfile,
+            has_compose=result.has_compose,
+            compose_services=result.compose_services,
+            env_keys=result.env_keys,
+        )
+    except ValueError as e:
+        raise StackValidationError(str(e))
+
+
+@router.post("/webhooks/{stack_id}", status_code=status.HTTP_202_ACCEPTED)
+async def stack_webhook(
+    stack_id: int,
+    background: BackgroundTasks,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    stack = await db.get(Stack, stack_id)
+    if stack is None or stack.status == "deleting":
+        raise NotFoundError("Stack not found")
+
+    if stack.blueprint_id != "git":
+        raise ConflictError("Webhook only supported for git blueprint")
+
+    settings = request.app.state.settings
+    inputs = stacks_service.decrypt_inputs(stack, settings)
+
+    if inputs.get("source_id"):
+        source = await db.get(GitSource, inputs["source_id"])
+        if source:
+            webhook_secret = decrypt_secret(source.webhook_secret_encrypted, settings.secret_key)
+            signature_header = request.headers.get("x-hub-signature-256")
+            if not signature_header:
+                raise ConflictError("Missing signature header")
+
+            payload = await request.body()
+            expected = "sha256=" + hmac.new(
+                webhook_secret.encode(), payload, hashlib.sha256
+            ).hexdigest()
+            if not hmac.compare_digest(expected, signature_header):
+                raise ConflictError("Invalid webhook signature")
+
+    stack.generation += 1
+    op = Operation(kind="webhook_rebuild", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
+    return {"status": "accepted", "operation_id": op.id}
+
+
 class SuggestedDomainResponse(BaseModel):
     domain: str
 
@@ -271,22 +351,23 @@ async def get_suggested_domain(
 
 @router.get("", response_model=list[StackResponse])
 async def list_stacks(
-    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+    request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> Any:
     query = select(Stack).order_by(Stack.name)
     if not is_admin(user):
         query = query.where(Stack.owner_id == user.id)
     stacks = (await db.execute(query)).scalars().all()
-    return [await stack_response(db, stack) for stack in stacks]
+    return [await stack_response(db, stack, request) for stack in stacks]
 
 
 @router.get("/{stack_id}", response_model=StackResponse)
-async def get_stack(
+async def stack_get(
+    request: Request,
     stack_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
-    return await stack_response(db, await fetch_owned_stack(db, user, stack_id))
+    return await stack_response(db, await fetch_owned_stack(db, user, stack_id), request)
 
 
 @router.post("", response_model=StackOperationAccepted, status_code=status.HTTP_202_ACCEPTED)
@@ -354,7 +435,7 @@ async def create_stack(
     reconciler = request.app.state.reconciler
     background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
     return StackOperationAccepted(
-        stack=await stack_response(db, stack), operation_id=op.id, show_once=alloc.secrets
+        stack=await stack_response(db, stack, request), operation_id=op.id, show_once=alloc.secrets
     )
 
 
@@ -379,7 +460,7 @@ async def delete_stack(
     # again — there is nothing to undo.
     stack.status = "deleting"
     stack.generation += 1
-    response = await stack_response(db, stack)
+    response = await stack_response(db, stack, request)
     op = Operation(kind="delete_stack", stack_id=stack.id, domain=stack.name)
     db.add(op)
     await db.commit()
@@ -455,7 +536,38 @@ async def set_stack_domain(
     # A domain change alters no units, so converge plans nothing and would not
     # touch Caddy — re-sync ingress explicitly so the new route goes live.
     background.add_task(reconciler.resync_ingress)
-    return StackOperationAccepted(stack=await stack_response(db, stack), operation_id=op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+
+
+@router.put("/{stack_id}/env", response_model=StackOperationAccepted)
+async def set_stack_env(
+    request: Request,
+    stack_id: int,
+    body: SetStackEnvRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+
+    settings = request.app.state.settings
+    inputs = stacks_service.decrypt_inputs(stack, settings)
+    
+    # Merge or overwrite env block
+    inputs["env"] = body.env
+    
+    stack.inputs_encrypted = stacks_service.encrypt_inputs(inputs, settings)
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    reconciler = request.app.state.reconciler
+    background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
 
 
 @router.post("/{stack_id}/actions/{action_name}", response_model=StackActionResponse)
@@ -601,4 +713,4 @@ async def set_service_exposure(
     await db.refresh(op)
 
     background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
-    return StackOperationAccepted(stack=await stack_response(db, stack), operation_id=op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)

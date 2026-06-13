@@ -588,6 +588,107 @@ function ConnRow({ label, uri }: { label: string; uri: string }) {
   );
 }
 
+function EnvVarsCard({
+  stack,
+  onOperation,
+}: {
+  stack: Stack;
+  onOperation: (operationId: number) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [envVars, setEnvVars] = useState("");
+
+  const updateEnv = useMutation({
+    mutationFn: async (envString: string) => {
+      const parsedEnv: Record<string, string> = {};
+      envString.split("\n").forEach(line => {
+        const match = line.match(/^([^=]+)=(.*)$/);
+        if (match && match[1] && match[2] !== undefined) {
+          parsedEnv[match[1].trim()] = match[2].trim();
+        }
+      });
+      const { data, error } = await api.PUT("/api/stacks/{stack_id}/env" as any, {
+        params: { path: { stack_id: stack.id } },
+        body: { env: parsedEnv },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Could not update environment variables"));
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success("Environment variables updated. Restarting stack...");
+      onOperation(data.operation_id);
+      setEditing(false);
+      void queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update env vars"),
+  });
+
+  const envObj = (stack as any).inputs?.env || {};
+  const currentEnvString = Object.entries(envObj).map(([k, v]) => `${k}=${v}`).join("\n");
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">Environment Variables</CardTitle>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setEnvVars(currentEnvString);
+            setEditing(true);
+          }}
+        >
+          Edit
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {Object.keys(envObj).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No environment variables defined.</p>
+        ) : (
+          <div className="rounded-md border bg-muted/40 p-3 max-h-48 overflow-y-auto">
+            {Object.entries(envObj).map(([key, value]) => (
+              <div key={key} className="flex gap-2 font-mono text-xs mb-1 last:mb-0">
+                <span className="font-semibold text-primary/80">{key}</span>
+                <span className="text-muted-foreground">=</span>
+                <span className="truncate flex-1">{String(value)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+      <Dialog open={editing} onClose={() => setEditing(false)}>
+        <DialogContent className="max-w-xl">
+          <DialogTitle>Edit Environment Variables</DialogTitle>
+          <DialogDescription>
+            Variables must be in <code>KEY=value</code> format, one per line. They will be applied on the next stack restart.
+          </DialogDescription>
+          <div className="py-2">
+            <textarea
+              className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="PORT=3000&#10;DATABASE_URL=postgres://..."
+              value={envVars}
+              onChange={(e) => setEnvVars(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+          <DialogActions>
+            <Button variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button
+              loading={updateEnv.isPending}
+              onClick={() => updateEnv.mutate(envVars)}
+            >
+              Save & Restart
+            </Button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 function ConnectionsCard({
   stack,
   onOperation,
@@ -612,7 +713,7 @@ function ConnectionsCard({
   const expose = useMutation({
     mutationFn: async ({ service, exposed }: { service: string; exposed: boolean }) => {
       const { data, error } = await api.PUT(
-        "/api/stacks/{stack_id}/services/{service_name}/expose",
+        "/api/stacks/{stack_id}/services/{service_name}/expose" as any,
         { params: { path: { stack_id: stack.id, service_name: service } }, body: { exposed } },
       );
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not change exposure"));
@@ -814,6 +915,7 @@ export function StackDetailPage() {
       </div>
 
       <ConnectionsCard stack={data} onOperation={setOperationId} />
+      <EnvVarsCard stack={data} onOperation={setOperationId} />
       <ActionsCard stack={data} actions={actions} />
       <StackToolsCard stack={data} />
       <StackBackupsCard stack={data} onOperation={setOperationId} />

@@ -18,6 +18,7 @@ import {
   Settings,
   UsersRound,
   X,
+  GitBranch,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
@@ -28,6 +29,7 @@ const NAV = [
   { to: "/sites", label: "Sites", icon: Globe },
   // v2 (ADR-013): blueprint-deployed container workloads.
   { to: "/stacks", label: "Deployments", icon: Boxes },
+  { to: "/sources", label: "Sources", icon: GitBranch },
   { to: "/databases", label: "Databases", icon: Database },
   // Phase 11b: DNS zones are tenant-scoped — clients manage their own.
   { to: "/dns", label: "DNS", icon: Network },

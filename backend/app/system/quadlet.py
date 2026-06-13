@@ -163,7 +163,7 @@ def network_unit(stack: StackSpec) -> str:
 
 
 def build_unit(stack: StackSpec, service: ServiceSpec) -> str:
-    branch = f"#{service.build_branch}" if service.build_branch else ""
+    workspace = f"%h/stacks/{stack.name}/src"
     return "\n".join(
         [
             MANAGED_HEADER,
@@ -171,9 +171,13 @@ def build_unit(stack: StackSpec, service: ServiceSpec) -> str:
             f"# hosty-service={service.name}",
             f"{SPEC_HASH_MARKER}{spec_hash(stack, service)}",
             "",
+            "[Unit]",
+            f"After={stack.name}-git-sync.service",
+            f"Requires={stack.name}-git-sync.service",
+            "",
             "[Build]",
             f"ImageTag=hosty/{stack.name}-{service.name}:latest",
-            f"SetWorkingDirectory={service.build_repo}{branch}",
+            f"SetWorkingDirectory={workspace}",
             "",
         ]
     )
@@ -183,11 +187,20 @@ def unit_files(stack: StackSpec) -> dict[str, str]:
     """The COMPLETE desired unit-file set for a stack: what WriteUnits syncs
     the quadlet directory to (write these, delete any other file of this
     stack)."""
+    from app.system.git_sync import git_sync_unit
+    
     files = {network_file_name(stack.name): network_unit(stack)}
+    needs_git_sync = False
+    
     for service in stack.services:
         files[container_file_name(stack.name, service.name)] = container_unit(stack, service)
         if service.build_repo:
             files[build_file_name(stack.name, service.name)] = build_unit(stack, service)
+            needs_git_sync = True
+            
+    if needs_git_sync:
+        files[f"{stack.name}-git-sync.service"] = git_sync_unit(stack)
+        
     return files
 
 

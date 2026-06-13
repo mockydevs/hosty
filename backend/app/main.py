@@ -27,10 +27,12 @@ from app.api.routes import (
     plans,
     security,
     sites,
+    sources,
     stacks,
     system,
     usage,
     users,
+    webhooks,
 )
 from app.core import logging as app_logging
 from app.core.config import Settings, get_settings
@@ -177,6 +179,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system.router, prefix="/api/system", tags=["system"])
     app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
     app.include_router(apps.router, prefix="/api/apps", tags=["apps"])
+    app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
+    app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
     app.include_router(stacks.router, prefix="/api/stacks", tags=["stacks"])
     app.include_router(sites.operations_router, prefix="/api/operations", tags=["operations"])
     app.include_router(databases.router, prefix="/api/databases", tags=["databases"])

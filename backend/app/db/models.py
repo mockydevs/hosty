@@ -425,3 +425,27 @@ class ApiToken(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
+class GitSource(Base):
+    """A connected Git integration (e.g., GitHub App)."""
+
+    __tablename__ = "git_sources"
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_git_sources_owner_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="github")
+    
+    # GitHub App Specifics
+    app_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    installation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    client_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    client_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    private_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    webhook_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

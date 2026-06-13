@@ -917,6 +917,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sources */
+        get: operations["list_sources_api_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/github/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Github Manifest
+         * @description Returns the manifest JSON needed to create a GitHub App.
+         */
+        post: operations["github_manifest_api_sources_github_manifest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Github Callback
+         * @description Receives the code from GitHub, exchanges it for app credentials, and saves the GitSource.
+         */
+        post: operations["github_callback_api_sources_github_callback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Source Repos
+         * @description Fetches accessible repositories from the source.
+         */
+        get: operations["list_source_repos_api_sources__source_id__repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stacks/blueprints": {
         parameters: {
             query?: never;
@@ -933,6 +1010,40 @@ export interface paths {
         get: operations["get_blueprints_api_stacks_blueprints_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/git/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze Git Repo */
+        post: operations["analyze_git_repo_api_stacks_git_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/webhooks/{stack_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stack Webhook */
+        post: operations["stack_webhook_api_stacks_webhooks__stack_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -985,8 +1096,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Stack */
-        get: operations["get_stack_api_stacks__stack_id__get"];
+        /** Stack Get */
+        get: operations["stack_get_api_stacks__stack_id__get"];
         put?: never;
         post?: never;
         /** Delete Stack */
@@ -1011,6 +1122,23 @@ export interface paths {
          *     bumped, and the stack re-converges (Caddy re-syncs the route).
          */
         put: operations["set_stack_domain_api_stacks__stack_id__domain_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/env": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Stack Env */
+        put: operations["set_stack_env_api_stacks__stack_id__env_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2528,6 +2656,24 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** GitAnalyzeRequest */
+        GitAnalyzeRequest: {
+            /** Repo */
+            repo: string;
+            /** Branch */
+            branch: string;
+        };
+        /** GitAnalyzeResponse */
+        GitAnalyzeResponse: {
+            /** Has Dockerfile */
+            has_dockerfile: boolean;
+            /** Has Compose */
+            has_compose: boolean;
+            /** Compose Services */
+            compose_services: string[];
+            /** Env Keys */
+            env_keys: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2939,6 +3085,13 @@ export interface components {
              */
             behind_cloudflare: boolean;
         };
+        /** SetStackEnvRequest */
+        SetStackEnvRequest: {
+            /** Env */
+            env: {
+                [key: string]: string;
+            };
+        };
         /** SetupRequest */
         SetupRequest: {
             /** Username */
@@ -2995,6 +3148,22 @@ export interface components {
             db_bytes: number;
             /** Bandwidth Bytes */
             bandwidth_bytes: number;
+        };
+        /** SourceResponse */
+        SourceResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Provider */
+            provider: string;
+            /** App Id */
+            app_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** SshKeyCreate */
         SshKeyCreate: {
@@ -3099,6 +3268,10 @@ export interface components {
             volumes: components["schemas"]["StackVolumeResponse"][];
             /** Endpoints */
             endpoints: components["schemas"]["StackEndpointResponse"][];
+            /** Inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
         };
         /** StackServiceResponse */
         StackServiceResponse: {
@@ -3114,8 +3287,6 @@ export interface components {
             build_branch: string | null;
             /** Internal Port */
             internal_port: number | null;
-            /** Host Port */
-            host_port: number | null;
             /** Memory Mb */
             memory_mb: number | null;
             /** Cpu Percent */
@@ -5330,6 +5501,112 @@ export interface operations {
             };
         };
     };
+    list_sources_api_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceResponse"][];
+                };
+            };
+        };
+    };
+    github_manifest_api_sources_github_manifest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    github_callback_api_sources_github_callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_source_repos_api_sources__source_id__repos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_blueprints_api_stacks_blueprints_get: {
         parameters: {
             query?: never;
@@ -5346,6 +5623,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlueprintResponse"][];
+                };
+            };
+        };
+    };
+    analyze_git_repo_api_stacks_git_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GitAnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitAnalyzeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stack_webhook_api_stacks_webhooks__stack_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5434,7 +5775,7 @@ export interface operations {
             };
         };
     };
-    get_stack_api_stacks__stack_id__get: {
+    stack_get_api_stacks__stack_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5517,6 +5858,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_stack_env_api_stacks__stack_id__env_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStackEnvRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

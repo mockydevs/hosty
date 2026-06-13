@@ -18,6 +18,7 @@ const STACK = {
   services: [],
   volumes: [],
   endpoints: [],
+  inputs: {},
 };
 
 const BACKUP = {
