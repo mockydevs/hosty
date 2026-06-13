@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, apiErrorMessage } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Key, KeyRound, Plus, ShieldAlert, Ticket, Trash2 } from "lucide-react";
 import type React from "react";
@@ -267,8 +268,12 @@ function ApiTokensTab() {
                     size="sm"
                     className="border-amber-600/30 hover:bg-amber-600/10"
                     onClick={async () => {
-                      await navigator.clipboard.writeText(newToken);
-                      toast.success("Token copied to clipboard");
+                      try {
+                        await copyToClipboard(newToken);
+                        toast.success("Token copied to clipboard");
+                      } catch {
+                        toast.error("Copy failed");
+                      }
                     }}
                   >
                     Copy

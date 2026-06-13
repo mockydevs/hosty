@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+import { copyToClipboard } from "@/lib/utils";
 /**
  * Stack create wizard (v2/M4): pick a blueprint, then fill a form rendered
  * straight from the blueprint's declared inputs schema — adding a blueprint
@@ -130,7 +131,7 @@ export function ShowOnceDialog({
 }) {
   const copy = async (value: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyToClipboard(value);
       toast.success("Copied");
     } catch {
       toast.error("Copy failed — select the text manually");

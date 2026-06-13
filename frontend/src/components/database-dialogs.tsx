@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+import { copyToClipboard } from "@/lib/utils";
 /**
  * Database dialogs shared by the global page and the site tab:
  * create (per site), show-once credentials, delete with type-to-confirm.
@@ -113,7 +114,7 @@ export function CredentialsDialog({
 }) {
   const copy = async (value: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyToClipboard(value);
       toast.success("Copied");
     } catch {
       toast.error("Copy failed — select the text manually");

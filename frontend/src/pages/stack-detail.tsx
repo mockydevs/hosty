@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+import { copyToClipboard } from "@/lib/utils";
 import { ShowOnceDialog } from "@/pages/stack-create";
 import { StackStatusBadge, isSettling } from "@/pages/stacks";
 /**
@@ -561,7 +562,7 @@ type ConnectionLink = components["schemas"]["ConnectionLinkResponse"];
 function ConnRow({ label, uri }: { label: string; uri: string }) {
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(uri);
+      await copyToClipboard(uri);
       toast.success("Connection string copied");
     } catch {
       toast.error("Copy failed — select the text manually");

@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
+import { copyToClipboard } from "@/lib/utils";
 /**
  * Account security (Phase 11d): TOTP 2FA enrollment/disable and the active
  * refresh-token sessions list with revoke / revoke-others.
@@ -101,8 +102,12 @@ function EnrollDialog({
                 size="icon"
                 aria-label="Copy secret"
                 onClick={async () => {
-                  await navigator.clipboard.writeText(secret);
-                  toast.success("Secret copied");
+                  try {
+                    await copyToClipboard(secret);
+                    toast.success("Secret copied");
+                  } catch {
+                    toast.error("Copy failed");
+                  }
                 }}
               >
                 <Copy className="h-4 w-4" />

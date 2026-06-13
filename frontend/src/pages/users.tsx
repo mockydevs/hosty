@@ -22,6 +22,7 @@ import {
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { useAuth } from "@/lib/auth";
+import { copyToClipboard } from "@/lib/utils";
 /**
  * Users (Phase 11a, admin-only): create client accounts with a temporary
  * password (shown once), suspend/unsuspend, set quotas, reset passwords and
@@ -66,8 +67,12 @@ function TempPasswordDialog({
               size="icon"
               aria-label="Copy temporary password"
               onClick={async () => {
-                await navigator.clipboard.writeText(created.temp_password ?? "");
-                toast.success("Copied to clipboard");
+                try {
+                  await copyToClipboard(created.temp_password ?? "");
+                  toast.success("Copied to clipboard");
+                } catch {
+                  toast.error("Copy failed");
+                }
               }}
             >
               <Copy className="h-4 w-4" />
