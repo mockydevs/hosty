@@ -3,7 +3,10 @@ metadata and Coolify-style variable defaults/required markers."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from app.domain.validate import SpecValidationError
 from app.orchestration.blueprints.base import Allocation
@@ -14,6 +17,22 @@ def write_template(tmp_path, text: str):
     path = tmp_path / "postgres.yml"
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def test_builtin_template_images_are_fully_qualified_and_digest_pinned():
+    templates_dir = Path(__file__).resolve().parent.parent / "templates"
+    image_refs: list[tuple[str, str, str]] = []
+    for path in sorted(templates_dir.glob("*.yml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        services = data.get("services", {}) if isinstance(data, dict) else {}
+        for service_name, service in services.items():
+            if isinstance(service, dict) and service.get("image"):
+                image_refs.append((path.name, str(service_name), str(service["image"])))
+
+    assert image_refs
+    for template, service, image in image_refs:
+        assert image.startswith("docker.io/"), f"{template}:{service} uses unqualified {image}"
+        assert "@sha256:" in image, f"{template}:{service} is not digest pinned"
 
 
 def test_compose_blueprint_metadata_drives_json_schema_title(tmp_path):

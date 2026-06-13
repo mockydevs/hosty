@@ -100,6 +100,16 @@ async def test_blueprint_catalog(admin_client, stack_host):
     assert resp.status_code == 200
     catalog = {bp["id"]: bp for bp in resp.json()}
     assert "raw-image" in catalog
+    for blueprint_id in (
+        "adminer",
+        "grafana",
+        "meilisearch",
+        "nginx",
+        "phpmyadmin",
+        "prometheus",
+        "rabbitmq",
+    ):
+        assert blueprint_id in catalog
     schema = catalog["raw-image"]["inputs_schema"]
     assert "image" in schema["properties"]
     assert "internal_port" in schema["properties"]

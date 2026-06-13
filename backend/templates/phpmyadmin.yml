@@ -1,0 +1,17 @@
+x-hosty:
+  name: "phpMyAdmin"
+  version: 1
+  category: "Developer Tools"
+  icon: "database"
+  description: "Deploy phpMyAdmin with arbitrary MySQL or MariaDB server login."
+  web: web
+  ports:
+    - web
+
+services:
+  web:
+    image: docker.io/library/phpmyadmin:5@sha256:c9f2c3790e7bc7b18ca9a978b137d3cc446b996f9f977b5d9b2d7100386d9310
+    ports:
+      - 80:80
+    environment:
+      PMA_ARBITRARY: "1"

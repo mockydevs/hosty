@@ -1,0 +1,17 @@
+x-hosty:
+  name: "Grafana"
+  version: 1
+  category: "Monitoring"
+  icon: "bar-chart-3"
+  description: "Deploy Grafana dashboards and visualization."
+  web: web
+  ports:
+    - web
+
+services:
+  web:
+    image: docker.io/grafana/grafana:11.5.2@sha256:8b37a2f028f164ce7b9889e1765b9d6ee23fec80f871d156fbf436d6198d32b7
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana-data:/var/lib/grafana

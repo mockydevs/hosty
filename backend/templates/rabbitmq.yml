@@ -1,0 +1,27 @@
+x-hosty:
+  name: "RabbitMQ"
+  version: 1
+  category: "Queues"
+  icon: "message-square"
+  description: "Deploy RabbitMQ with the management UI."
+  web: web
+  ports:
+    - web
+  secrets:
+    - rabbitmq_password
+  inputs:
+    username:
+      type: "string"
+      default: "hosty"
+      description: "Management user name"
+
+services:
+  web:
+    image: docker.io/library/rabbitmq:3-management@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
+    ports:
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: ${username}
+      RABBITMQ_DEFAULT_PASS: ${rabbitmq_password}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
