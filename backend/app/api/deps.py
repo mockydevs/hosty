@@ -82,6 +82,8 @@ async def _get_api_token_user(request: Request, db: AsyncSession, bearer_token: 
     ).scalar_one_or_none()
     if row is None:
         raise UnauthorizedError("Invalid API token")
+    if row.expires_at is not None and row.expires_at <= utcnow():
+        raise UnauthorizedError("API token has expired")
     user = await db.get(User, row.owner_id)
     if user is None:
         raise UnauthorizedError("API token owner no longer exists")

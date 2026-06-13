@@ -89,6 +89,7 @@ def _plan_teardown(name: str, obs: ObservedStack) -> list[Action]:
 def _plan_converge(spec: StackSpec, obs: ObservedStack | None) -> list[Action]:
     actions: list[Action] = []
     observed_units = obs.units if obs else {}
+    observed_builds = obs.build_units if obs else {}
     observed_dirs = obs.volume_dirs if obs else frozenset()
 
     if obs is None or not obs.tenant_present:
@@ -105,11 +106,20 @@ def _plan_converge(spec: StackSpec, obs: ObservedStack | None) -> list[Action]:
         if name not in observed_units or observed_units[name].spec_hash != hashed
     }
     extra = set(observed_units) - set(expected)
+    expected_builds = {
+        service.name: expected[service.name] for service in spec.services if service.build_repo
+    }
+    build_stale = {
+        name
+        for name, hashed in expected_builds.items()
+        if observed_builds.get(name) != hashed
+    }
+    extra_builds = set(observed_builds) - set(expected_builds)
 
     for service in sorted(extra):
         if observed_units[service].active:
             actions.append(StopService(spec.tenant, spec.name, service))
-    rewrite = bool(stale or extra)
+    rewrite = bool(stale or extra or build_stale or extra_builds)
     if rewrite:
         actions.append(WriteUnits(spec))
         actions.append(DaemonReload(spec.tenant))

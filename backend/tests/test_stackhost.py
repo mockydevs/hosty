@@ -55,6 +55,29 @@ def test_sync_writes_the_full_set_and_reports_change(rooted):
     assert stackhost.sync_units(42, "blog", quadlet.unit_files(stack)) is False
 
 
+def test_sync_tracks_and_removes_build_units(rooted):
+    built = StackSpec(
+        name="blog",
+        tenant="hosty-t-7",
+        services=(
+            ServiceSpec(
+                name="web",
+                image="hosty-build-target",
+                build_repo="https://github.com/example/app.git",
+                build_branch="main",
+            ),
+        ),
+    )
+    assert stackhost.sync_units(42, "blog", quadlet.unit_files(built)) is True
+    assert {f.file_name for f in stackhost.scan_units(42)} == {
+        "blog-web.build",
+        "blog-web.container",
+        "blog.network",
+    }
+    assert stackhost.sync_units(42, "blog", quadlet.unit_files(spec())) is True
+    assert "blog-web.build" not in {f.file_name for f in stackhost.scan_units(42)}
+
+
 def test_sync_removes_stale_stack_files_only(rooted):
     two = spec(services=("web", "worker"))
     stackhost.sync_units(42, "blog", quadlet.unit_files(two))
@@ -110,12 +133,26 @@ def test_env_files_written_0600_inside_stacks_root(rooted, tmp_path):
         assert oct(os.stat(env_path).st_mode & 0o777) == "0o600"
 
 
+def test_env_files_are_exactly_reconciled_and_removed(rooted, tmp_path):
+    first = spec(services=("web", "worker"))
+    files = quadlet.env_files(first)
+    assert stackhost.sync_env_files("hosty-t-7", "blog", files) is True
+
+    second = spec(services=("web",))
+    assert stackhost.sync_env_files("hosty-t-7", "blog", quadlet.env_files(second)) is True
+    env_dir = tmp_path / "home" / "hosty-t-7" / "stacks" / "blog" / "env"
+    assert sorted(path.name for path in env_dir.iterdir()) == ["web.env"]
+
+    assert stackhost.remove_env_files("hosty-t-7", "blog") is True
+    assert not env_dir.exists()
+
+
 def test_env_file_path_escape_rejected(rooted):
     with pytest.raises(stackhost.StackHostError):
-        stackhost.write_env_files("hosty-t-7", {"/etc/passwd": "x"})
+        stackhost.sync_env_files("hosty-t-7", "blog", {"/etc/passwd": "x"})
     with pytest.raises(stackhost.StackHostError):
         root = quadlet.stacks_root("hosty-t-7")
-        stackhost.write_env_files("hosty-t-7", {f"{root}/../escape.env": "x"})
+        stackhost.sync_env_files("hosty-t-7", "blog", {f"{root}/../escape.env": "x"})
 
 
 def test_volume_dirs_lifecycle_and_scan(rooted, tmp_path):

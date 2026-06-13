@@ -50,12 +50,13 @@ from app.domain.specs import (
 class _StackState:
     tenant: str
     files: dict[str, str | None] = field(default_factory=dict)  # service -> spec hash
+    builds: dict[str, str | None] = field(default_factory=dict)  # service -> spec hash
     active: set[str] = field(default_factory=set)
     dirs: set[str] = field(default_factory=set)
 
     @property
     def empty(self) -> bool:
-        return not (self.files or self.active or self.dirs)
+        return not (self.files or self.builds or self.active or self.dirs)
 
 
 class ModelHost:
@@ -68,6 +69,9 @@ class ModelHost:
         self.tenants.add(spec.tenant)
         state = _StackState(tenant=spec.tenant)
         state.files = {svc.name: spec_hash(spec, svc) for svc in spec.services}
+        state.builds = {
+            svc.name: spec_hash(spec, svc) for svc in spec.services if svc.build_repo
+        }
         if not spec.suspended:
             state.active = set(state.files)
         state.dirs = {vol.name for vol in spec.volumes}
@@ -96,9 +100,13 @@ class ModelHost:
                 state = self._entry(spec.name, spec.tenant)
                 state.tenant = spec.tenant
                 state.files = {svc.name: spec_hash(spec, svc) for svc in spec.services}
+                state.builds = {
+                    svc.name: spec_hash(spec, svc) for svc in spec.services if svc.build_repo
+                }
             case RemoveUnits(_, stack):
                 if stack in self.stacks:
                     self.stacks[stack].files = {}
+                    self.stacks[stack].builds = {}
             case StartService(tenant, stack, service) | RestartService(tenant, stack, service):
                 assert tenant in self.tenants, "start before EnsureTenant"
                 state = self.stacks.get(stack)
@@ -129,6 +137,7 @@ class ModelHost:
                 tenant=state.tenant,
                 tenant_present=state.tenant in self.tenants,
                 units=units,
+                build_units=dict(state.builds),
                 volume_dirs=frozenset(state.dirs),
             )
         return out
@@ -143,6 +152,9 @@ def project(desired: list[StackSpec]) -> Observed:
             units={
                 svc.name: ObservedUnit(spec_hash(spec, svc), active=not spec.suspended)
                 for svc in spec.services
+            },
+            build_units={
+                svc.name: spec_hash(spec, svc) for svc in spec.services if svc.build_repo
             },
             volume_dirs=frozenset(vol.name for vol in spec.volumes),
         )
@@ -288,6 +300,41 @@ def test_drift_missing_unit_file_rewrites():
     actions = plan([spec], observed)
     assert WriteUnits(spec) in actions
     assert StartService("hosty-t-7", "blog", "web") in actions
+
+
+def test_drift_missing_build_unit_rewrites_without_restarting_running_container():
+    service = web(
+        image="hosty-build-target",
+        build_repo="https://github.com/example/app.git",
+        build_branch="main",
+    )
+    spec = stack(services=(service,))
+    observed = converged(spec)
+    observed["blog"] = ObservedStack(
+        tenant="hosty-t-7",
+        units=observed["blog"].units,
+        build_units={},
+    )
+    assert plan([spec], observed) == [
+        WriteUnits(spec),
+        DaemonReload("hosty-t-7"),
+        SyncCaddy(),
+    ]
+
+
+def test_orphaned_build_unit_is_pruned():
+    spec = stack()
+    observed = converged(spec)
+    observed["blog"] = ObservedStack(
+        tenant="hosty-t-7",
+        units=observed["blog"].units,
+        build_units={"web": "old"},
+    )
+    assert plan([spec], observed) == [
+        WriteUnits(spec),
+        DaemonReload("hosty-t-7"),
+        SyncCaddy(),
+    ]
 
 
 def test_drift_corrupt_marker_rewrites_and_restarts():

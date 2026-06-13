@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 log = structlog.get_logger("hosty.errors")
 
@@ -74,6 +75,16 @@ def register_error_handlers(app: FastAPI) -> None:
             status_code=422,
             content=_envelope(
                 "validation_error", "Request validation failed", jsonable_encoder(exc.errors())
+            ),
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+        log.warning("database_conflict", path=request.url.path)
+        return JSONResponse(
+            status_code=409,
+            content=_envelope(
+                "conflict", "Another request changed the same resource; retry the operation"
             ),
         )
 

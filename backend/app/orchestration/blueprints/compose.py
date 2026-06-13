@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from app.domain.specs import ServiceSpec, StackSpec, VolumeSpec
+from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec
 from app.domain.validate import SpecValidationError
 from app.orchestration.blueprints.base import ActionHandler, Allocation, StackHealth
 
@@ -41,32 +41,60 @@ def _substitute(value: object, subs: dict[str, str]) -> str:
 class ComposeBlueprint:
     def __init__(self, yaml_path: Path):
         self.yaml_path = yaml_path
-        with open(yaml_path) as f:
+        with open(yaml_path, encoding="utf-8") as f:
             self.raw_data = yaml.safe_load(f)
+        if not isinstance(self.raw_data, dict):
+            raise SpecValidationError(f"Compose template {yaml_path.name!r} must be a mapping")
+        services = self.raw_data.get("services")
+        if not isinstance(services, dict) or not services:
+            raise SpecValidationError(
+                f"Compose template {yaml_path.name!r} must declare at least one service"
+            )
+        for name, service in services.items():
+            if not isinstance(service, dict):
+                raise SpecValidationError(f"Compose service {name!r} must be a mapping")
 
         self.id = self.yaml_path.stem
         hosty_meta = self.raw_data.get("x-hosty", {})
-        
+        if not isinstance(hosty_meta, dict):
+            raise SpecValidationError("x-hosty must be a mapping")
+
         self.version = hosty_meta.get("version", 1)
         self.category = hosty_meta.get("category", "Other")
         self.icon = hosty_meta.get("icon", "boxes")
         self.display_name = hosty_meta.get("name", self.id)
         self.description = hosty_meta.get("description", f"Deploy {self.id}")
-        
-        self._secrets = list(hosty_meta.get("secrets", []))
+
+        raw_secrets = hosty_meta.get("secrets", [])
+        raw_ports = hosty_meta.get("ports", [])
+        if not isinstance(raw_secrets, list) or not all(
+            isinstance(value, str) for value in raw_secrets
+        ):
+            raise SpecValidationError("x-hosty.secrets must be a list of names")
+        if not isinstance(raw_ports, list) or not all(
+            isinstance(value, str) for value in raw_ports
+        ):
+            raise SpecValidationError("x-hosty.ports must be a list of service names")
+        self._secrets = list(raw_secrets)
         self._inputs_def = hosty_meta.get("inputs", {})
-        self._ports = list(hosty_meta.get("ports", [])) # list of service names that need ports
+        self._ports = list(raw_ports)
+        if not isinstance(self._inputs_def, dict):
+            raise SpecValidationError("x-hosty.inputs must be a mapping")
+        self._web_service = hosty_meta.get("web")
+        self._domain_input = hosty_meta.get("domain_input")
         self._InputsModel = self._build_inputs_model()
 
     def _build_inputs_model(self) -> type[BaseModel]:
         fields = {}
         for key, spec in self._inputs_def.items():
+            if not isinstance(spec, dict):
+                raise SpecValidationError(f"Input definition {key!r} must be a mapping")
             type_ = str
             if spec.get("type") == "boolean":
                 type_ = bool
             elif spec.get("type") in ("number", "integer"):
                 type_ = int
-            
+
             field_kwargs = {}
             if "default" in spec:
                 field_kwargs["default"] = spec["default"]
@@ -74,9 +102,9 @@ class ComposeBlueprint:
                 field_kwargs["description"] = spec["description"]
             if spec.get("secret"):
                 field_kwargs["json_schema_extra"] = {"secret": True}
-            
+
             fields[key] = (type_, Field(**field_kwargs))
-            
+
         return create_model(
             f"{self.id.capitalize()}Inputs",
             __config__=ConfigDict(title=self.display_name),
@@ -96,7 +124,7 @@ class ComposeBlueprint:
         services_data = self.raw_data.get("services", {})
         services = []
         volumes = []
-        
+
         # Build substitution dictionary
         subs = {}
         for k, v in alloc.secrets.items():
@@ -112,64 +140,105 @@ class ComposeBlueprint:
             raw_build = svc_data.get("build")
             if raw_build and isinstance(raw_build, str):
                 build_str = _substitute(raw_build, subs)
-                
+
                 if "#" in build_str:
                     build_repo, build_branch = build_str.split("#", 1)
                 else:
                     build_repo = build_str
+            elif isinstance(raw_build, dict):
+                context = raw_build.get("context")
+                if isinstance(context, str) and context.startswith(("https://", "git@", "ssh://")):
+                    build_str = _substitute(context, subs)
+                    if "#" in build_str:
+                        build_repo, build_branch = build_str.split("#", 1)
+                    else:
+                        build_repo = build_str
+                elif not svc_data.get("image"):
+                    raise SpecValidationError(
+                        f"Service {svc_name!r} uses a local build context without a fallback image"
+                    )
 
             env_vars = {}
             raw_env = svc_data.get("environment", {})
             if isinstance(raw_env, list):
                 for e in raw_env:
-                    if "=" in e:
-                        ek, ev = e.split("=", 1)
+                    item = str(e)
+                    if "=" in item:
+                        ek, ev = item.split("=", 1)
                         env_vars[ek] = ev
+                    else:
+                        env_vars[item] = subs.get(item, "")
             elif isinstance(raw_env, dict):
                 env_vars = dict(raw_env)
 
             env_vars = {str(ek): _substitute(ev, subs) for ek, ev in env_vars.items()}
-                
+
             internal_port = None
             if svc_data.get("ports"):
-                # Simplistic port parsing
-                p = str(svc_data["ports"][0])
-                internal_port = int(p.rsplit(":", 1)[-1].split("/", 1)[0])
-            elif svc_name in alloc.ports:
-                # If they asked for a port but didn't list it in compose
-                # This could be improved, but usually internal_port is defined
-                pass
+                raw_port = svc_data["ports"][0]
+                if isinstance(raw_port, dict):
+                    raw_port = raw_port.get("target")
+                if raw_port is None:
+                    raise SpecValidationError(f"Service {svc_name!r} has an invalid port mapping")
+                p = _substitute(raw_port, subs)
+                try:
+                    internal_port = int(p.rsplit(":", 1)[-1].split("/", 1)[0])
+                except ValueError as exc:
+                    raise SpecValidationError(
+                        f"Service {svc_name!r} has an invalid container port {p!r}"
+                    ) from exc
 
-            # If the service requires a host port (requested via x-hosty.ports)
             host_port = alloc.ports.get(svc_name)
+            if host_port is not None and internal_port is None:
+                raise SpecValidationError(
+                    f"Service {svc_name!r} requests a Hosty port but declares no container port"
+                )
 
-            services.append(ServiceSpec(
-                name=svc_name,
-                image=image,
-                env=tuple(sorted(env_vars.items())),
-                internal_port=internal_port,
-                host_port=host_port,
-                is_web=False, # We can add x-hosty.web: [svc_name] later
-                build_repo=build_repo,
-                build_branch=build_branch,
-            ))
+            services.append(
+                ServiceSpec(
+                    name=svc_name,
+                    image=image,
+                    env=tuple(sorted(env_vars.items())),
+                    internal_port=internal_port,
+                    host_port=host_port,
+                    is_web=svc_name == self._web_service,
+                    build_repo=build_repo,
+                    build_branch=build_branch,
+                )
+            )
 
             for vol in svc_data.get("volumes", []):
-                # "volume_name:/path/in/container"
-                if ":" in vol:
-                    v_name, v_path = vol.split(":", 1)
-                    volumes.append(VolumeSpec(
-                        name=v_name,
-                        service=svc_name,
-                        mount_path=v_path
-                    ))
+                if isinstance(vol, dict):
+                    if vol.get("type", "volume") != "volume":
+                        raise SpecValidationError(
+                            f"Service {svc_name!r}: only named volumes are supported"
+                        )
+                    v_name, v_path = vol.get("source"), vol.get("target")
+                else:
+                    parts = str(vol).split(":", 2)
+                    if len(parts) < 2:
+                        raise SpecValidationError(
+                            f"Service {svc_name!r} has an invalid volume mapping {vol!r}"
+                        )
+                    v_name, v_path = parts[0], parts[1]
+                volumes.append(
+                    VolumeSpec(name=str(v_name), service=svc_name, mount_path=str(v_path))
+                )
+
+        endpoints = ()
+        if self._web_service and self._domain_input:
+            domain = subs.get(self._domain_input, "").strip().lower()
+            if domain:
+                endpoints = (
+                    EndpointSpec(domain=domain, service=self._web_service),
+                )
 
         return StackSpec(
             name=name,
             tenant=alloc.tenant,
             services=tuple(services),
             volumes=tuple(volumes),
-            endpoints=(),
+            endpoints=endpoints,
         )
 
     def actions(self) -> dict[str, ActionHandler]:

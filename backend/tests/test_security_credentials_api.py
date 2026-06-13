@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.db.models import SshKey
+from datetime import timedelta
+
+from app.core.clock import utcnow
+from app.db.models import ApiToken, SshKey
 from tests.conftest import TEST_USER
 
 PRIVATE_KEY = """-----BEGIN OPENSSH PRIVATE KEY-----
@@ -75,3 +78,18 @@ async def test_api_token_auth_and_revoke(admin_client):
         "/api/auth/me", headers={"Authorization": f"Bearer {raw_token}"}
     )
     assert rejected.status_code == 401
+
+
+async def test_expired_api_token_is_rejected(admin_client, app):
+    created = await admin_client.post("/api/security/tokens", json={"name": "temporary"})
+    body = created.json()
+    async with app.state.sessionmaker() as db:
+        token = await db.get(ApiToken, body["id"])
+        token.expires_at = utcnow() - timedelta(seconds=1)
+        await db.commit()
+
+    rejected = await admin_client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {body['token']}"}
+    )
+    assert rejected.status_code == 401
+    assert rejected.json()["error"]["message"] == "API token has expired"

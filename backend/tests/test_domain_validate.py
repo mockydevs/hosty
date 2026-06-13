@@ -47,6 +47,50 @@ def test_invalid_image_refs(image):
         v.validate_image_ref(image)
 
 
+@pytest.mark.parametrize(
+    "repo",
+    [
+        "https://github.com/example/app.git",
+        "https://gitlab.com/group/subgroup/app.git",
+        "git@github.com:example/private-app.git",
+        "ssh://git@git.example.com:2222/team/app.git",
+    ],
+)
+def test_valid_git_repositories(repo):
+    assert v.validate_git_repo(repo) == repo
+
+
+@pytest.mark.parametrize(
+    "repo",
+    [
+        "",
+        "http://github.com/example/app.git",
+        "file:///etc/passwd",
+        "https://github.com/example/app.git\nInjected=true",
+        "-https://github.com/example/app.git",
+        "x" * 1025,
+        None,
+    ],
+)
+def test_invalid_git_repositories(repo):
+    with pytest.raises(v.SpecValidationError):
+        v.validate_git_repo(repo)
+
+
+@pytest.mark.parametrize("ref", ["main", "release/v1.2", "feature_1", "abc-123"])
+def test_valid_git_refs(ref):
+    assert v.validate_git_ref(ref) == ref
+
+
+@pytest.mark.parametrize(
+    "ref",
+    ["", "-main", "feature..bad", "main@{1}", "bad ref", "main/", "main.", "a" * 256, None],
+)
+def test_invalid_git_refs(ref):
+    with pytest.raises(v.SpecValidationError):
+        v.validate_git_ref(ref)
+
+
 @pytest.mark.parametrize("name", ["a", "web", "my-app2", "a" + "b" * 30 + "c"])
 def test_valid_slugs(name):
     assert v.validate_slug(name) == name

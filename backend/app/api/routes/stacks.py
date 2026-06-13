@@ -52,6 +52,8 @@ class StackServiceResponse(BaseModel):
     name: str
     image: str
     image_digest: str | None
+    build_repo: str | None
+    build_branch: str | None
     internal_port: int | None
     host_port: int | None
     memory_mb: int | None

@@ -6,6 +6,8 @@ x-hosty:
   description: "Deploy any application directly from a public Git repository. The application will be built automatically using its Dockerfile."
   ports:
     - web
+  web: web
+  domain_input: domain
   inputs:
     repo:
       type: "string"
@@ -14,7 +16,16 @@ x-hosty:
       type: "string"
       default: "main"
       description: "Git Branch (e.g. main)"
+    internal_port:
+      type: "integer"
+      default: 3000
+      description: "Port the application listens on inside the container"
+    domain:
+      type: "string"
+      description: "Public domain for the application"
 
 services:
   web:
     build: ${repo}#${branch}
+    ports:
+      - "${internal_port}:${internal_port}"

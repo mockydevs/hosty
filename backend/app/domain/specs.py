@@ -19,6 +19,8 @@ from app.domain.validate import (
     validate_domain_name,
     validate_env_key,
     validate_env_value,
+    validate_git_ref,
+    validate_git_repo,
     validate_image_ref,
     validate_mount_path,
     validate_port,
@@ -60,7 +62,11 @@ class ServiceSpec:
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
-        if not self.build_repo:
+        if self.build_repo:
+            validate_git_repo(self.build_repo)
+            if self.build_branch:
+                validate_git_ref(self.build_branch)
+        else:
             validate_image_ref(self.image)
         for key, value in self.env:
             validate_env_key(key)
@@ -204,6 +210,7 @@ class ObservedStack:
     tenant: str
     tenant_present: bool = True
     units: dict[str, ObservedUnit] = field(default_factory=dict)  # service -> unit
+    build_units: dict[str, str | None] = field(default_factory=dict)  # service -> spec hash
     volume_dirs: frozenset[str] = frozenset()
 
 

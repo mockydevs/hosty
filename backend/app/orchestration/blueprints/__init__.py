@@ -17,6 +17,8 @@ register(_wordpress.WordPressBlueprint())
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "templates"
 if TEMPLATES_DIR.exists():
     for yml_file in TEMPLATES_DIR.glob("*.yml"):
+        if get_blueprint(yml_file.stem) is not None:
+            continue
         try:
             register(ComposeBlueprint(yml_file))
         except Exception as e:

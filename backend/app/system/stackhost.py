@@ -21,7 +21,7 @@ from app.domain.validate import validate_slug
 from app.system import quadlet, runner
 from app.system.tenants import validate_tenant_username
 
-UNIT_SUFFIXES = (".container", ".network")
+UNIT_SUFFIXES = (".build", ".container", ".network")
 
 
 class StackHostError(RuntimeError):
@@ -126,21 +126,61 @@ def scan_units(uid: int) -> tuple[UnitFile, ...]:
     return tuple(files)
 
 
-def write_env_files(tenant: str, files: dict[str, str]) -> None:
-    """Write per-service EnvironmentFiles: 0600, tenant-owned. Paths come
-    from quadlet.env_file_path and are re-checked to sit inside the tenant's
-    stacks root."""
+def sync_env_files(tenant: str, stack: str, files: dict[str, str]) -> bool:
+    """Make the stack env directory hold exactly ``files``.
+
+    Environment files contain credentials, so stale files are deleted on
+    every rewrite instead of being left behind after service/env changes.
+    """
     validate_tenant_username(tenant)
-    root = os.path.normpath(quadlet.stacks_root(tenant))
+    validate_slug(stack, what="stack name")
+    env_dir = os.path.normpath(os.path.join(quadlet.stack_dir(tenant, stack), "env"))
+    desired: dict[str, str] = {}
     for path, content in files.items():
         normalized = os.path.normpath(path)
-        if normalized != root and not normalized.startswith(root + os.sep):
-            raise StackHostError(f"Env file path escapes the stacks root: {path!r}")
-        directory = os.path.dirname(normalized)
-        os.makedirs(directory, exist_ok=True)
-        _open_write(normalized, content, 0o600)
-        shutil.chown(directory, user=tenant, group=tenant)
-        shutil.chown(normalized, user=tenant, group=tenant)
+        if os.path.dirname(normalized) != env_dir:
+            raise StackHostError(f"Env file path escapes the stack env directory: {path!r}")
+        desired[normalized] = content
+
+    existing: dict[str, str] = {}
+    if os.path.isdir(env_dir):
+        for entry in Path(env_dir).iterdir():
+            if entry.is_file():
+                try:
+                    existing[str(entry)] = entry.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+
+    changed = False
+    if desired:
+        os.makedirs(env_dir, exist_ok=True)
+        shutil.chown(env_dir, user=tenant, group=tenant)
+    for path, content in desired.items():
+        if existing.get(path) != content:
+            _open_write(path, content, 0o600)
+            changed = True
+        else:
+            os.chmod(path, 0o600)
+        shutil.chown(path, user=tenant, group=tenant)
+    for path in existing:
+        if path not in desired:
+            os.unlink(path)
+            changed = True
+    if os.path.isdir(env_dir) and not os.listdir(env_dir):
+        os.rmdir(env_dir)
+    return changed
+
+
+def write_env_files(tenant: str, files: dict[str, str]) -> None:
+    """Compatibility wrapper for callers that only write one stack."""
+    if not files:
+        return
+    first = Path(next(iter(files)))
+    sync_env_files(tenant, first.parent.parent.name, files)
+
+
+def remove_env_files(tenant: str, stack: str) -> bool:
+    return sync_env_files(tenant, stack, {})
 
 
 def sync_ssh_keys(tenant: str, keys: list[tuple[str, str]]) -> None:

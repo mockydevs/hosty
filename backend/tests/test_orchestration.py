@@ -13,7 +13,8 @@ import json
 import pytest
 from sqlalchemy import select
 
-from app.db.models import Notification, Operation, Tenant, User
+from app.core.secrets import encrypt_secret
+from app.db.models import Notification, Operation, SshKey, Tenant, User
 from app.domain.specs import (
     Observed,
     ObservedStack,
@@ -38,6 +39,7 @@ class FakeHost:
         self.next_uid = 6000
         self.unit_files: dict[int, dict[str, str]] = {}  # uid -> filename -> content
         self.env_files: dict[str, str] = {}
+        self.ssh_keys: dict[str, list[tuple[str, str]]] = {}
         self.volume_dirs: set[tuple[str, str, str]] = set()  # (tenant, stack, volume)
         self.active: set[tuple[str, str]] = set()  # (tenant, unit_name)
         self.fail_control: set[str] = set()  # actions ("start"/"stop"/...) that raise
@@ -76,11 +78,22 @@ class FakeHost:
         def remove_units(uid, stack):
             return sync_units(uid, stack, {})
 
-        def write_env_files(tenant, files):
+        def sync_env_files(tenant, stack, files):
+            prefix = f"/stacks/{stack}/env/"
+            for path in [p for p in host.env_files if prefix in p.replace("\\", "/")]:
+                if path not in files:
+                    del host.env_files[path]
             host.env_files.update(files)
+            return True
+
+        def remove_env_files(tenant, stack):
+            return sync_env_files(tenant, stack, {})
 
         def ensure_volume_dir(tenant, stack, volume):
             host.volume_dirs.add((tenant, stack, volume))
+
+        def sync_ssh_keys(tenant, keys):
+            host.ssh_keys[tenant] = list(keys)
 
         async def remove_volume_dir(tenant, stack, volume):
             host.volume_dirs.discard((tenant, stack, volume))
@@ -108,8 +121,10 @@ class FakeHost:
         for name, fn in [
             ("sync_units", sync_units),
             ("remove_units", remove_units),
-            ("write_env_files", write_env_files),
+            ("sync_env_files", sync_env_files),
+            ("remove_env_files", remove_env_files),
             ("ensure_volume_dir", ensure_volume_dir),
+            ("sync_ssh_keys", sync_ssh_keys),
             ("remove_volume_dir", remove_volume_dir),
             ("scan_tenant", scan_tenant),
         ]:
@@ -144,12 +159,17 @@ class FakeHost:
     def build_observed(self) -> Observed:
         stacks: dict[str, dict] = {}
         for linux_user, uid in self.users.items():
-            for content in self.unit_files.get(uid, {}).values():
+            for file_name, content in self.unit_files.get(uid, {}).items():
                 stack = quadlet.read_stack_marker(content)
                 if stack is None:
                     continue
-                entry = stacks.setdefault(stack, {"tenant": linux_user, "units": {}, "dirs": set()})
+                entry = stacks.setdefault(
+                    stack, {"tenant": linux_user, "units": {}, "builds": {}, "dirs": set()}
+                )
                 service = quadlet.read_service_marker(content)
+                if service is not None and file_name.endswith(".build"):
+                    entry["builds"][service] = quadlet.read_spec_hash(content)
+                    continue
                 if service is not None:
                     unit_name = f"{stack}-{service}.service"
                     entry["units"][service] = ObservedUnit(
@@ -157,13 +177,16 @@ class FakeHost:
                         active=(linux_user, unit_name) in self.active,
                     )
         for tenant, stack, volume in self.volume_dirs:
-            entry = stacks.setdefault(stack, {"tenant": tenant, "units": {}, "dirs": set()})
+            entry = stacks.setdefault(
+                stack, {"tenant": tenant, "units": {}, "builds": {}, "dirs": set()}
+            )
             entry["dirs"].add(volume)
         return {
             name: ObservedStack(
                 tenant=entry["tenant"],
                 tenant_present=entry["tenant"] in self.users,
                 units=entry["units"],
+                build_units=entry["builds"],
                 volume_dirs=frozenset(entry["dirs"]),
             )
             for name, entry in stacks.items()
@@ -243,6 +266,26 @@ async def test_fresh_create_converges_end_to_end(db, host, make_reconciler):
     assert outcome.planned == 0
 
 
+async def test_tenant_provision_installs_preexisting_private_git_keys(
+    db, host, make_reconciler, settings
+):
+    owner = await make_owner(db)
+    db.add(
+        SshKey(
+            owner_id=owner.id,
+            name="github-main",
+            public_key="ssh-ed25519 test",
+            private_key_encrypted=encrypt_secret("private-key", settings.secret_key),
+        )
+    )
+    await db.commit()
+
+    reconciler = make_reconciler([make_spec(owner.id)])
+    await reconciler.converge_all()
+
+    assert host.ssh_keys[f"hosty-t-{owner.id}"] == [("github-main", "private-key")]
+
+
 async def test_killed_container_is_restarted_next_cycle_and_drift_notifies(
     db, host, make_reconciler, settings
 ):
@@ -309,11 +352,13 @@ async def test_delete_tears_down_and_releases_tenant(db, host, make_reconciler):
     reconciler = make_reconciler(desired)
     await reconciler.converge_all()
     assert spec.tenant in host.users
+    host.env_files["/home/hosty-t-1/stacks/blog/env/web.env"] = "SECRET=old\n"
 
     desired.clear()  # the API deleted the stack
     (outcome,) = await reconciler.converge_all()
     assert outcome.error is None
     assert host.build_observed() == {}
+    assert host.env_files == {}
     assert spec.tenant not in host.users  # host user removed
     assert (
         await db.execute(select(Tenant).where(Tenant.linux_user == spec.tenant))

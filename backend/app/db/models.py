@@ -16,7 +16,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
-    email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(
+        String(254), unique=True, index=True, nullable=True
+    )
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")  # admin | client
@@ -229,6 +231,8 @@ class StackService(Base):
     name: Mapped[str] = mapped_column(String(32), nullable=False)
     image: Mapped[str] = mapped_column(String(512), nullable=False)
     image_digest: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    build_repo: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    build_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     internal_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     host_port: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
     env_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)

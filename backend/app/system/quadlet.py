@@ -79,6 +79,11 @@ def env_file_text(service: ServiceSpec) -> str:
 
 
 def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
+    image = (
+        build_file_name(stack.name, service.name)
+        if service.build_repo
+        else service.image
+    )
     lines = [
         MANAGED_HEADER,
         f"# hosty-stack={stack.name}",
@@ -90,7 +95,7 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         "",
         "[Container]",
         f"ContainerName={stack.name}-{service.name}",
-        f"Image={build_file_name(stack.name, service.name) if service.build_repo else service.image}",
+        f"Image={image}",
         f"Network={network_file_name(stack.name)}",
         # Hardening — unconditional.
         "NoNewPrivileges=true",

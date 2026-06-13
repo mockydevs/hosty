@@ -40,7 +40,7 @@ async def _sync_tenant_keys(db: AsyncSession, user_id: int, secret_key: str) -> 
     tenant = (
         await db.execute(select(Tenant).where(Tenant.user_id == user_id))
     ).scalar_one_or_none()
-    if not tenant:
+    if not tenant or tenant.uid is None:
         return
 
     keys = (await db.execute(select(SshKey).where(SshKey.owner_id == user_id))).scalars().all()
@@ -137,6 +137,7 @@ class ApiTokenResponse(BaseModel):
     name: str
     created_at: datetime
     last_used_at: datetime | None
+    expires_at: datetime | None
 
 
 @router.get("/tokens", response_model=list[ApiTokenResponse])
@@ -149,7 +150,13 @@ async def list_api_tokens(
         await db.execute(select(ApiToken).where(ApiToken.owner_id == current_user.id))
     ).scalars().all()
     return [
-        ApiTokenResponse(id=t.id, name=t.name, created_at=t.created_at, last_used_at=t.last_used_at)
+        ApiTokenResponse(
+            id=t.id,
+            name=t.name,
+            created_at=t.created_at,
+            last_used_at=t.last_used_at,
+            expires_at=t.expires_at,
+        )
         for t in tokens
     ]
 

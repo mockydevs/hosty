@@ -172,6 +172,9 @@ async def test_stack_composition(admin_client, stack_host, wp_cli):
     assert "@sha256:" in services[DB]["image"]
     assert "@sha256:" in services[ADMINER]["image"]
     assert "@sha256:" in services[FILES]["image"]
+    for service in (WEB, DB, ADMINER, FILES):
+        digest = services[service]["image"].rsplit("@sha256:", 1)[1]
+        assert len(set(digest)) > 1  # reject synthetic placeholder digests
     assert services["web"]["internal_port"] == 80 and services["web"]["host_port"]
     # The DB is stack-internal: no published port, unreachable from the host.
     assert services["db"]["internal_port"] is None and services["db"]["host_port"] is None

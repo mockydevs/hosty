@@ -98,6 +98,50 @@ services:
     assert spec.volumes[0].mount_path == "/var/lib/postgresql/data"
 
 
+def test_compose_blueprint_strips_short_volume_access_mode(tmp_path):
+    blueprint = ComposeBlueprint(
+        write_template(
+            tmp_path,
+            """
+services:
+  app:
+    image: nginx:1.27
+    volumes:
+      - content:/usr/share/nginx/html:ro
+""",
+        )
+    )
+    spec = blueprint.render(
+        "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7")
+    )
+    assert spec.volumes[0].mount_path == "/usr/share/nginx/html"
+
+
+@pytest.mark.parametrize("text", ["", "[]", "services: {}", "services:\n  app: broken"])
+def test_compose_blueprint_rejects_malformed_structure(tmp_path, text):
+    with pytest.raises(SpecValidationError):
+        ComposeBlueprint(write_template(tmp_path, text))
+
+
+def test_compose_blueprint_rejects_unsupported_local_build_without_image(tmp_path):
+    blueprint = ComposeBlueprint(
+        write_template(
+            tmp_path,
+            """
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+""",
+        )
+    )
+    with pytest.raises(SpecValidationError, match="local build context"):
+        blueprint.render(
+            "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7")
+        )
+
+
 def test_compose_blueprint_rejects_missing_required_variable(tmp_path):
     blueprint = ComposeBlueprint(
         write_template(
@@ -118,3 +162,55 @@ services:
             blueprint.inputs().model_validate({}),
             Allocation(tenant="hosty-t-7", ports={}, secrets={}),
         )
+
+
+def test_compose_blueprint_renders_git_web_endpoint(tmp_path):
+    blueprint = ComposeBlueprint(
+        write_template(
+            tmp_path,
+            """
+x-hosty:
+  name: "Git Repository"
+  ports: [web]
+  web: web
+  domain_input: domain
+  inputs:
+    repo:
+      type: string
+    branch:
+      type: string
+      default: main
+    internal_port:
+      type: integer
+      default: 3000
+    domain:
+      type: string
+services:
+  web:
+    build: ${repo}#${branch}
+    ports:
+      - "${internal_port}:${internal_port}"
+""",
+        )
+    )
+    inputs = blueprint.inputs().model_validate(
+        {
+            "repo": "https://github.com/example/app.git",
+            "branch": "main",
+            "internal_port": 3000,
+            "domain": "app.example.com",
+        }
+    )
+    spec = blueprint.render(
+        "app",
+        inputs,
+        Allocation(tenant="hosty-t-7", ports={"web": 20100}),
+    )
+
+    service = spec.services[0]
+    assert service.build_repo == "https://github.com/example/app.git"
+    assert service.build_branch == "main"
+    assert service.internal_port == 3000
+    assert service.host_port == 20100
+    assert service.is_web is True
+    assert spec.endpoints[0].domain == "app.example.com"

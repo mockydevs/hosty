@@ -27,6 +27,13 @@ ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 OBJECT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
 # User-chosen short names (stacks, services, volumes): strict slug.
 SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
+GIT_HTTPS_RE = re.compile(
+    r"^https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~/-]+(?:\.git)?$"
+)
+GIT_SSH_RE = re.compile(
+    r"^(?:ssh://)?git@[A-Za-z0-9.-]+(?::[0-9]{1,5})?[:/][A-Za-z0-9._~/-]+(?:\.git)?$"
+)
+GIT_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 
 
 class SpecValidationError(ValueError):
@@ -37,6 +44,30 @@ def validate_image_ref(image: str) -> str:
     if not isinstance(image, str) or len(image) > 512 or not IMAGE_RE.fullmatch(image):
         raise SpecValidationError(f"Invalid image reference: {image!r}")
     return image
+
+
+def validate_git_repo(repo: str) -> str:
+    if (
+        not isinstance(repo, str)
+        or len(repo) > 1024
+        or "\x00" in repo
+        or "\n" in repo
+        or not (GIT_HTTPS_RE.fullmatch(repo) or GIT_SSH_RE.fullmatch(repo))
+    ):
+        raise SpecValidationError(f"Invalid Git repository URL: {repo!r}")
+    return repo
+
+
+def validate_git_ref(ref: str) -> str:
+    if (
+        not isinstance(ref, str)
+        or not GIT_REF_RE.fullmatch(ref)
+        or ".." in ref
+        or "@{" in ref
+        or ref.endswith(("/", "."))
+    ):
+        raise SpecValidationError(f"Invalid Git branch or ref: {ref!r}")
+    return ref
 
 
 def validate_object_name(name: str) -> str:

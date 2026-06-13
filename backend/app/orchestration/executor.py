@@ -18,7 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.db.models import Tenant, User
+from app.core.secrets import decrypt_secret
+from app.db.models import SshKey, Tenant, User
 from app.domain import actions as act
 from app.services import tenancy
 from app.system import quadlet, stackhost, systemd_user
@@ -66,15 +67,29 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
             if user is None:
                 raise ExecutorError(f"No user account for tenant {tenant}")
             await tenancy.ensure_tenant(ctx.db, user)
+            keys = (
+                await ctx.db.execute(select(SshKey).where(SshKey.owner_id == user.id))
+            ).scalars().all()
+            await asyncio.to_thread(
+                stackhost.sync_ssh_keys,
+                tenant,
+                [
+                    (key.name, decrypt_secret(key.private_key_encrypted, ctx.settings.secret_key))
+                    for key in keys
+                ],
+            )
         case act.EnsureVolumeDir(tenant=tenant, stack=stack, volume=volume):
             await asyncio.to_thread(stackhost.ensure_volume_dir, tenant, stack, volume)
         case act.WriteUnits(stack=spec):
             uid = await _uid_for(ctx.db, spec.tenant)
-            await asyncio.to_thread(stackhost.write_env_files, spec.tenant, quadlet.env_files(spec))
+            await asyncio.to_thread(
+                stackhost.sync_env_files, spec.tenant, spec.name, quadlet.env_files(spec)
+            )
             await asyncio.to_thread(stackhost.sync_units, uid, spec.name, quadlet.unit_files(spec))
         case act.RemoveUnits(tenant=tenant, stack=stack):
             uid = await _uid_for(ctx.db, tenant)
             await asyncio.to_thread(stackhost.remove_units, uid, stack)
+            await asyncio.to_thread(stackhost.remove_env_files, tenant, stack)
         case act.DaemonReload(tenant=tenant):
             await systemd_user.daemon_reload(tenant)
         case act.StartService(tenant=tenant, stack=stack, service=service):

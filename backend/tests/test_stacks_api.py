@@ -190,6 +190,32 @@ async def test_create_dynamic_uptime_kuma_template(admin_client, stack_host):
     assert stack["volumes"][0]["mount_path"] == "/app/data"
 
 
+async def test_create_git_template_persists_build_source(admin_client, stack_host):
+    body = {
+        "name": "git-test",
+        "blueprint_id": "git",
+        "inputs": {
+            "repo": "https://github.com/example/app.git",
+            "branch": "main",
+            "internal_port": 3000,
+            "domain": "git.example.com",
+        },
+    }
+    payload, op = await create_stack_ok(admin_client, body)
+    assert op["status"] == "succeeded", op
+
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    service = stack["services"][0]
+    assert service["internal_port"] == 3000
+    assert service["host_port"] is not None
+    assert service["is_web"] is True
+    assert stack["endpoints"][0]["domain"] == "git.example.com"
+
+    uid = stack_host.users["hosty-t-1"]
+    build = stack_host.unit_files[uid]["git-test-web.build"]
+    assert "SetWorkingDirectory=https://github.com/example/app.git#main" in build
+
+
 async def test_dynamic_templates_allocate_distinct_ports(admin_client, stack_host):
     first = {
         "name": "postgres-test",

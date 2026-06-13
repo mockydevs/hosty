@@ -45,11 +45,15 @@ async def _observe_tenant(linux_user: str, uid: int) -> Observed:
     running = {c.name for c in containers if c.running}
 
     units: dict[str, dict[str, ObservedUnit]] = {}
+    build_units: dict[str, dict[str, str | None]] = {}
     stacks_seen: set[str] = set()
     for unit_file in scan.unit_files:
         stacks_seen.add(unit_file.stack)
         if unit_file.service is None:
             continue  # .network file: presence only
+        if unit_file.file_name.endswith(".build"):
+            build_units.setdefault(unit_file.stack, {})[unit_file.service] = unit_file.spec_hash
+            continue
         units.setdefault(unit_file.stack, {})[unit_file.service] = ObservedUnit(
             spec_hash=unit_file.spec_hash,
             active=f"{unit_file.stack}-{unit_file.service}" in running,
@@ -72,6 +76,7 @@ async def _observe_tenant(linux_user: str, uid: int) -> Observed:
             tenant=linux_user,
             tenant_present=tenant_present,
             units=units.get(stack, {}),
+            build_units=build_units.get(stack, {}),
             volume_dirs=scan.volume_dirs.get(stack, frozenset()),
         )
         for stack in stacks_seen

@@ -1946,6 +1946,8 @@ export interface components {
             created_at: string;
             /** Last Used At */
             last_used_at: string | null;
+            /** Expires At */
+            expires_at: string | null;
         };
         /** AppLogsResponse */
         AppLogsResponse: {
@@ -2950,6 +2952,10 @@ export interface components {
             image: string;
             /** Image Digest */
             image_digest: string | null;
+            /** Build Repo */
+            build_repo: string | null;
+            /** Build Branch */
+            build_branch: string | null;
             /** Internal Port */
             internal_port: number | null;
             /** Host Port */

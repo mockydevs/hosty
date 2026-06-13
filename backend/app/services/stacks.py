@@ -108,6 +108,8 @@ def spec_for(
                 memory_mb=svc.memory_mb,
                 cpu_percent=svc.cpu_percent,
                 is_web=svc.is_web,
+                build_repo=svc.build_repo,
+                build_branch=svc.build_branch,
             )
             for svc in sorted(services, key=lambda s: s.name)
         ),
@@ -271,6 +273,8 @@ async def persist_rendered(
                 stack_id=stack.id,
                 name=svc.name,
                 image=svc.image,
+                build_repo=svc.build_repo,
+                build_branch=svc.build_branch,
                 internal_port=svc.internal_port,
                 host_port=svc.host_port,
                 env_encrypted=encrypt_env(dict(svc.env), settings),

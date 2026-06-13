@@ -42,19 +42,19 @@ DB_PASSWORD_SECRET = "db_password"
 
 WP_CLI_IMAGE = (
     "docker.io/library/wordpress:cli-php8.3"
-    "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    "@sha256:744d4cbfb63d6ed90808cf87d99f822ed569c9cec714f602ca7d2fc955892455"
 )
 ADMINER_IMAGE = (
     "docker.io/library/adminer:4"
-    "@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    "@sha256:ee94dcfafed929cdd6e0bc25e74ce1bf92b71e5c9a7e94e9fee5e3993e7d49dd"
 )
 FILES_IMAGE = (
     "docker.io/filebrowser/filebrowser:v2"
-    "@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    "@sha256:9805b21cf910f3ef6f4a1c8f441f1dd6cc4197136f9541fe2a1ab6d050706e4b"
 )
 MARIADB_IMAGE = (
     "docker.io/library/mariadb:11.4"
-    "@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    "@sha256:1b46b73d4b629022dfa29e6db3bb0d63b5df714fc3bfbe5057d63d76d8f6054b"
 )
 
 SALT_ENV_KEYS = (
@@ -74,9 +74,9 @@ DEFAULT_PHP = "8.3"
 
 def _wp_image(php_version: str) -> str:
     digest = {
-        "8.2": "1111111111111111111111111111111111111111111111111111111111111111",
-        "8.3": "2222222222222222222222222222222222222222222222222222222222222222",
-        "8.4": "3333333333333333333333333333333333333333333333333333333333333333",
+        "8.2": "1e6215749283955d5c9ffea6c297651ed23cdfdbb91677ad7abd705b2682f2cf",
+        "8.3": "30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+        "8.4": "da2a1ff20daa435abf260853ebfd829b1f5f9b8400938940c7393f786a63bf94",
     }[php_version]
     return f"docker.io/library/wordpress:6.8-php{php_version}-apache@sha256:{digest}"
 
