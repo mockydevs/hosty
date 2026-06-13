@@ -3,7 +3,6 @@ import { type JsonSchema, SchemaForm } from "@/components/schema-form";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogActions,
@@ -15,15 +14,21 @@ import { Input } from "@/components/ui/input";
 import { api, apiErrorMessage } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { copyToClipboard } from "@/lib/utils";
-/**
- * Stack create wizard (v2/M4): pick a blueprint, then fill a form rendered
- * straight from the blueprint's declared inputs schema — adding a blueprint
- * to the backend lights it up here with zero UI code. Secrets generated at
- * create are shown exactly once before navigating to the new stack.
- */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Boxes, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Boxes,
+  Check,
+  Container,
+  Copy,
+  GitBranch,
+  Globe2,
+  Layers,
+  Package,
+  Rocket,
+  Search,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -35,6 +40,7 @@ type BlueprintWithMeta = Blueprint & {
   description?: string;
 };
 type Accepted = components["schemas"]["StackOperationAccepted"];
+type DeployMode = "git" | "image" | "template";
 
 export function blueprintDisplayName(bp: Blueprint): string {
   const meta = bp as BlueprintWithMeta;
@@ -48,76 +54,517 @@ export function blueprintDisplayName(bp: Blueprint): string {
     .join(" ");
 }
 
-function BlueprintPicker({
-  blueprints,
-  onPick,
+function inputDefaults(schema: JsonSchema): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(schema.properties ?? {})) {
+    if (field.default !== undefined && field.default !== null && field.default !== "") {
+      defaults[key] = field.default;
+    }
+  }
+  return defaults;
+}
+
+function slugFromRepo(repo: string): string {
+  const last = repo.trim().replace(/\/$/, "").split(/[/:]/).pop() ?? "";
+  const cleaned = last
+    .replace(/\.git$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned.slice(0, 32) || "my-app";
+}
+
+function validateSlug(value: string): string | null {
+  return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(value)
+    ? null
+    : "1-32 lowercase letters, digits or hyphens; no leading/trailing hyphen";
+}
+
+function MethodButton({
+  active,
+  icon: Icon,
+  title,
+  description,
+  onClick,
 }: {
-  blueprints: Blueprint[];
-  onPick: (bp: Blueprint) => void;
+  active: boolean;
+  icon: typeof GitBranch;
+  title: string;
+  description: string;
+  onClick: () => void;
 }) {
-  const categories = Array.from(
-    new Set(blueprints.map((bp) => (bp as BlueprintWithMeta).category || "Other")),
+  return (
+    <button
+      type="button"
+      className={[
+        "flex w-full cursor-pointer items-start gap-3 rounded-md border p-3 text-left transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
+      ].join(" ")}
+      onClick={onClick}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">{title}</span>
+        <span
+          className={active ? "block text-xs opacity-80" : "block text-xs text-muted-foreground"}
+        >
+          {description}
+        </span>
+      </span>
+    </button>
   );
+}
+
+function DeploySteps({ mode }: { mode: DeployMode }) {
+  const steps = [
+    mode === "git" ? "Repository" : mode === "image" ? "Image" : "Template",
+    "Build",
+    "Domain",
+    "Deploy",
+  ];
+  return (
+    <ol className="grid gap-2 sm:grid-cols-4">
+      {steps.map((step, index) => (
+        <li
+          key={step}
+          className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+        >
+          <span
+            className={[
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+              index === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+            ].join(" ")}
+          >
+            {index === 0 ? <Check className="h-3 w-3" aria-hidden /> : index + 1}
+          </span>
+          <span className="text-xs font-medium">{step}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function SectionTitle({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof GitBranch;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="rounded-md border border-border bg-muted p-2">
+        <Icon className="h-4 w-4" aria-hidden />
+      </div>
+      <div>
+        <h2 className="text-base font-semibold">{title}</h2>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      </div>
+    </div>
+  );
+}
+
+function BuildPackPicker() {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <div className="rounded-md border border-primary bg-primary px-3 py-2 text-primary-foreground">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Package className="h-4 w-4" aria-hidden />
+          Dockerfile
+        </div>
+        <p className="mt-1 text-xs opacity-80">Build from the selected repository branch.</p>
+      </div>
+      <div className="rounded-md border border-dashed border-border px-3 py-2 text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 text-sm font-medium">
+          <span className="flex items-center gap-2">
+            <Layers className="h-4 w-4" aria-hidden />
+            Docker Compose
+          </span>
+          <Badge variant="outline">Next</Badge>
+        </div>
+        <p className="mt-1 text-xs">Compose analyzer and service review are being wired in.</p>
+      </div>
+    </div>
+  );
+}
+
+function GitDeployForm({
+  blueprint,
+  onSubmit,
+  pending,
+  serverError,
+}: {
+  blueprint?: Blueprint;
+  onSubmit: (name: string, inputs: Record<string, unknown>) => Promise<void>;
+  pending: boolean;
+  serverError: string | null;
+}) {
+  const [repo, setRepo] = useState("");
+  const [branch, setBranch] = useState("main");
+  const [name, setName] = useState("my-app");
+  const [domain, setDomain] = useState("");
+  const [port, setPort] = useState("3000");
+  const [manualName, setManualName] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!manualName) setName(slugFromRepo(repo));
+  }, [manualName, repo]);
+
+  if (!blueprint) {
+    return <ErrorState message="Git repository deployment is not available in this build." />;
+  }
+
+  const submit = async () => {
+    const slug = name.trim().toLowerCase();
+    const slugError = validateSlug(slug);
+    if (slugError) {
+      setNameError(slugError);
+      return;
+    }
+    setNameError(null);
+    await onSubmit(slug, {
+      ...inputDefaults(blueprint.inputs_schema as JsonSchema),
+      repo: repo.trim(),
+      branch: branch.trim() || "main",
+      internal_port: Number(port),
+      domain: domain.trim(),
+    });
+  };
 
   return (
-    <div className="space-y-10">
-      {categories.map((category) => {
-        const categoryBlueprints = blueprints.filter(
-          (bp) => ((bp as BlueprintWithMeta).category || "Other") === category,
-        );
-        return (
-          <div key={category} className="space-y-4">
-            <h2 className="text-xl font-semibold tracking-tight">{category}</h2>
-            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-              {categoryBlueprints.map((bp) => {
-                const schema = bp.inputs_schema as JsonSchema;
-                const meta = bp as BlueprintWithMeta;
-                return (
-                  <Card
-                    key={bp.id}
-                    className="cursor-pointer hover:border-primary transition-all duration-200 group flex items-start p-4"
-                    onClick={() => onPick(bp)}
-                  >
-                    <div className="mr-4 mt-1 rounded-md bg-muted p-2 group-hover:bg-primary/10 group-hover:text-primary transition-colors flex items-center justify-center">
-                      {meta.icon ? (
-                        <img
-                          src={`/icons/${meta.icon}.svg`}
-                          className="h-8 w-8 object-contain"
-                          alt=""
-                          onError={(e) => {
-                            // Fallback to Boxes if image fails to load
-                            const target = e.currentTarget;
-                            target.style.display = "none";
-                            target.parentElement?.classList.add("fallback-boxes");
-                          }}
-                        />
-                      ) : (
-                        <Boxes className="h-8 w-8" aria-hidden />
-                      )}
-                      {meta.icon && (
-                        <Boxes className="h-8 w-8 hidden [.fallback-boxes_&]:block" aria-hidden />
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold leading-none tracking-tight text-base">
-                          {blueprintDisplayName(bp)}
-                        </h3>
-                        <Badge variant="secondary" className="text-[10px]">
-                          v{bp.version}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {meta.description || schema.description || `Deploy ${bp.id}`}
-                      </p>
-                    </div>
-                  </Card>
-                );
-              })}
+    <div className="space-y-6">
+      <SectionTitle
+        icon={GitBranch}
+        title="Git repository"
+        description="Public Git URL, branch, build pack, network port, then deploy."
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="space-y-4 rounded-md border border-border bg-card p-4">
+          <FormField label="Repository URL" htmlFor="repo-url">
+            <Input
+              id="repo-url"
+              placeholder="https://github.com/acme/app.git"
+              autoComplete="off"
+              spellCheck={false}
+              value={repo}
+              onChange={(event) => setRepo(event.target.value)}
+            />
+          </FormField>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Branch" htmlFor="repo-branch">
+              <Input
+                id="repo-branch"
+                autoComplete="off"
+                spellCheck={false}
+                value={branch}
+                onChange={(event) => setBranch(event.target.value)}
+              />
+            </FormField>
+            <FormField label="App port" htmlFor="repo-port">
+              <Input
+                id="repo-port"
+                type="number"
+                min={1}
+                max={65535}
+                value={port}
+                onChange={(event) => setPort(event.target.value)}
+              />
+            </FormField>
+          </div>
+
+          <BuildPackPicker />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Deployment name" htmlFor="deploy-name" error={nameError ?? undefined}>
+              <Input
+                id="deploy-name"
+                autoComplete="off"
+                spellCheck={false}
+                value={name}
+                onChange={(event) => {
+                  setManualName(true);
+                  setName(event.target.value);
+                }}
+              />
+            </FormField>
+            <FormField label="Domain" htmlFor="deploy-domain">
+              <Input
+                id="deploy-domain"
+                placeholder="app.example.com"
+                autoComplete="off"
+                spellCheck={false}
+                value={domain}
+                onChange={(event) => setDomain(event.target.value)}
+              />
+            </FormField>
+          </div>
+
+          {serverError && (
+            <p className="text-sm text-destructive" role="alert">
+              {serverError}
+            </p>
+          )}
+
+          <Button onClick={submit} loading={pending} disabled={!repo.trim() || !port.trim()}>
+            <Rocket className="h-4 w-4" aria-hidden />
+            Deploy
+          </Button>
+        </div>
+
+        <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Globe2 className="h-4 w-4" aria-hidden />
+            Route
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Source</span>
+              <span className="max-w-40 truncate font-mono text-xs">{repo || "repository"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Ref</span>
+              <span className="font-mono text-xs">{branch || "main"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Port</span>
+              <span className="font-mono text-xs">{port || "3000"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Domain</span>
+              <span className="max-w-40 truncate font-mono text-xs">{domain || "auto"}</span>
             </div>
           </div>
-        );
-      })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageDeployForm({
+  blueprint,
+  onSubmit,
+  pending,
+  serverError,
+}: {
+  blueprint?: Blueprint;
+  onSubmit: (name: string, inputs: Record<string, unknown>) => Promise<void>;
+  pending: boolean;
+  serverError: string | null;
+}) {
+  const [name, setName] = useState("container-app");
+  const [image, setImage] = useState("");
+  const [port, setPort] = useState("3000");
+  const [domain, setDomain] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  if (!blueprint) {
+    return <ErrorState message="Container image deployment is not available in this build." />;
+  }
+
+  const submit = async () => {
+    const slug = name.trim().toLowerCase();
+    const slugError = validateSlug(slug);
+    if (slugError) {
+      setNameError(slugError);
+      return;
+    }
+    setNameError(null);
+    await onSubmit(slug, {
+      ...inputDefaults(blueprint.inputs_schema as JsonSchema),
+      image: image.trim(),
+      internal_port: Number(port),
+      domain: domain.trim(),
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle
+        icon={Container}
+        title="Container image"
+        description="Deploy an existing image from Docker Hub, GHCR, or another registry."
+      />
+      <div className="space-y-4 rounded-md border border-border bg-card p-4">
+        <FormField label="Image" htmlFor="image-ref">
+          <Input
+            id="image-ref"
+            placeholder="ghcr.io/acme/app:latest"
+            autoComplete="off"
+            spellCheck={false}
+            value={image}
+            onChange={(event) => setImage(event.target.value)}
+          />
+        </FormField>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <FormField label="Deployment name" htmlFor="image-name" error={nameError ?? undefined}>
+            <Input
+              id="image-name"
+              autoComplete="off"
+              spellCheck={false}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </FormField>
+          <FormField label="App port" htmlFor="image-port">
+            <Input
+              id="image-port"
+              type="number"
+              min={1}
+              max={65535}
+              value={port}
+              onChange={(event) => setPort(event.target.value)}
+            />
+          </FormField>
+          <FormField label="Domain" htmlFor="image-domain">
+            <Input
+              id="image-domain"
+              placeholder="app.example.com"
+              autoComplete="off"
+              spellCheck={false}
+              value={domain}
+              onChange={(event) => setDomain(event.target.value)}
+            />
+          </FormField>
+        </div>
+        {serverError && (
+          <p className="text-sm text-destructive" role="alert">
+            {serverError}
+          </p>
+        )}
+        <Button onClick={submit} loading={pending} disabled={!image.trim() || !port.trim()}>
+          <Rocket className="h-4 w-4" aria-hidden />
+          Deploy
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TemplateDeployForm({
+  blueprints,
+  onSubmit,
+  pending,
+  serverError,
+}: {
+  blueprints: Blueprint[];
+  onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
+  pending: boolean;
+  serverError: string | null;
+}) {
+  const templates = blueprints.filter((bp) => !["git", "raw-image"].includes(bp.id));
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Blueprint | null>(templates[0] ?? null);
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selected) {
+      setName(`${selected.id}-${Math.random().toString(36).slice(2, 6)}`);
+      setNameError(null);
+    }
+  }, [selected]);
+
+  const filtered = templates.filter((bp) => {
+    const term = query.trim().toLowerCase();
+    return !term || bp.id.includes(term) || blueprintDisplayName(bp).toLowerCase().includes(term);
+  });
+
+  if (!selected) return <ErrorState message="No one-click templates are available." />;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+      <div className="space-y-3">
+        <SectionTitle icon={Boxes} title="Templates" />
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            aria-label="Search templates"
+            placeholder="Search templates"
+            className="pl-9"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+          {filtered.map((bp) => {
+            const active = selected.id === bp.id;
+            const meta = bp as BlueprintWithMeta;
+            return (
+              <button
+                type="button"
+                key={bp.id}
+                className={[
+                  "flex w-full cursor-pointer items-center gap-3 rounded-md border p-3 text-left transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
+                ].join(" ")}
+                onClick={() => setSelected(bp)}
+              >
+                <div className={active ? "text-primary-foreground" : "text-muted-foreground"}>
+                  {meta.icon ? (
+                    <img src={`/icons/${meta.icon}.svg`} className="h-6 w-6" alt="" />
+                  ) : (
+                    <Boxes className="h-5 w-5" aria-hidden />
+                  )}
+                </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {blueprintDisplayName(bp)}
+                  </span>
+                  <span
+                    className={
+                      active ? "block text-xs opacity-80" : "block text-xs text-muted-foreground"
+                    }
+                  >
+                    {(bp as BlueprintWithMeta).category || "Template"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-md border border-border bg-card p-4">
+        <SchemaForm
+          key={selected.id}
+          schema={selected.inputs_schema as JsonSchema}
+          onSubmit={async (inputs) => {
+            const slug = name.trim().toLowerCase();
+            const slugError = validateSlug(slug);
+            if (slugError) {
+              setNameError(slugError);
+              return;
+            }
+            setNameError(null);
+            await onSubmit(selected, slug, inputs);
+          }}
+          submitLabel={`Deploy ${blueprintDisplayName(selected)}`}
+          pending={pending}
+          serverError={serverError}
+        >
+          <FormField label="Deployment name" htmlFor="template-name" error={nameError ?? undefined}>
+            <Input
+              id="template-name"
+              autoComplete="off"
+              spellCheck={false}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </FormField>
+        </SchemaForm>
+      </div>
     </div>
   );
 }
@@ -134,7 +581,7 @@ export function ShowOnceDialog({
       await copyToClipboard(value);
       toast.success("Copied");
     } catch {
-      toast.error("Copy failed — select the text manually");
+      toast.error("Copy failed. Select the text manually.");
     }
   };
 
@@ -142,9 +589,7 @@ export function ShowOnceDialog({
     <Dialog open={secrets !== null} onClose={onClose}>
       <DialogContent>
         <DialogTitle>Generated secrets</DialogTitle>
-        <DialogDescription>
-          Save these now — they are shown only this once and stored encrypted.
-        </DialogDescription>
+        <DialogDescription>These values are shown once and stored encrypted.</DialogDescription>
         {secrets && (
           <dl className="space-y-2 text-sm">
             {Object.entries(secrets).map(([label, value]) => (
@@ -166,7 +611,7 @@ export function ShowOnceDialog({
           </dl>
         )}
         <DialogActions>
-          <Button onClick={onClose}>I saved them</Button>
+          <Button onClick={onClose}>Continue</Button>
         </DialogActions>
       </DialogContent>
     </Dialog>
@@ -176,53 +621,44 @@ export function ShowOnceDialog({
 export function StackCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Blueprint | null>(null);
-  const [name, setName] = useState("");
-  const [nameError, setNameError] = useState<string | null>(null);
+  const [mode, setMode] = useState<DeployMode>("git");
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [accepted, setAccepted] = useState<Accepted | null>(null);
-
-  useEffect(() => {
-    if (selected) {
-      const shortId = Math.random().toString(36).substring(2, 6);
-      setName(`${selected.id}-${shortId}`);
-      setNameError(null);
-      setServerError(null);
-    } else {
-      setName("");
-    }
-  }, [selected]);
 
   const blueprints = useQuery({
     queryKey: ["stack-blueprints"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/stacks/blueprints");
-      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load blueprints"));
+      if (error || !data)
+        throw new Error(apiErrorMessage(error, "Failed to load deployment options"));
       return data;
     },
   });
 
-  const submit = async (inputs: Record<string, unknown>) => {
-    if (!selected) return;
-    const slug = name.trim().toLowerCase();
-    if (!/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(slug)) {
-      setNameError("1-32 lowercase letters, digits or hyphens; no leading/trailing hyphen");
-      return;
-    }
-    setNameError(null);
+  const byId = useMemo(() => {
+    const map = new Map<string, Blueprint>();
+    for (const bp of blueprints.data ?? []) map.set(bp.id, bp);
+    return map;
+  }, [blueprints.data]);
+
+  const submitBlueprint = async (
+    blueprint: Blueprint,
+    name: string,
+    inputs: Record<string, unknown>,
+  ) => {
     setServerError(null);
     setPending(true);
     try {
       const { data, error, response } = await api.POST("/api/stacks", {
-        body: { name: slug, blueprint_id: selected.id, inputs },
+        body: { name, blueprint_id: blueprint.id, inputs },
       });
       if (error || !data) {
-        setServerError(apiErrorMessage(error, `Create failed (${response.status})`));
+        setServerError(apiErrorMessage(error, `Deploy failed (${response.status})`));
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["stacks"] });
-      toast.success(`Deploying ${data.stack.name}…`);
+      toast.success(`Deploying ${data.stack.name}`);
       if (Object.keys(data.show_once ?? {}).length > 0) {
         setAccepted(data);
       } else {
@@ -233,84 +669,103 @@ export function StackCreatePage() {
     }
   };
 
+  const gitBlueprint = byId.get("git");
+  const imageBlueprint = byId.get("raw-image");
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Back"
-          onClick={() => (selected ? setSelected(null) : navigate("/stacks"))}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {selected ? `New ${blueprintDisplayName(selected)} stack` : "New stack"}
-        </h1>
+    <div className="mx-auto max-w-7xl space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" aria-label="Back" onClick={() => navigate("/stacks")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">New deployment</h1>
+            <p className="text-sm text-muted-foreground">
+              Deploy from Git, an image, or a template.
+            </p>
+          </div>
+        </div>
       </div>
 
       {blueprints.isPending ? (
-        <LoadingState label="Loading blueprints…" />
+        <LoadingState label="Loading deployment options" />
       ) : blueprints.isError ? (
         <ErrorState message={blueprints.error.message} onRetry={() => blueprints.refetch()} />
-      ) : !selected ? (
-        <BlueprintPicker blueprints={blueprints.data} onPick={setSelected} />
       ) : (
-        <Card className="max-w-4xl mx-auto w-full">
-          <CardHeader>
-            <CardTitle className="text-base">Configure</CardTitle>
-            <CardDescription>
-              Runs rootless under your own isolated system account, published only on loopback and
-              served through Caddy with automatic HTTPS.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SchemaForm
-              key={selected.id}
-              schema={selected.inputs_schema as JsonSchema}
-              onSubmit={submit}
-              submitLabel="Create stack"
-              pending={pending}
-              serverError={serverError}
-              fieldActions={
-                (selected.inputs_schema as JsonSchema).properties?.domain
-                  ? {
-                      domain: {
-                        label: "Autogenerate",
-                        run: async () => {
-                          const slug = name.trim().toLowerCase();
-                          const { data, error } = await api.GET("/api/stacks/suggested-domain", {
-                            params: { query: { name: slug } },
-                          });
-                          if (error || !data) {
-                            toast.error(
-                              apiErrorMessage(
-                                error,
-                                "Set an apps base domain or server public IP first",
-                              ),
-                            );
-                            return null;
-                          }
-                          return data.domain;
-                        },
-                      },
-                    }
-                  : undefined
-              }
-            >
-              <FormField label="Stack name" htmlFor="stack-name" error={nameError ?? undefined}>
-                <Input
-                  id="stack-name"
-                  placeholder="my-app"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+        <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
+          <aside className="space-y-3">
+            <div className="rounded-md border border-border bg-card p-3">
+              <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Source</p>
+              <div className="space-y-2">
+                <MethodButton
+                  active={mode === "git"}
+                  icon={GitBranch}
+                  title="Git repository"
+                  description="Dockerfile from GitHub or any Git URL"
+                  onClick={() => {
+                    setMode("git");
+                    setServerError(null);
+                  }}
                 />
-              </FormField>
-            </SchemaForm>
-          </CardContent>
-        </Card>
+                <MethodButton
+                  active={mode === "image"}
+                  icon={Container}
+                  title="Container image"
+                  description="Docker Hub, GHCR, private registry"
+                  onClick={() => {
+                    setMode("image");
+                    setServerError(null);
+                  }}
+                />
+                <MethodButton
+                  active={mode === "template"}
+                  icon={Boxes}
+                  title="Templates"
+                  description="Databases, WordPress, tools"
+                  onClick={() => {
+                    setMode("template");
+                    setServerError(null);
+                  }}
+                />
+              </div>
+            </div>
+          </aside>
+
+          <section className="space-y-5">
+            <DeploySteps mode={mode} />
+            {mode === "git" && (
+              <GitDeployForm
+                blueprint={gitBlueprint}
+                pending={pending}
+                serverError={serverError}
+                onSubmit={(name, inputs) => {
+                  if (!gitBlueprint) return Promise.resolve();
+                  return submitBlueprint(gitBlueprint, name, inputs);
+                }}
+              />
+            )}
+            {mode === "image" && (
+              <ImageDeployForm
+                blueprint={imageBlueprint}
+                pending={pending}
+                serverError={serverError}
+                onSubmit={(name, inputs) => {
+                  if (!imageBlueprint) return Promise.resolve();
+                  return submitBlueprint(imageBlueprint, name, inputs);
+                }}
+              />
+            )}
+            {mode === "template" && (
+              <TemplateDeployForm
+                blueprints={blueprints.data}
+                pending={pending}
+                serverError={serverError}
+                onSubmit={submitBlueprint}
+              />
+            )}
+          </section>
+        </div>
       )}
 
       <ShowOnceDialog

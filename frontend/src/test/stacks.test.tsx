@@ -1,9 +1,12 @@
 import { type JsonSchema, SchemaForm, schemaFields } from "@/components/schema-form";
-import { blueprintDisplayName } from "@/pages/stack-create";
+import { StackCreatePage, blueprintDisplayName } from "@/pages/stack-create";
+import { jsonResponse, mockFetch } from "@/test/helpers";
 /** Stacks (v2/M4): the schema-driven form renderer — blueprint inputs JSON
  * Schema → fields, validation, value coercion, secret handling. */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 /** Trimmed-down pydantic model_json_schema() of RawImageInputs. */
@@ -252,5 +255,98 @@ describe("SchemaForm", () => {
     };
     render(<SchemaForm schema={schema} onSubmit={() => {}} />);
     expect(screen.getByLabelText("Api Key")).toHaveAttribute("type", "password");
+  });
+});
+
+describe("StackCreatePage", () => {
+  it("defaults to a Git deployment flow and posts the git blueprint payload", async () => {
+    const user = userEvent.setup();
+    const fetch = mockFetch({
+      "GET /api/stacks/blueprints": () =>
+        jsonResponse([
+          {
+            id: "git",
+            version: 1,
+            category: "Source Code",
+            icon: "git",
+            display_name: "Git Repository",
+            description: "Deploy from Git",
+            inputs_schema: {
+              type: "object",
+              properties: {
+                repo: { type: "string" },
+                branch: { type: "string", default: "main" },
+                internal_port: { type: "integer", default: 3000 },
+                domain: { type: "string", default: "" },
+              },
+            },
+            actions: [],
+          },
+          {
+            id: "raw-image",
+            version: 1,
+            category: "Containers",
+            icon: "container",
+            display_name: "Container Image",
+            description: "Deploy an image",
+            inputs_schema: { type: "object", properties: {} },
+            actions: [],
+          },
+        ]),
+      "POST /api/stacks": async (req) => {
+        const body = await req.json();
+        expect(body).toEqual({
+          name: "demo-app",
+          blueprint_id: "git",
+          inputs: {
+            repo: "https://github.com/acme/demo-app.git",
+            branch: "main",
+            internal_port: 3000,
+            domain: "",
+          },
+        });
+        return jsonResponse({
+          stack: {
+            id: 7,
+            name: "demo-app",
+            blueprint_id: "git",
+            blueprint_version: 1,
+            status: "converging",
+            error_message: null,
+            generation: 1,
+            observed_generation: 0,
+            created_at: new Date().toISOString(),
+            services: [],
+            volumes: [],
+            endpoints: [],
+          },
+          operation_id: 99,
+          show_once: {},
+        });
+      },
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <StackCreatePage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("New deployment")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Git repository/i })).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText("Repository URL"),
+      "https://github.com/acme/demo-app.git",
+    );
+    expect(screen.getByLabelText("Deployment name")).toHaveValue("demo-app");
+    await user.click(screen.getByRole("button", { name: "Deploy" }));
+
+    expect(fetch).toHaveBeenCalledWith(expect.objectContaining({ method: "POST" }));
   });
 });

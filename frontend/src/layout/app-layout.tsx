@@ -27,7 +27,7 @@ const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/sites", label: "Sites", icon: Globe },
   // v2 (ADR-013): blueprint-deployed container workloads.
-  { to: "/stacks", label: "Stacks", icon: Boxes },
+  { to: "/stacks", label: "Deployments", icon: Boxes },
   { to: "/databases", label: "Databases", icon: Database },
   // Phase 11b: DNS zones are tenant-scoped — clients manage their own.
   { to: "/dns", label: "DNS", icon: Network },

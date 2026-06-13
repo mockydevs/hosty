@@ -74,9 +74,9 @@ export function StacksPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Stacks</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Deployments</h1>
         <Button onClick={() => navigate("/stacks/new")}>
-          <Plus className="h-4 w-4" aria-hidden /> New stack
+          <Plus className="h-4 w-4" aria-hidden /> New deployment
         </Button>
       </div>
 
@@ -86,7 +86,7 @@ export function StacksPage() {
           aria-hidden
         />
         <Input
-          aria-label="Search stacks"
+          aria-label="Search deployments"
           placeholder="Search names and domains…"
           className="pl-9"
           value={search}
@@ -95,21 +95,19 @@ export function StacksPage() {
       </div>
 
       {stacks.isPending ? (
-        <LoadingState label="Loading stacks…" />
+        <LoadingState label="Loading deployments…" />
       ) : stacks.isError ? (
         <ErrorState message={stacks.error.message} onRetry={() => stacks.refetch()} />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={search ? "No stacks match your search" : "No stacks yet"}
+          title={search ? "No deployments match your search" : "No deployments yet"}
           description={
-            search
-              ? "Try a different name or domain."
-              : "Deploy any container image — or a one-click app — as an isolated, rootless stack."
+            search ? "Try a different name or domain." : "Deploy from Git, an image, or a template."
           }
         >
           {!search && (
             <Button className="mt-2" onClick={() => navigate("/stacks/new")}>
-              <Plus className="h-4 w-4" aria-hidden /> New stack
+              <Plus className="h-4 w-4" aria-hidden /> New deployment
             </Button>
           )}
         </EmptyState>
