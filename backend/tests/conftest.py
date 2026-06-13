@@ -24,6 +24,25 @@ def settings() -> Settings:
     )
 
 
+@pytest.fixture(autouse=True)
+def _offline_image_versions(monkeypatch):
+    """Keep the version catalog off the network in tests. Real registry
+    fetches return []  (so blueprints fall back to their template default);
+    tests that inject an httpx transport via `http=` still exercise the real
+    fetch path against their mock."""
+    from app.services import image_versions
+
+    real_fetch = image_versions._fetch_tags
+
+    async def fetch(repo, *, http=None):
+        if http is not None:
+            return await real_fetch(repo, http=http)
+        return []
+
+    monkeypatch.setattr(image_versions, "_fetch_tags", fetch)
+    image_versions.clear_cache()
+
+
 @pytest_asyncio.fixture
 async def app(settings):
     application = create_app(settings)

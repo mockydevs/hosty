@@ -78,10 +78,14 @@ def build_is_active_argv(user: str, unit: str) -> list[str]:
 
 def build_journal_argv(user: str, unit: str, *, tail: int = 200) -> list[str]:
     tail = max(1, min(int(tail), 5000))
+    # Same machine spec as every systemctl call: `<user>@.host` (connect AS
+    # the tenant user TO the local host). A bare `<user>@` makes journalctl
+    # read the whole string as a container name and fail with "No machine
+    # '<user>@' known".
     return [
         "journalctl",
         "-M",
-        f"{validate_tenant_username(user)}@",
+        _machine(user),
         "--user-unit",
         validate_unit(unit),
         "-n",

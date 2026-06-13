@@ -13,6 +13,7 @@ x-hosty:
       type: "string"
       default: "7.2"
       description: "Redis version (e.g. 7.0, 7.2)"
+      versions_from: "redis"
 
 services:
   db:

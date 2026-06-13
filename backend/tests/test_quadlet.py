@@ -59,7 +59,7 @@ def test_container_unit_snapshot_full():
         "Label=hosty.managed=1\n"
         "PublishPort=127.0.0.1:20001:80\n"
         "EnvironmentFile=/home/hosty-t-7/stacks/blog/env/web.env\n"
-        "Volume=/home/hosty-t-7/stacks/blog/volumes/content:/var/www/html\n"
+        "Volume=/home/hosty-t-7/stacks/blog/volumes/content:/var/www/html:U\n"
         "PodmanArgs=--memory=512m --cpus=1.5\n"
         "\n"
         "[Service]\n"
@@ -92,7 +92,7 @@ def test_container_unit_snapshot_minimal():
         "LogDriver=journald\n"
         "Label=hosty.stack=blog\n"
         "Label=hosty.managed=1\n"
-        "Volume=/home/hosty-t-7/stacks/blog/volumes/dbdata:/var/lib/mysql\n"
+        "Volume=/home/hosty-t-7/stacks/blog/volumes/dbdata:/var/lib/mysql:U\n"
         "\n"
         "[Service]\n"
         "Restart=always\n"
@@ -101,6 +101,35 @@ def test_container_unit_snapshot_minimal():
         "[Install]\n"
         "WantedBy=default.target\n"
     )
+
+
+def test_volume_chown_flag_only_for_single_owner_volumes():
+    """`:U` (chown to the container user) is emitted for a volume owned by one
+    service — the rootless-DB-bind-mount fix — but NOT for a volume shared
+    across services (chowning would thrash ownership between containers)."""
+    stack = StackSpec(
+        name="wp",
+        tenant="hosty-t-7",
+        services=(
+            ServiceSpec(name="web", image="docker.io/library/wordpress:6@sha256:" + "a" * 64),
+            ServiceSpec(name="files", image="docker.io/filebrowser/filebrowser:v2"),
+            ServiceSpec(name="db", image="docker.io/library/mariadb:11"),
+        ),
+        volumes=(
+            VolumeSpec(name="html", service="web", mount_path="/var/www/html"),
+            VolumeSpec(name="html", service="files", mount_path="/srv"),  # shared → no :U
+            VolumeSpec(name="db-data", service="db", mount_path="/var/lib/mysql"),  # solo → :U
+        ),
+    )
+    by_name = {s.name: s for s in stack.services}
+    web = quadlet.container_unit(stack, by_name["web"])
+    files = quadlet.container_unit(stack, by_name["files"])
+    db = quadlet.container_unit(stack, by_name["db"])
+
+    assert "Volume=/home/hosty-t-7/stacks/wp/volumes/html:/var/www/html\n" in web
+    assert ":/var/www/html:U" not in web  # shared volume is left un-chowned
+    assert "Volume=/home/hosty-t-7/stacks/wp/volumes/html:/srv\n" in files
+    assert "Volume=/home/hosty-t-7/stacks/wp/volumes/db-data:/var/lib/mysql:U\n" in db
 
 
 def test_network_unit_snapshot():

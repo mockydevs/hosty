@@ -67,7 +67,7 @@ def test_journal_argv_clamps_tail():
     assert argv == [
         "journalctl",
         "-M",
-        "hosty-t-7@",
+        "hosty-t-7@.host",  # connect AS the tenant TO the local host, like systemctl
         "--user-unit",
         "blog-web.service",
         "-n",

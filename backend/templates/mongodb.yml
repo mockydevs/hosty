@@ -13,6 +13,7 @@ x-hosty:
       type: "string"
       default: "7.0"
       description: "MongoDB version (e.g. 6.0, 7.0)"
+      versions_from: "mongo"
     username:
       type: "string"
       default: "root"

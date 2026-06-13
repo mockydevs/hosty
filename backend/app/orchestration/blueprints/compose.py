@@ -82,6 +82,14 @@ class ComposeBlueprint:
             raise SpecValidationError("x-hosty.inputs must be a mapping")
         self._web_service = hosty_meta.get("web")
         self._domain_input = hosty_meta.get("domain_input")
+        # Inputs that should render as a registry-sourced version dropdown:
+        # `versions_from: <docker repo>` on the input. The list of series is
+        # fetched + cached at form-render time (services/image_versions.py).
+        self._version_inputs = {
+            key: str(spec["versions_from"])
+            for key, spec in self._inputs_def.items()
+            if isinstance(spec, dict) and spec.get("versions_from")
+        }
         self._InputsModel = self._build_inputs_model()
 
     def _build_inputs_model(self) -> type[BaseModel]:
@@ -113,6 +121,15 @@ class ComposeBlueprint:
 
     def inputs(self) -> type[BaseModel]:
         return self._InputsModel
+
+    def version_inputs(self) -> dict[str, tuple[str, str]]:
+        """input name -> (docker repo, default version) for fields that
+        should render as a dynamic version dropdown. The default doubles as
+        the offline fallback and sets the series granularity."""
+        return {
+            key: (repo, str(self._inputs_def[key].get("default", "")))
+            for key, repo in self._version_inputs.items()
+        }
 
     def ports_needed(self, inputs: BaseModel) -> list[str]:
         return self._ports
@@ -229,9 +246,7 @@ class ComposeBlueprint:
         if self._web_service and self._domain_input:
             domain = subs.get(self._domain_input, "").strip().lower()
             if domain:
-                endpoints = (
-                    EndpointSpec(domain=domain, service=self._web_service),
-                )
+                endpoints = (EndpointSpec(domain=domain, service=self._web_service),)
 
         return StackSpec(
             name=name,

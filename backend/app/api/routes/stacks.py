@@ -10,6 +10,7 @@ and apps.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -25,7 +26,7 @@ from app.db.models import App, Operation, Site, Stack, StackEndpoint, User
 from app.domain.validate import SpecValidationError, validate_slug
 from app.orchestration.blueprints import list_blueprints
 from app.orchestration.blueprints.base import ActionResult, Blueprint
-from app.services import quotas
+from app.services import image_versions, quotas
 from app.services import stacks as stacks_service
 from app.services.stacks import StackValidationError
 from app.system import quadlet, systemd_user
@@ -185,10 +186,34 @@ async def _refuse_domain_conflicts(db: AsyncSession, domains: list[str]) -> None
         raise ConflictError("An app already uses this domain")
 
 
+async def _inputs_schema_with_versions(bp: Blueprint) -> dict[str, Any]:
+    """The blueprint's JSON Schema, with any registry-backed version field
+    turned into an enum (newest series first) so the wizard renders a
+    dropdown instead of free text. Falls back to the static schema for
+    blueprints that declare no dynamic versions."""
+    schema = bp.inputs().model_json_schema()
+    version_inputs = getattr(bp, "version_inputs", None)
+    if version_inputs is None:
+        return schema
+    props = schema.get("properties", {})
+    for field_name, (repo, default) in version_inputs().items():
+        prop = props.get(field_name)
+        if not isinstance(prop, dict):
+            continue
+        series = await image_versions.available_series(repo, default=default or "latest")
+        prop["enum"] = series
+        if series:
+            prop["default"] = series[0]  # genuine latest when online; template default offline
+    return schema
+
+
 @router.get("/blueprints", response_model=list[BlueprintResponse])
 async def get_blueprints() -> Any:
     """The catalog that drives the create wizard: each blueprint's typed
-    inputs as JSON Schema — no per-blueprint UI code."""
+    inputs as JSON Schema — no per-blueprint UI code. Version fields are
+    populated from the image registry so new releases appear automatically."""
+    blueprints = list_blueprints()
+    schemas = await asyncio.gather(*(_inputs_schema_with_versions(bp) for bp in blueprints))
     return [
         BlueprintResponse(
             id=bp.id,
@@ -197,10 +222,10 @@ async def get_blueprints() -> Any:
             icon=bp.icon,
             display_name=bp.display_name,
             description=bp.description,
-            inputs_schema=bp.inputs().model_json_schema(),
+            inputs_schema=schema,
             actions=sorted(bp.actions()),
         )
-        for bp in list_blueprints()
+        for bp, schema in zip(blueprints, schemas, strict=True)
     ]
 
 

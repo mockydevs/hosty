@@ -2,7 +2,7 @@ import { type JsonSchema, SchemaForm, schemaFields } from "@/components/schema-f
 import { blueprintDisplayName } from "@/pages/stack-create";
 /** Stacks (v2/M4): the schema-driven form renderer — blueprint inputs JSON
  * Schema → fields, validation, value coercion, secret handling. */
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -161,6 +161,44 @@ describe("SchemaForm", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText("Env: every entry needs a name")).toBeInTheDocument();
+  });
+
+  it("renders an enum field as a version dropdown defaulting to the latest", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        version: {
+          type: "string",
+          title: "Version",
+          enum: ["17", "16", "15"],
+          default: "17",
+          description: "PostgreSQL version",
+        },
+      },
+    };
+    render(<SchemaForm schema={schema} onSubmit={onSubmit} submitLabel="Create" />);
+
+    const select = screen.getByLabelText("Version");
+    expect(select.tagName).toBe("SELECT");
+    expect(
+      within(select as HTMLElement)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["17", "16", "15"]);
+    // Defaults to the latest, but is changeable.
+    await user.selectOptions(select, "15");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(onSubmit).toHaveBeenCalledWith({ version: "15" });
+  });
+
+  it("classifies an enum string field as a select", () => {
+    const fields = schemaFields({
+      type: "object",
+      properties: { version: { type: "string", enum: ["16", "15"] } },
+    });
+    expect(fields[0]?.kind).toBe("select");
   });
 
   it("renders secret-flagged fields as password inputs", () => {

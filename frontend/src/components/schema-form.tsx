@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
  * so a new blueprint ships with zero per-blueprint UI code.
  *
  * Supported shapes (everything a blueprint inputs model can declare):
- *   string (secret → password input), integer/number (min/max), boolean,
+ *   string (secret → password input), string with `enum` (dropdown, e.g. a
+ *   registry-sourced version picker), integer/number (min/max), boolean,
  *   object with string additionalProperties (key→value editor, e.g. env or
  *   volumes), and `anyOf [T, null]` optionals (pydantic's `T | None`).
  */
@@ -26,11 +27,13 @@ export type JsonSchema = {
   required?: string[];
   additionalProperties?: JsonSchema | boolean;
   anyOf?: JsonSchema[];
+  /** Allowed values — rendered as a dropdown (e.g. a version picker). */
+  enum?: unknown[];
   /** pydantic json_schema_extra={"secret": True} marks write-only secrets. */
   secret?: boolean;
 };
 
-type FieldKind = "string" | "number" | "boolean" | "map";
+type FieldKind = "string" | "number" | "boolean" | "map" | "select";
 
 interface Field {
   name: string;
@@ -51,7 +54,7 @@ function unwrap(schema: JsonSchema): JsonSchema {
 function fieldKind(schema: JsonSchema): FieldKind | null {
   switch (schema.type) {
     case "string":
-      return "string";
+      return Array.isArray(schema.enum) && schema.enum.length > 0 ? "select" : "string";
     case "integer":
     case "number":
       return "number";
@@ -87,7 +90,11 @@ function initialState(fields: Field[]): Record<string, FieldState> {
   for (const field of fields) {
     if (field.kind === "boolean") state[field.name] = field.schema.default === true;
     else if (field.kind === "map") state[field.name] = [];
-    else state[field.name] = field.schema.default != null ? String(field.schema.default) : "";
+    else if (field.kind === "select") {
+      const options = (field.schema.enum ?? []).map(String);
+      state[field.name] =
+        field.schema.default != null ? String(field.schema.default) : (options[0] ?? "");
+    } else state[field.name] = field.schema.default != null ? String(field.schema.default) : "";
   }
   return state;
 }
@@ -108,7 +115,8 @@ function parseField(field: Field, raw: FieldState): [string | null, unknown] {
       if (maximum != null && value > maximum) return [`${label} must be ≤ ${maximum}`, null];
       return [null, value];
     }
-    case "string": {
+    case "string":
+    case "select": {
       const text = (raw as string).trim();
       if (!text) return field.required ? [`${label} is required`, null] : [null, undefined];
       return [null, text];
@@ -281,6 +289,30 @@ export function SchemaForm({
                   valuePlaceholder="value"
                   secret={field.schema.secret}
                 />
+              </FormField>
+            </div>
+          );
+        }
+        if (field.kind === "select") {
+          const options = (field.schema.enum ?? []).map(String);
+          return (
+            <div className={colSpanClass} key={field.name}>
+              <FormField label={label} htmlFor={field.name} error={error}>
+                <select
+                  id={field.name}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                  value={values[field.name] as string}
+                  onChange={(e) => set(field.name, e.target.value)}
+                >
+                  {options.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+                {field.schema.description && (
+                  <p className="text-xs text-muted-foreground">{field.schema.description}</p>
+                )}
               </FormField>
             </div>
           );

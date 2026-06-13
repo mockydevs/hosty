@@ -105,6 +105,29 @@ async def test_blueprint_catalog(admin_client, stack_host):
     assert "internal_port" in schema["properties"]
 
 
+async def test_blueprint_catalog_injects_version_enum(admin_client, stack_host, monkeypatch):
+    """A version-bearing template (postgres) renders its `version` field as an
+    enum of registry series with the latest as default — the create wizard
+    gets a dropdown with no per-blueprint code."""
+    from app.services import image_versions
+
+    series = {"postgres": ["17", "16", "15"], "mariadb": ["11.4", "11.2"]}
+
+    async def fake_series(repo, *, default, http=None):
+        return series.get(repo, [default])
+
+    monkeypatch.setattr(image_versions, "available_series", fake_series)
+    resp = await admin_client.get("/api/stacks/blueprints")
+    assert resp.status_code == 200
+    catalog = {bp["id"]: bp for bp in resp.json()}
+
+    version = catalog["postgres"]["inputs_schema"]["properties"]["version"]
+    assert version["enum"] == ["17", "16", "15"]
+    assert version["default"] == "17"  # genuine latest leads
+    # A blueprint without dynamic versions is untouched (no enum on free text).
+    assert "enum" not in catalog["raw-image"]["inputs_schema"]["properties"]["image"]
+
+
 async def test_create_stack_happy_path(admin_client, stack_host):
     payload, op = await create_stack_ok(admin_client)
     assert op["status"] == "succeeded", op
