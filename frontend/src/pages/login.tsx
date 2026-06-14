@@ -230,7 +230,7 @@ export function LoginPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/auth/setup");
       if (error || !data) throw new Error("Failed to check setup status");
-      return data;
+      return data; /* as any */
     },
     staleTime: Number.POSITIVE_INFINITY,
     retry: 1,

@@ -37,7 +37,7 @@ export function useDatabases() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/databases");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load databases"));
-      return data;
+      return data; /* as any */
     },
   });
 }
@@ -65,7 +65,7 @@ function ResetPasswordButton({
         params: { path: { database_id: databaseId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Reset failed"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: onCredentials,
     onError: (err) => toast.error(err.message),
@@ -95,7 +95,7 @@ export function DatabasesPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/sites");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load sites"));
-      return data;
+      return data; /* as any */
     },
   });
   const activeSites: Site[] = (sites.data ?? []).filter((s) => s.status === "active");

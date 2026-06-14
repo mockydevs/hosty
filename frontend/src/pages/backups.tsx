@@ -58,7 +58,7 @@ function RunNowButton({
         params: { path: { site_id: site.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not start the backup"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: (data) => onStarted(data.operation_id),
     onError: (err) => toast.error(err.message),
@@ -88,7 +88,7 @@ export function BackupsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/backups/meta");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load backup settings"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -97,7 +97,7 @@ export function BackupsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/sites");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load sites"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -106,7 +106,7 @@ export function BackupsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/backups");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load backups"));
-      return data;
+      return data; /* as any */
     },
   });
 

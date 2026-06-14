@@ -194,7 +194,7 @@ export function SitesPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/sites");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load sites"));
-      return data;
+      return data; /* as any */
     },
     refetchInterval: (q) =>
       q.state.data?.some((s) => s.status === "provisioning" || s.status === "deleting")

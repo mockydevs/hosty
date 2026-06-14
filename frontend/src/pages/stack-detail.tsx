@@ -83,7 +83,7 @@ export function StackBackupsCard({
         params: { path: { stack_id: stack.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load backups"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -93,7 +93,7 @@ export function StackBackupsCard({
         params: { path: { stack_id: stack.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Backup failed to start"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       onOperation(data.operation_id);
@@ -110,7 +110,7 @@ export function StackBackupsCard({
         body: { scope: "full", confirm_domain: confirm },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Restore failed to start"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: (data) => {
       onOperation(data.operation_id);
@@ -208,7 +208,7 @@ function LogsCard({ stack }: { stack: Stack }) {
         params: { path: { stack_id: stack.id }, query: { service, tail: 200 } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load logs"));
-      return data;
+      return data; /* as any */
     },
     enabled: service !== "",
   });
@@ -336,7 +336,7 @@ function ActionsCard({ stack, actions }: { stack: Stack; actions: string[] }) {
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Action failed (${response.status})`));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (result) => {
       if (result.ok) toast.success(result.message || "Done");
@@ -471,7 +471,7 @@ function EndpointsCard({
         body: { domain: value, behind_cloudflare: false },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not set the domain"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: (data) => {
       toast.success("Updating domain…");
@@ -628,7 +628,7 @@ function EnvVarsCard({
         body: { env: parsedEnv },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not update environment variables"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: (data) => {
       toast.success("Environment variables updated. Restarting stack...");
@@ -721,7 +721,7 @@ function ConnectionsCard({
         params: { path: { stack_id: stack.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load connections"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -732,7 +732,7 @@ function ConnectionsCard({
         { params: { path: { stack_id: stack.id, service_name: service } }, body: { exposed } },
       );
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not change exposure"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       setConfirming(null);
@@ -832,7 +832,7 @@ export function StackDetailPage() {
         params: { path: { stack_id: id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load stack"));
-      return data;
+      return data; /* as any */
     },
     enabled: Number.isInteger(id),
     refetchInterval: (q) => (q.state.data && isSettling(q.state.data) ? 3_000 : false),
@@ -843,7 +843,7 @@ export function StackDetailPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/stacks/blueprints");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load blueprints"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -1024,16 +1024,16 @@ export function StackDetailPage() {
               </>
             )}
 
-            {activeSubTab === "Advanced" && <AdvancedSettings />}
-            {activeSubTab === "Git Source" && <GitSourceSettings />}
+            {activeSubTab === "Advanced" && <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />}
+            {activeSubTab === "Git Source" && <GitSourceSettings stackId={Number(id)} inputs={data.inputs} />}
             {activeSubTab === "Servers" && <ServersList />}
-            {activeSubTab === "Scheduled Tasks" && <ScheduledTasksList />}
-            {activeSubTab === "Webhooks" && <WebhooksConfig />}
+            {activeSubTab === "Scheduled Tasks" && <ScheduledTasksList stackId={Number(id)} />}
+            {activeSubTab === "Webhooks" && <WebhooksConfig stackId={Number(id)} />}
             {activeSubTab === "Preview Deployments" && <PreviewDeploymentsConfig />}
-            {activeSubTab === "Rollback" && <RollbackList />}
-            {activeSubTab === "Resource Limits" && <ResourceLimitsConfig />}
-            {activeSubTab === "Metrics" && <MetricsView />}
-            {activeSubTab === "Tags" && <TagsConfig />}
+            {activeSubTab === "Rollback" && <RollbackList stackId={Number(id)} />}
+            {activeSubTab === "Resource Limits" && <ResourceLimitsConfig stackId={Number(id)} inputs={data.inputs} />}
+            {activeSubTab === "Metrics" && <MetricsView stackId={Number(id)} />}
+            {activeSubTab === "Tags" && <TagsConfig stackId={Number(id)} />}
           </div>
         </div>
       )}
@@ -1043,7 +1043,7 @@ export function StackDetailPage() {
       )}
 
       {activeTab === "Deployments" && (
-        <DeploymentsTab />
+        <DeploymentsTab stackId={Number(id)} />
       )}
 
       {activeTab === "Terminal" && (

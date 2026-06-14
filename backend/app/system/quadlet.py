@@ -87,7 +87,13 @@ def _volume_owner_counts(stack: StackSpec) -> dict[str, int]:
 
 
 def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
-    image = build_file_name(stack.name, service.name) if service.build_repo else service.image
+    if service.build_repo:
+        if service.build_tool == "nixpacks":
+            image = f"hosty/{stack.name}-{service.name}:latest"
+        else:
+            image = build_file_name(stack.name, service.name)
+    else:
+        image = service.image
     lines = [
         MANAGED_HEADER,
         f"# hosty-stack={stack.name}",
@@ -96,6 +102,15 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         "",
         "[Unit]",
         f"Description=hosty stack {stack.name} — service {service.name}",
+    ]
+    
+    if service.build_repo and service.build_tool == "nixpacks":
+        lines.extend([
+            f"Requires={stack.name}-{service.name}-nixpacks.service",
+            f"After={stack.name}-{service.name}-nixpacks.service",
+        ])
+        
+    lines.extend([
         "",
         "[Container]",
         f"ContainerName={stack.name}-{service.name}",
@@ -106,7 +121,7 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         "LogDriver=journald",
         f"Label=hosty.stack={stack.name}",
         "Label=hosty.managed=1",
-    ]
+    ])
     if service.internal_port is not None:
         # Loopback IP derived from stack ID by default. An explicitly EXPOSED
         # service binds 0.0.0.0 so it is reachable on the server's public IP.
@@ -183,6 +198,33 @@ def build_unit(stack: StackSpec, service: ServiceSpec) -> str:
     )
 
 
+def nixpacks_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
+    workspace = f"%h/stacks/{stack.name}/src"
+    image_tag = f"hosty/{stack.name}-{service.name}:latest"
+    return "\n".join(
+        [
+            MANAGED_HEADER,
+            f"# hosty-stack={stack.name}",
+            f"# hosty-service={service.name}",
+            f"{SPEC_HASH_MARKER}{spec_hash(stack, service)}",
+            "",
+            "[Unit]",
+            f"Description=hosty Nixpacks build {stack.name} — service {service.name}",
+            f"After={stack.name}-git-sync.service",
+            f"Requires={stack.name}-git-sync.service",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            f"WorkingDirectory={workspace}",
+            f"ExecStart=/usr/bin/env nixpacks build . --name {image_tag}",
+            "TimeoutStartSec=1800",
+            "",
+            "[Install]",
+            "WantedBy=default.target",
+        ]
+    )
+
+
 def unit_files(stack: StackSpec) -> dict[str, str]:
     """The COMPLETE desired unit-file set for a stack: what WriteUnits syncs
     the quadlet directory to (write these, delete any other file of this
@@ -195,7 +237,10 @@ def unit_files(stack: StackSpec) -> dict[str, str]:
     for service in stack.services:
         files[container_file_name(stack.name, service.name)] = container_unit(stack, service)
         if service.build_repo:
-            files[build_file_name(stack.name, service.name)] = build_unit(stack, service)
+            if service.build_tool == "nixpacks":
+                files[f"{stack.name}-{service.name}-nixpacks.service"] = nixpacks_build_unit(stack, service)
+            else:
+                files[build_file_name(stack.name, service.name)] = build_unit(stack, service)
             needs_git_sync = True
             
     if needs_git_sync:

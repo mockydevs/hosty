@@ -82,7 +82,7 @@ function BackupFailures() {
         },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load operations"));
-      return data;
+      return data; /* as any */
     },
     refetchInterval: 60_000,
   });
@@ -148,7 +148,7 @@ function ServiceCard({ service }: { service: ServiceStatus }) {
         params: { path: { unit: service.unit, action: "restart" } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Restart failed"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: () => {
       toast.success(`${serviceLabel(service.unit)} restarted`);
@@ -235,7 +235,7 @@ export function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/system/stats");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load system stats"));
-      return data;
+      return data; /* as any */
     },
     refetchInterval: 5_000,
   });
@@ -245,7 +245,7 @@ export function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/system/services");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load services"));
-      return data;
+      return data; /* as any */
     },
     refetchInterval: 10_000,
   });

@@ -2562,14 +2562,109 @@
         ]
       }
     },
+    "/api/sources/{source_id}": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Get Source",
+        "operationId": "get_source_api_sources__source_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Delete Source",
+        "operationId": "delete_source_api_sources__source_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sources/github/manifest": {
       "post": {
         "tags": [
           "sources"
         ],
         "summary": "Github Manifest",
-        "description": "Returns the manifest JSON needed to create a GitHub App.",
+        "description": "Returns the manifest JSON for creating a GitHub App via the manifest flow.",
         "operationId": "github_manifest_api_sources_github_manifest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManifestBody"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2577,6 +2672,16 @@
               "application/json": {
                 "schema": {
                   "title": "Response Github Manifest Api Sources Github Manifest Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2595,15 +2700,13 @@
           "sources"
         ],
         "summary": "Github Callback",
-        "description": "Receives the code from GitHub, exchanges it for app credentials, and saves the GitSource.",
+        "description": "Exchange a GitHub App manifest code for credentials and persist the GitSource.",
         "operationId": "github_callback_api_sources_github_callback_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
-                "type": "object",
-                "title": "Payload"
+                "$ref": "#/components/schemas/GitHubCallbackBody"
               }
             }
           },
@@ -2638,13 +2741,61 @@
         ]
       }
     },
+    "/api/sources/{source_id}/refresh-installation": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Refresh Installation",
+        "description": "Re-fetch the installation ID from GitHub for a source that is missing one.",
+        "operationId": "refresh_installation_api_sources__source_id__refresh_installation_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Refresh Installation Api Sources  Source Id  Refresh Installation Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sources/{source_id}/repos": {
       "get": {
         "tags": [
           "sources"
         ],
         "summary": "List Source Repos",
-        "description": "Fetches accessible repositories from the source.",
+        "description": "List repositories accessible to the GitHub App installation.",
         "operationId": "list_source_repos_api_sources__source_id__repos_get",
         "security": [
           {
@@ -2679,6 +2830,123 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sources/{source_id}/install-url": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Get Install Url",
+        "description": "Return a signed GitHub App installation URL (state token expires in 1 hour).",
+        "operationId": "get_install_url_api_sources__source_id__install_url_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Install Url Api Sources  Source Id  Install Url Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sources/github/install": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Github Install",
+        "description": "Handle GitHub's setup_url redirect after app installation or permission update.",
+        "operationId": "github_install_api_sources_github_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitHubInstallBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Github Install Api Sources Github Install Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/webhooks/github": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Github Webhook",
+        "description": "Receives GitHub App push events and triggers rebuilds for matching stacks.",
+        "operationId": "github_webhook_api_webhooks_github_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Github Webhook Api Webhooks Github Post"
                 }
               }
             }
@@ -3403,6 +3671,558 @@
                 "schema": {
                   "$ref": "#/components/schemas/StackOperationAccepted"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/config": {
+      "patch": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Update Stack Config",
+        "operationId": "update_stack_config_api_stacks__stack_id__config_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Update Stack Config Api Stacks  Stack Id  Config Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/tags": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Stack Tags",
+        "operationId": "get_stack_tags_api_stacks__stack_id__tags_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Add Stack Tag",
+        "operationId": "add_stack_tag_api_stacks__stack_id__tags_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/tags/{tag_id}": {
+      "delete": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Remove Stack Tag",
+        "operationId": "remove_stack_tag_api_stacks__stack_id__tags__tag_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tag Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/scheduled-tasks": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Scheduled Tasks",
+        "operationId": "get_scheduled_tasks_api_stacks__stack_id__scheduled_tasks_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Add Scheduled Task",
+        "operationId": "add_scheduled_task_api_stacks__stack_id__scheduled_tasks_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledTaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/scheduled-tasks/{task_id}": {
+      "delete": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Remove Scheduled Task",
+        "operationId": "remove_scheduled_task_api_stacks__stack_id__scheduled_tasks__task_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/deployments": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Deployments",
+        "operationId": "get_deployments_api_stacks__stack_id__deployments_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/deployments/{deployment_id}/rollback": {
+      "post": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Rollback Deployment",
+        "operationId": "rollback_deployment_api_stacks__stack_id__deployments__deployment_id__rollback_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          },
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Deployment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/webhook_info": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Webhook Info",
+        "operationId": "get_webhook_info_api_stacks__stack_id__webhook_info_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stacks/{stack_id}/metrics": {
+      "get": {
+        "tags": [
+          "stacks"
+        ],
+        "summary": "Get Stack Metrics",
+        "operationId": "get_stack_metrics_api_stacks__stack_id__metrics_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stack_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stack Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -5747,6 +6567,213 @@
         }
       }
     },
+    "/api/servers": {
+      "get": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "List Servers",
+        "operationId": "list_servers_api_servers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ServerResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Servers Api Servers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "Create Server",
+        "operationId": "create_server_api_servers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/servers/{server_id}": {
+      "get": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "Get Server",
+        "operationId": "get_server_api_servers__server_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "Delete Server",
+        "operationId": "delete_server_api_servers__server_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/servers/{server_id}/validate": {
+      "post": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "Validate Server",
+        "description": "SSH into the server (or probe localhost) and collect host information.",
+        "operationId": "validate_server_api_servers__server_id__validate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/backups": {
       "get": {
         "tags": [
@@ -6462,6 +7489,255 @@
           }
         }
       }
+    },
+    "/api/tags/": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "List Global Tags",
+        "operationId": "list_global_tags_api_tags__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GlobalTagResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Global Tags Api Tags  Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/tags/{tag_id}": {
+      "delete": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Delete Global Tag",
+        "operationId": "delete_global_tag_api_tags__tag_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tag Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shared-variables/": {
+      "get": {
+        "tags": [
+          "shared-variables"
+        ],
+        "summary": "List Shared Variables",
+        "operationId": "list_shared_variables_api_shared_variables__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SharedVariableResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Shared Variables Api Shared Variables  Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "shared-variables"
+        ],
+        "summary": "Create Shared Variable",
+        "operationId": "create_shared_variable_api_shared_variables__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharedVariableCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedVariableResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/shared-variables/{var_id}": {
+      "patch": {
+        "tags": [
+          "shared-variables"
+        ],
+        "summary": "Update Shared Variable",
+        "operationId": "update_shared_variable_api_shared_variables__var_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "var_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Var Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharedVariableUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedVariableResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shared-variables"
+        ],
+        "summary": "Delete Shared Variable",
+        "operationId": "delete_shared_variable_api_shared_variables__var_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "var_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Var Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6485,6 +7761,13 @@
             "type": "string",
             "maxLength": 64,
             "title": "Name"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes"
           }
         },
         "type": "object",
@@ -6502,6 +7785,10 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "scopes": {
+            "type": "string",
+            "title": "Scopes"
           },
           "created_at": {
             "type": "string",
@@ -6537,6 +7824,7 @@
         "required": [
           "id",
           "name",
+          "scopes",
           "created_at",
           "last_used_at",
           "expires_at"
@@ -7217,6 +8505,56 @@
         ],
         "title": "CloudflareZoneResponse"
       },
+      "ConfigUpdateRequest": {
+        "properties": {
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "auto_deploy": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Deploy"
+          },
+          "force_rebuild": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Rebuild"
+          }
+        },
+        "type": "object",
+        "title": "ConfigUpdateRequest"
+      },
       "ConnectionLinkResponse": {
         "properties": {
           "service": {
@@ -7403,6 +8741,27 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Inputs"
+          },
+          "server_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServerResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -7986,6 +9345,17 @@
             },
             "type": "array",
             "title": "Env Keys"
+          },
+          "compose_file_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compose File Content"
           }
         },
         "type": "object",
@@ -7996,6 +9366,99 @@
           "env_keys"
         ],
         "title": "GitAnalyzeResponse"
+      },
+      "GitHubCallbackBody": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "installation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installation Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "GitHubCallbackBody"
+      },
+      "GitHubInstallBody": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "title": "Installation Id"
+          },
+          "setup_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setup Action"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "installation_id"
+        ],
+        "title": "GitHubInstallBody"
+      },
+      "GlobalTagResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "usage_count": {
+            "type": "integer",
+            "title": "Usage Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "usage_count"
+        ],
+        "title": "GlobalTagResponse"
       },
       "HTTPValidationError": {
         "properties": {
@@ -8123,6 +9586,23 @@
         "type": "object",
         "title": "LoginResponse",
         "description": "Either tokens (no 2FA) or a short-lived challenge requiring a TOTP code."
+      },
+      "ManifestBody": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "ManifestBody"
       },
       "MyUsageResponse": {
         "properties": {
@@ -8965,6 +10445,225 @@
         ],
         "title": "ScheduleResponse"
       },
+      "ScheduledTaskCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "command": {
+            "type": "string",
+            "title": "Command"
+          },
+          "cron_schedule": {
+            "type": "string",
+            "title": "Cron Schedule"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "command",
+          "cron_schedule"
+        ],
+        "title": "ScheduledTaskCreate"
+      },
+      "ServerCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-zA-Z0-9 _\\-\\.]+$",
+            "title": "Name"
+          },
+          "hostname": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Hostname"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "default": 22
+          },
+          "ssh_user": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Ssh User",
+            "default": "root"
+          },
+          "ssh_key_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssh Key Id"
+          },
+          "is_localhost": {
+            "type": "boolean",
+            "title": "Is Localhost",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "hostname"
+        ],
+        "title": "ServerCreate"
+      },
+      "ServerResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "hostname": {
+            "type": "string",
+            "title": "Hostname"
+          },
+          "port": {
+            "type": "integer",
+            "title": "Port"
+          },
+          "ssh_user": {
+            "type": "string",
+            "title": "Ssh User"
+          },
+          "ssh_key_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssh Key Id"
+          },
+          "is_localhost": {
+            "type": "boolean",
+            "title": "Is Localhost"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "os_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Os Info"
+          },
+          "cpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Count"
+          },
+          "memory_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Mb"
+          },
+          "disk_free_gb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Free Gb"
+          },
+          "podman_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Podman Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "hostname",
+          "port",
+          "ssh_user",
+          "ssh_key_id",
+          "is_localhost",
+          "status",
+          "error_message",
+          "os_info",
+          "cpu_count",
+          "memory_mb",
+          "disk_free_gb",
+          "podman_version",
+          "created_at",
+          "last_checked_at"
+        ],
+        "title": "ServerResponse"
+      },
       "ServiceStatusResponse": {
         "properties": {
           "unit": {
@@ -9138,6 +10837,110 @@
         ],
         "title": "SetupStatusResponse"
       },
+      "SharedVariableCreate": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+            "title": "Key"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 4096,
+            "title": "Value"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "SharedVariableCreate"
+      },
+      "SharedVariableResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "value",
+          "description",
+          "created_at"
+        ],
+        "title": "SharedVariableResponse"
+      },
+      "SharedVariableUpdate": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "SharedVariableUpdate"
+      },
       "SiteResponse": {
         "properties": {
           "id": {
@@ -9276,6 +11079,28 @@
             "type": "string",
             "title": "App Id"
           },
+          "app_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Slug"
+          },
+          "installation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installation Id"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -9288,6 +11113,8 @@
           "name",
           "provider",
           "app_id",
+          "app_slug",
+          "installation_id",
           "created_at"
         ],
         "title": "SourceResponse"
@@ -9525,6 +11352,27 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Inputs"
+          },
+          "server_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServerResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -9787,6 +11635,19 @@
           "uptime_seconds"
         ],
         "title": "SystemStatsResponse"
+      },
+      "TagCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TagCreateRequest"
       },
       "TestSMTPRequest": {
         "properties": {

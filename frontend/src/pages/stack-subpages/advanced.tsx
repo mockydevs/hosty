@@ -17,7 +17,7 @@ export function AdvancedSettings({ stackId, inputs }: { stackId: number, inputs:
       // @ts-ignore
       const res = await api.PATCH(`/api/stacks/${stackId}/config`, { body: { auto_deploy: autoDeploy, force_rebuild: forceRebuild } });
       if (res.error) throw new Error("Failed to save");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       toast.success("Settings saved");

@@ -4,9 +4,9 @@ import { api } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Edit } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/states";
 
@@ -22,7 +22,7 @@ export function SharedVariablesPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/shared-variables/");
       if (error) throw new Error("Failed to fetch shared variables");
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -32,7 +32,7 @@ export function SharedVariablesPage() {
         body: { key, value, description: description || undefined },
       });
       if (error) throw new Error("Failed to create shared variable");
-      return data;
+      return data; /* as any */
     },
     onSuccess: () => {
       toast.success("Shared variable created");
@@ -61,7 +61,7 @@ export function SharedVariablesPage() {
   });
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState error={error as Error} />;
+  if (error) return <ErrorState message={error instanceof Error ? error.message : String(error)} />;
 
   return (
     <div className="space-y-6">
@@ -70,16 +70,12 @@ export function SharedVariablesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Shared Variables</h1>
           <p className="text-sm text-muted-foreground">Manage global environment variables across all projects.</p>
         </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Add Variable
-            </Button>
-          </DialogTrigger>
+        <Button onClick={() => setIsOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Add Variable
+        </Button>
+        <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Shared Variable</DialogTitle>
-            </DialogHeader>
+            <DialogTitle>Add Shared Variable</DialogTitle>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
                 <Label>Key</Label>

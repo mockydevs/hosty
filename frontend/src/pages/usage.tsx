@@ -34,7 +34,7 @@ function MyUsage({ month }: { month: string }) {
         params: { query: { month } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load usage"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -132,7 +132,7 @@ function AllClientsUsage({ month }: { month: string }) {
         params: { query: { month } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load usage"));
-      return data;
+      return data; /* as any */
     },
   });
 

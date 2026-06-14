@@ -59,6 +59,7 @@ class ServiceSpec:
     is_web: bool = False
     build_repo: str | None = None
     build_branch: str | None = None
+    build_tool: str = "dockerfile"
     # When True the published port binds 0.0.0.0 (reachable on the server's
     # public IP) instead of loopback-only — opt-in external access for e.g. a
     # database. Requires a published port.
@@ -188,6 +189,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "cpu_percent": service.cpu_percent,
         "build_repo": service.build_repo,
         "build_branch": service.build_branch,
+        "build_tool": service.build_tool,
         "network": stack.network,
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
     }

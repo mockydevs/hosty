@@ -10,7 +10,7 @@ export function DeploymentsTab({ stackId }: { stackId: number }) {
     queryKey: ["stacks", stackId, "deployments"],
     queryFn: async () => {
       // @ts-ignore
-      const res = await api.GET(`/api/stacks/${stackId}/deployments`);
+      const res = await api.GET(`/api/stacks/${stackId}/deployments` as any);
       return res.data || [];
     }
   });

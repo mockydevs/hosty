@@ -151,6 +151,7 @@ class GitAnalyzeResponse(BaseModel):
     has_compose: bool
     compose_services: list[str]
     env_keys: list[str]
+    compose_file_content: str | None = None
 
 
 class ConnectionLinkResponse(BaseModel):
@@ -285,6 +286,7 @@ async def analyze_git_repo(
             has_compose=result.has_compose,
             compose_services=result.compose_services,
             env_keys=result.env_keys,
+            compose_file_content=result.compose_file_content,
         )
     except ValueError as e:
         raise StackValidationError(str(e))

@@ -18,7 +18,7 @@ export function ResourceLimitsConfig({ stackId, inputs }: { stackId: number, inp
       // @ts-ignore
       const res = await api.PATCH(`/api/stacks/${stackId}/config`, { body: { cpu_limit: Number(cpu) || null, memory_limit: Number(mem) || null } });
       if (res.error) throw new Error("Failed to save limits");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       toast.success("Resource limits saved");

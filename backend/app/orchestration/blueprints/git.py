@@ -8,11 +8,12 @@ from app.orchestration.blueprints.base import ActionHandler, ActionResult, Alloc
 class GitBlueprintInputs(BaseModel):
     repo: str = Field(..., title="Repository URL", description="e.g. https://github.com/org/repo.git")
     branch: str = Field("main", title="Branch")
-    build_method: str = Field("dockerfile", title="Build Method", description="dockerfile or compose")
+    build_method: str = Field("dockerfile", title="Build Method", description="dockerfile, compose, or nixpacks")
     internal_port: int = Field(3000, title="Application Port")
     domain: str = Field("", title="Domain (optional)")
     env: dict[str, str] = Field(default_factory=dict)
     source_id: int | None = Field(None, title="Git Source ID")
+    compose_file_content: str = Field("", title="Compose File Content")
 
 
 class GitBlueprint(Blueprint):
@@ -32,13 +33,14 @@ class GitBlueprint(Blueprint):
     def render(self, name: str, inputs: BaseModel, alloc: Allocation) -> StackSpec:
         assert isinstance(inputs, GitBlueprintInputs)
 
-        # Basic Dockerfile rendering
-        if inputs.build_method == "dockerfile":
+        # Basic Dockerfile or Nixpacks rendering
+        if inputs.build_method in ("dockerfile", "nixpacks"):
             svc = ServiceSpec(
                 name="web",
                 image="hosty-build-target",
                 build_repo=inputs.repo,
                 build_branch=inputs.branch,
+                build_tool=inputs.build_method,
                 internal_port=inputs.internal_port,
                 env=tuple(sorted(inputs.env.items())),
                 is_web=True,
@@ -56,9 +58,51 @@ class GitBlueprint(Blueprint):
                 endpoints=tuple(endpoints),
             )
         
-        # Compose rendering logic is complex and ideally hooks into ComposeBlueprint parsing
-        # For now, we fallback to simple web service
-        raise NotImplementedError("Dynamic compose generation pending integration")
+        # Compose rendering
+        if inputs.build_method == "compose":
+            from app.orchestration.blueprints.compose import ComposeBlueprint
+            import tempfile
+            from pydantic import create_model
+            
+            if not inputs.compose_file_content:
+                raise SpecValidationError("Docker Compose build method requires a compose file")
+                
+            with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as f:
+                f.write(inputs.compose_file_content)
+                temp_path = f.name
+                
+            try:
+                compose_bp = ComposeBlueprint(Path(temp_path))
+                
+                # Create dummy inputs from the env dictionary to satisfy render substitution
+                DummyInputs = create_model('DummyInputs', **{k: (str, v) for k, v in inputs.env.items()})
+                dummy_inputs = DummyInputs(**inputs.env)
+                
+                spec = compose_bp.render(name, dummy_inputs, alloc)
+                
+                # Override build repository for services that should be built from this repo
+                # In standard Compose setups from Git, `build: .` is common. The ComposeBlueprint 
+                # will set build_repo="." or similar. We overwrite any non-None build_repo or 
+                # hosty-build-target image to use this Git repository.
+                new_services = []
+                for svc in spec.services:
+                    if svc.build_repo or svc.image == "hosty-build-target":
+                        # Dataclass requires replace
+                        from dataclasses import replace
+                        svc = replace(
+                            svc, 
+                            build_repo=inputs.repo, 
+                            build_branch=inputs.branch,
+                            build_tool="dockerfile"
+                        )
+                    new_services.append(svc)
+                
+                from dataclasses import replace
+                return replace(spec, services=tuple(new_services))
+            finally:
+                Path(temp_path).unlink(missing_ok=True)
+                
+        raise SpecValidationError(f"Unknown build method: {inputs.build_method}")
 
     async def rebuild(
         self,

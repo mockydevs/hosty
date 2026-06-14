@@ -41,7 +41,7 @@ function SslStatusCard({ site }: { site: Site }) {
         params: { path: { site_id: siteId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to check SSL"));
-      return data;
+      return data; /* as any */
     },
     staleTime: 60_000,
   });
@@ -52,7 +52,7 @@ function SslStatusCard({ site }: { site: Site }) {
         params: { path: { site_id: siteId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Certificate renewal failed"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["sites", siteId, "ssl"], data);
@@ -71,7 +71,7 @@ function SslStatusCard({ site }: { site: Site }) {
       if (error || !data) {
         throw new Error(apiErrorMessage(error, "Could not update the proxy setting"));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["sites"] });
@@ -164,7 +164,7 @@ function DnsCard({ site }: { site: Site }) {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dns/meta");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load DNS settings"));
-      return data;
+      return data; /* as any */
     },
     staleTime: 60_000,
   });
@@ -174,7 +174,7 @@ function DnsCard({ site }: { site: Site }) {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dns/zones");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load zones"));
-      return data;
+      return data; /* as any */
     },
     enabled: meta.data?.enabled === true,
   });
@@ -189,7 +189,7 @@ function DnsCard({ site }: { site: Site }) {
         },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to create the zone"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (zone) => {
       await queryClient.invalidateQueries({ queryKey: ["dns", "zones"] });
@@ -294,7 +294,7 @@ function DeleteSiteDialog({
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Delete failed (${response.status})`));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["sites"] });
@@ -359,7 +359,7 @@ export function SiteDetailPage() {
           status: response.status,
         });
       }
-      return data;
+      return data; /* as any */
     },
     enabled: Number.isFinite(siteId),
     retry: (count, err) => (err as { status?: number }).status !== 404 && count < 2,

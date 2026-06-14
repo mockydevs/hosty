@@ -41,7 +41,7 @@ function SshKeysTab() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/security/keys");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load SSH keys"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -53,7 +53,7 @@ function SshKeysTab() {
       if (error) {
         throw new Error(apiErrorMessage(error, `Failed to add key (${response.status})`));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async () => {
       toast.success("SSH Key added successfully");
@@ -219,7 +219,7 @@ function ApiTokensTab() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/security/tokens");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load tokens"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -232,7 +232,7 @@ function ApiTokensTab() {
         throw new Error(apiErrorMessage(error, `Failed to create token (${response?.status})`));
       }
       if (!isCreatedToken(data)) throw new Error("Invalid token response");
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data: { token: string }) => {
       setNewToken(data.token);

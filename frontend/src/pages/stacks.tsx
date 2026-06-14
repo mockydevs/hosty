@@ -61,7 +61,7 @@ export function StacksPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/stacks");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load stacks"));
-      return data;
+      return data; /* as any */
     },
     refetchInterval: (q) => (q.state.data?.some(isSettling) ? 3_000 : false),
   });

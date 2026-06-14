@@ -15,7 +15,7 @@ export function TagsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/tags/");
       if (error) throw new Error("Failed to fetch tags");
-      return data;
+      return data as any; /* as any */
     },
   });
 
@@ -36,7 +36,7 @@ export function TagsPage() {
   });
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState error={error as Error} />;
+  if (error) return <ErrorState message={error instanceof Error ? error.message : String(error)} />;
 
   return (
     <div className="space-y-6">
@@ -62,7 +62,7 @@ export function TagsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              tags.map((t) => (
+              tags.map((t: any) => (
                 <TableRow key={t.id}>
                   <TableCell>
                     <Badge variant="secondary">{t.name}</Badge>

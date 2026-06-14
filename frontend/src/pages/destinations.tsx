@@ -4,10 +4,9 @@ import { api } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Server as ServerIcon, Activity } from "lucide-react";
+import { Plus, Trash2, Server as ServerIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/states";
 
@@ -19,18 +18,18 @@ export function DestinationsPage() {
   const [port, setPort] = useState("22");
   const [sshUser, setSshUser] = useState("root");
 
-  const { data: servers, isLoading, error } = useQuery({
+  const { data: servers, isLoading, error, refetch } = useQuery({
     queryKey: ["servers"],
     queryFn: async () => {
-      const { data, error } = await api.GET("/api/servers/");
+      const { data, error } = await api.GET("/api/servers");
       if (error) throw new Error("Failed to fetch servers");
-      return data;
+      return data; /* as any */
     },
   });
 
   const createServer = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.POST("/api/servers/", {
+      const { data, error } = await api.POST("/api/servers", {
         body: {
           name,
           hostname,
@@ -41,7 +40,7 @@ export function DestinationsPage() {
         },
       });
       if (error) throw new Error("Failed to create server");
-      return data;
+      return data; /* as any */
     },
     onSuccess: () => {
       toast.success("Server added");
@@ -71,7 +70,7 @@ export function DestinationsPage() {
   });
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState error={error as Error} />;
+  if (error) return <ErrorState message={error instanceof Error ? error.message : String(error)} onRetry={refetch} />;
 
   return (
     <div className="space-y-6">
@@ -80,16 +79,12 @@ export function DestinationsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Destinations</h1>
           <p className="text-sm text-muted-foreground">Manage remote servers and deployment targets.</p>
         </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Add Server
-            </Button>
-          </DialogTrigger>
+        <Button onClick={() => setIsOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Add Server
+        </Button>
+        <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Remote Server</DialogTitle>
-            </DialogHeader>
+            <DialogTitle>Add Remote Server</DialogTitle>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
                 <Label>Name</Label>

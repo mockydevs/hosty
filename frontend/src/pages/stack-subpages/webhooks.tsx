@@ -13,8 +13,8 @@ export function WebhooksConfig({ stackId }: { stackId: number }) {
     queryKey: ["stacks", stackId, "webhook_info"],
     queryFn: async () => {
       // @ts-ignore
-      const res = await api.GET(`/api/stacks/${stackId}/webhook_info`);
-      return res.data;
+      const res = await api.GET(`/api/stacks/${stackId}/webhook_info` as any);
+      return res.data as any;
     }
   });
 

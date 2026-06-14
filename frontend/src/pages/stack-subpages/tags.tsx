@@ -18,7 +18,7 @@ export function TagsConfig({ stackId }: { stackId: number }) {
     queryKey: ["stacks", stackId, "tags"],
     queryFn: async () => {
       // @ts-ignore
-      const res = await api.GET(`/api/stacks/${stackId}/tags`);
+      const res = await api.GET(`/api/stacks/${stackId}/tags` as any);
       return res.data || [];
     }
   });
@@ -28,7 +28,7 @@ export function TagsConfig({ stackId }: { stackId: number }) {
       // @ts-ignore
       const res = await api.POST(`/api/stacks/${stackId}/tags`, { body: { name: newTag } });
       if (res.error) throw new Error("Failed to add tag");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       setNewTag("");
@@ -42,7 +42,7 @@ export function TagsConfig({ stackId }: { stackId: number }) {
       // @ts-ignore
       const res = await api.DELETE(`/api/stacks/${stackId}/tags/${tagId}`);
       if (res.error) throw new Error("Failed to remove tag");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stacks", stackId, "tags"] });

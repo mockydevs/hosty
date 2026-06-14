@@ -122,7 +122,7 @@ function CreateUserDialog({
       if (apiError || !data) {
         throw new Error(apiErrorMessage(apiError, `Create failed (${response.status})`));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -256,7 +256,7 @@ function EditQuotasDialog({
     queryFn: async () => {
       const { data, error } = await api.GET("/api/plans");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load plans"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -553,7 +553,7 @@ function UserRowActions({
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Impersonation failed (${response.status})`));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       await impersonate(data.access_token);
@@ -586,7 +586,7 @@ function UserRowActions({
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Reset failed (${response.status})`));
       }
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -646,7 +646,7 @@ export function UsersPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/users");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load users"));
-      return data;
+      return data; /* as any */
     },
   });
 

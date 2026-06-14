@@ -19,6 +19,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Boxes,
+  Plus,
+  Trash2,
   ChevronRight,
   Container,
   Copy,
@@ -49,9 +51,9 @@ type Step = "type" | "github_app" | "repository" | "public_git" | "docker_image"
 type DomainConfig = { base_domain: string | null; sslip_fallback_ip: string | null };
 
 const BUILD_PACKS = [
-  { value: "nixpacks", label: "Nixpacks", available: false, hint: "Auto-detect build settings" },
+  { value: "nixpacks", label: "Nixpacks", available: true, hint: "Auto-detect build settings" },
   { value: "dockerfile", label: "Dockerfile", available: true, hint: "Build from a Dockerfile" },
-  { value: "dockercompose", label: "Docker Compose", available: false, hint: "Multi-container setup" },
+  { value: "compose", label: "Docker Compose", available: true, hint: "Multi-container setup" },
 ];
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -245,6 +247,7 @@ function BuildPackSelect({
 }
 
 // ─── EnvVarsEditor ────────────────────────────────────────────────────────────
+
 function EnvVarsEditor({
   value,
   onChange,
@@ -252,7 +255,43 @@ function EnvVarsEditor({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const [devView, setDevView] = useState(true);
+  const [devView, setDevView] = useState(false);
+
+  // Parse KEY=value string into array of objects
+  const parseEnvVars = (str: string) => {
+    if (!str.trim()) return [{ key: "", value: "" }];
+    return str.split("\n").map((line) => {
+      const idx = line.indexOf("=");
+      if (idx === -1) return { key: line.trim(), value: "" };
+      return { key: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
+    });
+  };
+
+  const serializeEnvVars = (pairs: { key: string; value: string }[]) => {
+    return pairs
+      .filter((p) => p.key) // Only serialize rows with a key
+      .map((p) => `${p.key}=${p.value}`)
+      .join("\n");
+  };
+
+  const pairs = parseEnvVars(value);
+
+  const updatePair = (index: number, newKey: string, newValue: string) => {
+    const newPairs = [...pairs];
+    newPairs[index] = { key: newKey, value: newValue };
+    onChange(serializeEnvVars(newPairs));
+  };
+
+  const addPair = () => {
+    const newPairs = [...pairs, { key: "", value: "" }];
+    onChange(serializeEnvVars(newPairs));
+  };
+
+  const removePair = (index: number) => {
+    const newPairs = pairs.filter((_, i) => i !== index);
+    if (newPairs.length === 0) newPairs.push({ key: "", value: "" });
+    onChange(serializeEnvVars(newPairs));
+  };
 
   return (
     <div className="space-y-2">
@@ -274,25 +313,46 @@ function EnvVarsEditor({
           )}
         </button>
       </div>
+      
+      <p className="text-xs text-muted-foreground">
+        Stored encrypted and injected at runtime.
+      </p>
+
       {devView ? (
-        <>
-          <p className="text-xs text-muted-foreground">
-            One <code className="font-mono">KEY=value</code> per line. Stored encrypted and injected
-            at runtime.
-          </p>
-          <textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={"PORT=3000\nDATABASE_URL=postgres://...\nSECRET_KEY=..."}
-            rows={8}
-            spellCheck={false}
-            className="flex w-full rounded-md border border-input bg-background px-3 py-2.5 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
-          />
-        </>
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={"PORT=3000\nDATABASE_URL=postgres://...\nSECRET_KEY=..."}
+          rows={8}
+          spellCheck={false}
+          className="flex w-full rounded-md border border-input bg-background px-3 py-2.5 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y mt-2"
+        />
       ) : (
-        <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-          Key-value editor coming soon — use Developer view for now.
-        </p>
+        <div className="space-y-2 mt-2">
+          {pairs.map((p, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <Input 
+                value={p.key} 
+                onChange={(e) => updatePair(i, e.target.value, p.value)}
+                placeholder="KEY"
+                className="font-mono text-xs w-1/3"
+              />
+              <span className="text-muted-foreground">=</span>
+              <Input 
+                value={p.value} 
+                onChange={(e) => updatePair(i, p.key, e.target.value)}
+                placeholder="value"
+                className="font-mono text-xs flex-1"
+              />
+              <Button type="button" variant="ghost" size="icon" onClick={() => removePair(i)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={addPair} className="w-full mt-2">
+            <Plus className="mr-2 h-4 w-4" /> Add Variable
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -319,7 +379,8 @@ function ConfigureForm({
   serverError: string | null;
 }) {
   const [branch, setBranch] = useState(defaultBranch || "main");
-  const [buildPack, setBuildPack] = useState("dockerfile");
+  const [buildPack, setBuildPack] = useState("nixpacks");
+  const [composeContent, setComposeContent] = useState<string | null>(null);
   const [name, setName] = useState(() => slugFromRepo(repo));
   const [manualName, setManualName] = useState(false);
   const [port, setPort] = useState("3000");
@@ -331,6 +392,46 @@ function ConfigureForm({
   useEffect(() => {
     if (!manualName && repo) setName(slugFromRepo(repo));
   }, [repo, manualName]);
+
+  const analyze = useQuery({
+    queryKey: ["git-analyze", repo, branch],
+    enabled: !!repo && !!branch,
+    queryFn: async () => {
+      // @ts-ignore
+      const { data, error } = await api.POST("/api/stacks/git/analyze", {
+        body: { repo, branch },
+      });
+      if (error) return null;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (analyze.data) {
+      if (analyze.data.has_compose) {
+        setBuildPack("compose");
+        setComposeContent(analyze.data.compose_file_content || null);
+      } else if (analyze.data.has_dockerfile) {
+        setBuildPack("dockerfile");
+      } else {
+        setBuildPack("nixpacks");
+      }
+      
+      const envKeys = analyze.data.env_keys;
+      if (envKeys && envKeys.length > 0) {
+        setEnvVars((prev) => {
+          const currentKeys = new Set(prev.split("\n").map(l => (l.split("=")[0] || "").trim()).filter(Boolean));
+          let newEnv = prev;
+          for (const k of envKeys) {
+            if (!currentKeys.has(k)) {
+              newEnv += (newEnv ? "\n" : "") + `${k}=`;
+            }
+          }
+          return newEnv;
+        });
+      }
+    }
+  }, [analyze.data]);
 
   useEffect(() => {
     if (defaultBranch) setBranch(defaultBranch);
@@ -357,7 +458,7 @@ function ConfigureForm({
     }
 
     await onSubmit(slug, {
-      ...inputDefaults(blueprint.inputs_schema as JsonSchema),
+      ...inputDefaults((blueprint.inputs_schema || {}) as JsonSchema),
       repo: repo.trim(),
       branch: branch.trim() || "main",
       build_method: buildPack,
@@ -365,6 +466,7 @@ function ConfigureForm({
       domain: domain.trim(),
       env: parsedEnv,
       source_id: sourceId,
+      compose_file_content: composeContent || "",
     });
   };
 
@@ -659,7 +761,7 @@ export function StackCreatePage() {
       const { data, error } = await api.GET("/api/stacks/blueprints");
       if (error || !data)
         throw new Error(apiErrorMessage(error, "Failed to load deployment options"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -1172,7 +1274,7 @@ function DockerImageView({
     }
 
     await onSubmit(slug, {
-      ...inputDefaults(blueprint.inputs_schema as JsonSchema),
+      ...inputDefaults((blueprint.inputs_schema || {}) as JsonSchema),
       image: tag ? `${image.trim()}:${tag.trim()}` : image.trim(),
       internal_port: Number(port) || 3000,
       domain: domain.trim(),

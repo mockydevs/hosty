@@ -19,6 +19,7 @@ class GitAnalysisResult(BaseModel):
     has_compose: bool
     compose_services: list[str] = []
     env_keys: list[str] = []
+    compose_file_content: str | None = None
 
 
 @asynccontextmanager
@@ -98,10 +99,12 @@ async def analyze_repo(url: str, branch: str) -> GitAnalysisResult:
         services: list[str] = []
         env_keys: list[str] = []
 
+        compose_content = None
         if has_compose:
             try:
                 with open(compose_file, "r") as f:
-                    data = yaml.safe_load(f)
+                    compose_content = f.read()
+                    data = yaml.safe_load(compose_content)
                 
                 if isinstance(data, dict) and "services" in data:
                     services = list(data["services"].keys())
@@ -114,4 +117,5 @@ async def analyze_repo(url: str, branch: str) -> GitAnalysisResult:
             has_compose=has_compose,
             compose_services=services,
             env_keys=env_keys,
+            compose_file_content=compose_content,
         )

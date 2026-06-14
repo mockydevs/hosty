@@ -54,7 +54,7 @@ export function CloudflareZonesPage() {
       if (error || !data) {
         throw new Error(apiErrorMessage(error, "Failed to load Cloudflare zones"));
       }
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -303,7 +303,7 @@ export function CloudflareZonePage() {
         params: { path: { cf_zone_id: cfZoneId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load records"));
-      return data;
+      return data; /* as any */
     },
     enabled: cfZoneId.length > 0,
   });

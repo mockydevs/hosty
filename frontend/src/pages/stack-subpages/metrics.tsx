@@ -9,7 +9,7 @@ export function MetricsView({ stackId }: { stackId: number }) {
     queryKey: ["stacks", stackId, "metrics"],
     queryFn: async () => {
       // @ts-ignore
-      const res = await api.GET(`/api/stacks/${stackId}/metrics`);
+      const res = await api.GET(`/api/stacks/${stackId}/metrics` as any);
       return res.data || [];
     },
     refetchInterval: 5000,

@@ -3070,6 +3070,8 @@ export interface components {
             compose_services: string[];
             /** Env Keys */
             env_keys: string[];
+            /** Compose File Content */
+            compose_file_content?: string | null;
         };
         /** GitHubCallbackBody */
         GitHubCallbackBody: {

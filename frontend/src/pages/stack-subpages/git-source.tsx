@@ -18,7 +18,7 @@ export function GitSourceSettings({ stackId, inputs }: { stackId: number, inputs
       // @ts-ignore
       const res = await api.PATCH(`/api/stacks/${stackId}/config`, { body: { repo, branch } });
       if (res.error) throw new Error("Failed to save");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       toast.success("Git settings saved");

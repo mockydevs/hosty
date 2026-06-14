@@ -12,7 +12,7 @@ export function RollbackList({ stackId }: { stackId: number }) {
     queryKey: ["stacks", stackId, "deployments"],
     queryFn: async () => {
       // @ts-ignore
-      const res = await api.GET(`/api/stacks/${stackId}/deployments`);
+      const res = await api.GET(`/api/stacks/${stackId}/deployments` as any);
       return res.data || [];
     }
   });
@@ -22,7 +22,7 @@ export function RollbackList({ stackId }: { stackId: number }) {
       // @ts-ignore
       const res = await api.POST(`/api/stacks/${stackId}/deployments/${deploymentId}/rollback`);
       if (res.error) throw new Error("Failed to rollback");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       toast.success("Rollback initiated");

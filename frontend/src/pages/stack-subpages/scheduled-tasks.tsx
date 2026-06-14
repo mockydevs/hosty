@@ -20,7 +20,7 @@ export function ScheduledTasksList({ stackId }: { stackId: number }) {
     queryKey: ["stacks", stackId, "tasks"],
     queryFn: async () => {
       // @ts-ignore
-      const res = await api.GET(`/api/stacks/${stackId}/scheduled-tasks`);
+      const res = await api.GET(`/api/stacks/${stackId}/scheduled-tasks` as any);
       return res.data || [];
     }
   });
@@ -30,7 +30,7 @@ export function ScheduledTasksList({ stackId }: { stackId: number }) {
       // @ts-ignore
       const res = await api.POST(`/api/stacks/${stackId}/scheduled-tasks`, { body: { name, command, cron_schedule: cron } });
       if (res.error) throw new Error("Failed to add task");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       setName(""); setCommand(""); setCron("");
@@ -44,7 +44,7 @@ export function ScheduledTasksList({ stackId }: { stackId: number }) {
       // @ts-ignore
       const res = await api.DELETE(`/api/stacks/${stackId}/scheduled-tasks/${id}`);
       if (res.error) throw new Error("Failed to remove task");
-      return res.data;
+      return res.data as any;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stacks", stackId, "tasks"] });

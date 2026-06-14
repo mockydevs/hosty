@@ -46,7 +46,7 @@ function useDnsMeta() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dns/meta");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load DNS settings"));
-      return data;
+      return data; /* as any */
     },
   });
 }
@@ -71,7 +71,7 @@ function SitesWithoutZones({
     queryFn: async () => {
       const { data, error } = await api.GET("/api/sites");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load sites"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -85,7 +85,7 @@ function SitesWithoutZones({
         },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to create the zone"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (zone) => {
       await queryClient.invalidateQueries({ queryKey: ["dns", "zones"] });
@@ -160,7 +160,7 @@ export function DnsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dns/zones");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load zones"));
-      return data;
+      return data; /* as any */
     },
   });
 
@@ -297,7 +297,7 @@ function CloudflarePushButton({ zoneId }: { zoneId: string }) {
         params: { path: { zone_id: zoneId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Cloudflare push failed"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: (result) => {
       toast.success(
@@ -326,7 +326,7 @@ function CloudflarePullButton({ zoneId }: { zoneId: string }) {
         params: { path: { zone_id: zoneId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Cloudflare import failed"));
-      return data;
+      return data; /* as any */
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["dns", "zone", zoneId] });
@@ -356,7 +356,7 @@ function DelegationBanner({ zoneId }: { zoneId: string }) {
         params: { path: { zone_id: zoneId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Delegation check failed"));
-      return data;
+      return data; /* as any */
     },
     staleTime: 5 * 60_000,
     retry: 1,
@@ -397,7 +397,7 @@ export function DnsZonePage() {
         params: { path: { zone_id: zoneId } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load the zone"));
-      return data;
+      return data; /* as any */
     },
     enabled: zoneId.length > 0,
   });
