@@ -156,6 +156,8 @@ class ComposeBlueprint:
             subs[k] = v
         for k, v in dict(inputs).items():
             subs[k] = str(v)
+            
+        shared_vars_env = [f"{k}={v}" for k, v in alloc.shared_variables.items()]
 
         for svc_name, svc_data in services_data.items():
             image = _substitute(svc_data.get("image", "hosty-build-target"), subs)
@@ -195,6 +197,11 @@ class ComposeBlueprint:
                         env_vars[item] = subs.get(item, "")
             elif isinstance(raw_env, dict):
                 env_vars = dict(raw_env)
+                
+            # Inject global shared variables (overriding if they exist, or maybe shouldn't override?)
+            for gk, gv in alloc.shared_variables.items():
+                if gk not in env_vars:
+                    env_vars[gk] = gv
 
             env_vars = {str(ek): _substitute(ev, subs) for ek, ev in env_vars.items()}
 

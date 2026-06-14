@@ -280,7 +280,13 @@ async def allocate(
 ) -> Allocation:
     """Generated secrets and loopback IP for one render."""
     secrets = {name: generate_secret() for name in blueprint.secrets_needed(inputs)}
-    return Allocation(tenant=tenant_for(stack.owner_id), loopback_ip=stack.loopback_ip, secrets=secrets)
+    
+    from sqlalchemy import select
+    from app.db.models import SharedVariable
+    sv_res = await db.execute(select(SharedVariable))
+    shared_vars = {sv.key: sv.value for sv in sv_res.scalars().all()}
+    
+    return Allocation(tenant=tenant_for(stack.owner_id), loopback_ip=stack.loopback_ip, secrets=secrets, shared_variables=shared_vars)
 
 
 async def persist_rendered(

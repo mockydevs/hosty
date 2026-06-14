@@ -232,6 +232,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(backups.router, prefix="/api/backups", tags=["backups"])
     app.include_router(backups.site_router, prefix="/api/sites", tags=["backups"])
     app.include_router(backups.stack_router, prefix="/api/stacks", tags=["backups"])
+    
+    from app.api.routes import tags, shared_variables
+    app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
+    app.include_router(shared_variables.router, prefix="/api/shared-variables", tags=["shared-variables"])
 
     dist = Path(settings.frontend_dist)
     if dist.is_dir():  # mounted last so /api always wins

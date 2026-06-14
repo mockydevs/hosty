@@ -515,3 +515,11 @@ class Deployment(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False) # e.g., 'success', 'failed', 'running'
     message: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+class SharedVariable(Base):
+    __tablename__ = "shared_variables"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(String(4096), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

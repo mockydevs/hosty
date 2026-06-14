@@ -934,6 +934,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source */
+        get: operations["get_source_api_sources__source_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Source */
+        delete: operations["delete_source_api_sources__source_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources/github/manifest": {
         parameters: {
             query?: never;
@@ -945,7 +963,7 @@ export interface paths {
         put?: never;
         /**
          * Github Manifest
-         * @description Returns the manifest JSON needed to create a GitHub App.
+         * @description Returns the manifest JSON for creating a GitHub App via the manifest flow.
          */
         post: operations["github_manifest_api_sources_github_manifest_post"];
         delete?: never;
@@ -965,9 +983,29 @@ export interface paths {
         put?: never;
         /**
          * Github Callback
-         * @description Receives the code from GitHub, exchanges it for app credentials, and saves the GitSource.
+         * @description Exchange a GitHub App manifest code for credentials and persist the GitSource.
          */
         post: operations["github_callback_api_sources_github_callback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}/refresh-installation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Installation
+         * @description Re-fetch the installation ID from GitHub for a source that is missing one.
+         */
+        post: operations["refresh_installation_api_sources__source_id__refresh_installation_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -983,11 +1021,71 @@ export interface paths {
         };
         /**
          * List Source Repos
-         * @description Fetches accessible repositories from the source.
+         * @description List repositories accessible to the GitHub App installation.
          */
         get: operations["list_source_repos_api_sources__source_id__repos_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}/install-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Install Url
+         * @description Return a signed GitHub App installation URL (state token expires in 1 hour).
+         */
+        get: operations["get_install_url_api_sources__source_id__install_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/github/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Github Install
+         * @description Handle GitHub's setup_url redirect after app installation or permission update.
+         */
+        post: operations["github_install_api_sources_github_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webhooks/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Github Webhook
+         * @description Receives GitHub App push events and triggers rebuilds for matching stacks.
+         */
+        post: operations["github_webhook_api_webhooks_github_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1216,6 +1314,161 @@ export interface paths {
          *     loopback-only. Flips the unit's PublishPort and re-converges.
          */
         put: operations["set_service_exposure_api_stacks__stack_id__services__service_name__expose_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Stack Config */
+        patch: operations["update_stack_config_api_stacks__stack_id__config_patch"];
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stack Tags */
+        get: operations["get_stack_tags_api_stacks__stack_id__tags_get"];
+        put?: never;
+        /** Add Stack Tag */
+        post: operations["add_stack_tag_api_stacks__stack_id__tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Stack Tag */
+        delete: operations["remove_stack_tag_api_stacks__stack_id__tags__tag_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/scheduled-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scheduled Tasks */
+        get: operations["get_scheduled_tasks_api_stacks__stack_id__scheduled_tasks_get"];
+        put?: never;
+        /** Add Scheduled Task */
+        post: operations["add_scheduled_task_api_stacks__stack_id__scheduled_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/scheduled-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Scheduled Task */
+        delete: operations["remove_scheduled_task_api_stacks__stack_id__scheduled_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Deployments */
+        get: operations["get_deployments_api_stacks__stack_id__deployments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/deployments/{deployment_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback Deployment */
+        post: operations["rollback_deployment_api_stacks__stack_id__deployments__deployment_id__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/webhook_info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Webhook Info */
+        get: operations["get_webhook_info_api_stacks__stack_id__webhook_info_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{stack_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stack Metrics */
+        get: operations["get_stack_metrics_api_stacks__stack_id__metrics_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1959,6 +2212,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Servers */
+        get: operations["list_servers_api_servers_get"];
+        put?: never;
+        /** Create Server */
+        post: operations["create_server_api_servers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/servers/{server_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Server */
+        get: operations["get_server_api_servers__server_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Server */
+        delete: operations["delete_server_api_servers__server_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/servers/{server_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Server
+         * @description SSH into the server (or probe localhost) and collect host information.
+         */
+        post: operations["validate_server_api_servers__server_id__validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/backups": {
         parameters: {
             query?: never;
@@ -2161,6 +2470,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tags/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Global Tags */
+        get: operations["list_global_tags_api_tags__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Global Tag */
+        delete: operations["delete_global_tag_api_tags__tag_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shared-variables/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Shared Variables */
+        get: operations["list_shared_variables_api_shared_variables__get"];
+        put?: never;
+        /** Create Shared Variable */
+        post: operations["create_shared_variable_api_shared_variables__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shared-variables/{var_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Shared Variable */
+        delete: operations["delete_shared_variable_api_shared_variables__var_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Shared Variable */
+        patch: operations["update_shared_variable_api_shared_variables__var_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2174,6 +2553,8 @@ export interface components {
         ApiTokenCreate: {
             /** Name */
             name: string;
+            /** Scopes */
+            scopes?: string[];
         };
         /** ApiTokenResponse */
         ApiTokenResponse: {
@@ -2181,6 +2562,8 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /** Scopes */
+            scopes: string;
             /**
              * Created At
              * Format: date-time
@@ -2412,6 +2795,17 @@ export interface components {
             /** Name Servers */
             name_servers: string[];
         };
+        /** ConfigUpdateRequest */
+        ConfigUpdateRequest: {
+            /** Repo */
+            repo?: string | null;
+            /** Branch */
+            branch?: string | null;
+            /** Auto Deploy */
+            auto_deploy?: boolean | null;
+            /** Force Rebuild */
+            force_rebuild?: boolean | null;
+        };
         /** ConnectionLinkResponse */
         ConnectionLinkResponse: {
             /** Service */
@@ -2475,6 +2869,9 @@ export interface components {
             inputs?: {
                 [key: string]: unknown;
             };
+            /** Server Id */
+            server_id?: number | null;
+            server?: components["schemas"]["ServerResponse"] | null;
         };
         /** CreateUserRequest */
         CreateUserRequest: {
@@ -2674,6 +3071,33 @@ export interface components {
             /** Env Keys */
             env_keys: string[];
         };
+        /** GitHubCallbackBody */
+        GitHubCallbackBody: {
+            /** Code */
+            code: string;
+            /** Installation Id */
+            installation_id?: string | null;
+            /** Name */
+            name?: string | null;
+        };
+        /** GitHubInstallBody */
+        GitHubInstallBody: {
+            /** Installation Id */
+            installation_id: string;
+            /** Setup Action */
+            setup_action?: string | null;
+            /** State */
+            state?: string | null;
+        };
+        /** GlobalTagResponse */
+        GlobalTagResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Usage Count */
+            usage_count: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2728,6 +3152,11 @@ export interface components {
             token_type: string;
             /** Expires In */
             expires_in?: number | null;
+        };
+        /** ManifestBody */
+        ManifestBody: {
+            /** Name */
+            name?: string | null;
         };
         /** MyUsageResponse */
         MyUsageResponse: {
@@ -3030,6 +3459,77 @@ export interface components {
             /** Last Run At */
             last_run_at: string | null;
         };
+        /** ScheduledTaskCreate */
+        ScheduledTaskCreate: {
+            /** Name */
+            name: string;
+            /** Command */
+            command: string;
+            /** Cron Schedule */
+            cron_schedule: string;
+        };
+        /** ServerCreate */
+        ServerCreate: {
+            /** Name */
+            name: string;
+            /** Hostname */
+            hostname: string;
+            /**
+             * Port
+             * @default 22
+             */
+            port: number;
+            /**
+             * Ssh User
+             * @default root
+             */
+            ssh_user: string;
+            /** Ssh Key Id */
+            ssh_key_id?: number | null;
+            /**
+             * Is Localhost
+             * @default false
+             */
+            is_localhost: boolean;
+        };
+        /** ServerResponse */
+        ServerResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Hostname */
+            hostname: string;
+            /** Port */
+            port: number;
+            /** Ssh User */
+            ssh_user: string;
+            /** Ssh Key Id */
+            ssh_key_id: number | null;
+            /** Is Localhost */
+            is_localhost: boolean;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message: string | null;
+            /** Os Info */
+            os_info: string | null;
+            /** Cpu Count */
+            cpu_count: number | null;
+            /** Memory Mb */
+            memory_mb: number | null;
+            /** Disk Free Gb */
+            disk_free_gb: number | null;
+            /** Podman Version */
+            podman_version: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Checked At */
+            last_checked_at: string | null;
+        };
         /** ServiceStatusResponse */
         ServiceStatusResponse: {
             /** Unit */
@@ -3104,6 +3604,38 @@ export interface components {
             /** Setup Required */
             setup_required: boolean;
         };
+        /** SharedVariableCreate */
+        SharedVariableCreate: {
+            /** Key */
+            key: string;
+            /** Value */
+            value: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** SharedVariableResponse */
+        SharedVariableResponse: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Value */
+            value: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SharedVariableUpdate */
+        SharedVariableUpdate: {
+            /** Value */
+            value?: string | null;
+            /** Description */
+            description?: string | null;
+        };
         /** SiteResponse */
         SiteResponse: {
             /** Id */
@@ -3159,6 +3691,10 @@ export interface components {
             provider: string;
             /** App Id */
             app_id: string;
+            /** App Slug */
+            app_slug: string | null;
+            /** Installation Id */
+            installation_id: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3272,6 +3808,9 @@ export interface components {
             inputs: {
                 [key: string]: unknown;
             };
+            /** Server Id */
+            server_id?: number | null;
+            server?: components["schemas"]["ServerResponse"] | null;
         };
         /** StackServiceResponse */
         StackServiceResponse: {
@@ -3341,6 +3880,11 @@ export interface components {
             disk_percent: number;
             /** Uptime Seconds */
             uptime_seconds: number;
+        };
+        /** TagCreateRequest */
+        TagCreateRequest: {
+            /** Name */
+            name: string;
         };
         /** TestSMTPRequest */
         TestSMTPRequest: {
@@ -5521,11 +6065,13 @@ export interface operations {
             };
         };
     };
-    github_manifest_api_sources_github_manifest_post: {
+    get_source_api_sources__source_id__get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                source_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5536,7 +6082,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["SourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_source_api_sources__source_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_manifest_api_sources_github_manifest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManifestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5550,11 +6167,40 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
+                "application/json": components["schemas"]["GitHubCallbackBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
+    };
+    refresh_installation_api_sources__source_id__refresh_installation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5603,6 +6249,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_install_url_api_sources__source_id__install_url_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_install_api_sources_github_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GitHubInstallBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_webhook_api_webhooks_github_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -6035,6 +6765,364 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StackOperationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_stack_config_api_stacks__stack_id__config_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stack_tags_api_stacks__stack_id__tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_stack_tag_api_stacks__stack_id__tags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_stack_tag_api_stacks__stack_id__tags__tag_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scheduled_tasks_api_stacks__stack_id__scheduled_tasks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_scheduled_task_api_stacks__stack_id__scheduled_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledTaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_scheduled_task_api_stacks__stack_id__scheduled_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deployments_api_stacks__stack_id__deployments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_deployment_api_stacks__stack_id__deployments__deployment_id__rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+                deployment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_webhook_info_api_stacks__stack_id__webhook_info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stack_metrics_api_stacks__stack_id__metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -7572,6 +8660,150 @@ export interface operations {
             };
         };
     };
+    list_servers_api_servers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerResponse"][];
+                };
+            };
+        };
+    };
+    create_server_api_servers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_server_api_servers__server_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_server_api_servers__server_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_server_api_servers__server_id__validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_all_backups_api_backups_get: {
         parameters: {
             query?: never;
@@ -8021,6 +9253,176 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_global_tags_api_tags__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalTagResponse"][];
+                };
+            };
+        };
+    };
+    delete_global_tag_api_tags__tag_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_shared_variables_api_shared_variables__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedVariableResponse"][];
+                };
+            };
+        };
+    };
+    create_shared_variable_api_shared_variables__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedVariableCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedVariableResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_shared_variable_api_shared_variables__var_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                var_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_shared_variable_api_shared_variables__var_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                var_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedVariableUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedVariableResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

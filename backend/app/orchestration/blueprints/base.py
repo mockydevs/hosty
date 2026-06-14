@@ -31,6 +31,7 @@ class Allocation:
     tenant: str
     loopback_ip: str
     secrets: dict[str, str] = field(default_factory=dict)
+    shared_variables: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
