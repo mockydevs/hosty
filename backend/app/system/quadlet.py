@@ -125,6 +125,10 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         f"ContainerName={stack.name}-{service.name}",
         f"Image={image}",
         f"Network={network_file_name(stack.name)}",
+        # Alias = compose service name so containers reach each other by
+        # short name (e.g. "postgres") not full name ("stack-abc-postgres").
+        # Maps to podman run --network-alias; matches Docker Compose DNS.
+        f"NetworkAlias={service.name}",
         # Hardening — unconditional.
         "NoNewPrivileges=true",
         "LogDriver=journald",
