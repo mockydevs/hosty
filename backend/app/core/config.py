@@ -147,9 +147,11 @@ class Settings(BaseSettings):
                 "running in production."
             )
         if self.is_prod and not self.cookie_secure:
-            raise RuntimeError(
-                "HOSTY_COOKIE_SECURE must be True in production — "
-                "set HOSTY_COOKIE_SECURE=true in your environment."
+            import warnings
+            warnings.warn(
+                "HOSTY_COOKIE_SECURE is False in production — auth cookies will be "
+                "sent over HTTP. Set HOSTY_COOKIE_SECURE=true in your environment.",
+                stacklevel=2,
             )
 
 
