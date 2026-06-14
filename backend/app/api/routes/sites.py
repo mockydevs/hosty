@@ -336,13 +336,17 @@ class OperationSummaryResponse(BaseModel):
 
 
 async def _operation_visible(db: AsyncSession, user: User, op: Operation) -> bool:
-    """Clients only see operations on their own sites (404 otherwise)."""
+    """Clients only see operations on their own sites/stacks (404 otherwise)."""
     if is_admin(user):
         return True
-    if op.site_id is None:
-        return False
-    site = await db.get(Site, op.site_id)
-    return site is not None and site.owner_id == user.id
+    if op.site_id is not None:
+        site = await db.get(Site, op.site_id)
+        return site is not None and site.owner_id == user.id
+    if op.stack_id is not None:
+        from app.db.models import Stack
+        stack = await db.get(Stack, op.stack_id)
+        return stack is not None and stack.owner_id == user.id
+    return False
 
 
 @operations_router.get("", response_model=list[OperationSummaryResponse])

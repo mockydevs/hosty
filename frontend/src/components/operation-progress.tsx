@@ -24,6 +24,21 @@ function stepIcon(status: string) {
   return STEP_ICONS[status as keyof typeof STEP_ICONS] ?? CircleDashed;
 }
 
+function opTitle(kind: string, domain: string): string {
+  const labels: Record<string, string> = {
+    create_stack: "Deploying",
+    delete_stack: "Removing",
+    converge_stack: "Redeploying",
+    webhook_rebuild: "Rebuilding",
+    create_site: "Provisioning",
+    delete_site: "Deleting",
+    backup_stack: "Backing up",
+    restore_stack: "Restoring",
+  };
+  const label = labels[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return `${label} ${domain}`;
+}
+
 export function OperationProgress({
   operationId,
   onFinished,
@@ -58,9 +73,7 @@ export function OperationProgress({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">
-          {op.kind === "create_site" ? "Provisioning" : "Deleting"} {op.domain}
-        </CardTitle>
+        <CardTitle className="text-base">{opTitle(op.kind, op.domain)}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         <ol className="space-y-1.5">

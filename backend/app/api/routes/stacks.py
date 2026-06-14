@@ -874,6 +874,39 @@ async def remove_scheduled_task(
     return {"status": "ok"}
 
 
+@router.get("/{stack_id}/operations")
+async def list_stack_operations(
+    stack_id: int,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Recent operations for a stack, newest first."""
+    import json as _json
+    await fetch_owned_stack(db, user, stack_id)
+    rows = (
+        await db.execute(
+            select(Operation)
+            .where(Operation.stack_id == stack_id)
+            .order_by(Operation.id.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": op.id,
+            "kind": op.kind,
+            "domain": op.domain,
+            "status": op.status,
+            "steps": _json.loads(op.steps_json),
+            "error": op.error,
+            "created_at": op.created_at.isoformat(),
+            "finished_at": op.finished_at.isoformat() if op.finished_at else None,
+        }
+        for op in rows
+    ]
+
+
 @router.get("/{stack_id}/deployments")
 async def get_deployments(
     stack_id: int,

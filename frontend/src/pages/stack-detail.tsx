@@ -1017,11 +1017,11 @@ export function StackDetailPage() {
   const { stackId } = useParams();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const [operationId, setOperationId] = useState<number | null>(
-    (location.state as { operationId?: number } | null)?.operationId ?? null,
-  );
+  const initialOpId = (location.state as { operationId?: number } | null)?.operationId ?? null;
+  const [operationId, setOperationId] = useState<number | null>(initialOpId);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("Configuration");
+  // Auto-switch to Deployments tab when arriving from a deploy action
+  const [activeTab, setActiveTab] = useState(initialOpId != null ? "Deployments" : "Configuration");
   const [activeSubTab, setActiveSubTab] = useState("General");
 
   const id = Number(stackId);
@@ -1178,11 +1178,12 @@ export function StackDetailPage() {
               {data.error_message}
             </p>
           )}
-          {operationId !== null && (
+          {operationId !== null && activeTab !== "Deployments" && (
             <OperationProgress
               operationId={operationId}
               onFinished={async (op) => {
                 await queryClient.invalidateQueries({ queryKey: ["stacks"] });
+                await queryClient.invalidateQueries({ queryKey: ["stacks", id, "operations"] });
                 if (op.status === "succeeded") setOperationId(null);
               }}
             />
@@ -1324,7 +1325,7 @@ export function StackDetailPage() {
 
       {activeTab === "Deployments" && (
         <div className="mt-5">
-          <DeploymentsTab stackId={Number(id)} />
+          <DeploymentsTab stackId={Number(id)} activeOperationId={operationId} />
         </div>
       )}
 
