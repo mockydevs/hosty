@@ -22,7 +22,10 @@ IMAGE_RE = re.compile(
     r"(?::[a-zA-Z0-9._-]{1,128})?"  # optional :tag
     r"(?:@sha256:[a-f0-9]{64})?$"  # optional @digest
 )
-ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Allows dots as interior characters to support apps like Cloudreve that
+# use dotted env var names (CR_CONF_Database.Host).  Dots are safe in
+# Podman env files; POSIX shells don't expand them specially.
+ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 # Derived object names (containers, networks, unit base names).
 OBJECT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
 # User-chosen short names (stacks, services, volumes): strict slug.

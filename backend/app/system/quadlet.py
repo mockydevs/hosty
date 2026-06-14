@@ -137,6 +137,8 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         bind = "0.0.0.0" if service.exposed else stack.loopback_ip
         host_port = derive_host_port(service.internal_port)
         lines.append(f"PublishPort={bind}:{host_port}:{service.internal_port}")
+    if service.command:
+        lines.append(f"Exec={' '.join(service.command)}")
     if service.env:
         lines.append(f"EnvironmentFile={env_file_path(stack.tenant, stack.name, service.name)}")
     # A volume mounted by exactly one service across the stack gets `:U` so

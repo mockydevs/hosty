@@ -23,7 +23,7 @@ services:
     - CR_CONF_Database.Host=postgres
     - CR_CONF_Database.User=${postgres_user}
     - CR_CONF_Database.Password=${postgres_password}
-    - CR_CONF_Database.Name=${POSTGRES_DB:-cloudreve-db}
+    - CR_CONF_Database.Name=cloudreve-db
     - CR_CONF_Database.Port=5432
     - CR_CONF_Redis.Server=redis:6379
     - CR_CONF_Redis.Password=${redis_password}

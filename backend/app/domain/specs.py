@@ -68,6 +68,9 @@ class ServiceSpec:
     # Quadlet emits After=/Requires= directives; combined with Restart=always
     # this handles service_healthy ordering without a separate health-probe unit.
     depends_on: tuple[str, ...] = ()
+    # Override the container image's default command (compose `command:`).
+    # Each element is one shell word; Quadlet emits Exec= with space-joining.
+    command: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
@@ -204,6 +207,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "network": stack.network,
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
         "depends_on": list(service.depends_on),
+        "command": list(service.command),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:32]

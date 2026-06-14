@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 import yaml
@@ -229,6 +230,15 @@ class ComposeBlueprint:
             else:
                 dep_names = ()
 
+            # Parse command — supports string ("cmd arg1") and list forms.
+            raw_cmd = svc_data.get("command")
+            if isinstance(raw_cmd, list):
+                cmd_tuple: tuple[str, ...] = tuple(_substitute(str(w), subs) for w in raw_cmd)
+            elif isinstance(raw_cmd, str):
+                cmd_tuple = tuple(shlex.split(_substitute(raw_cmd, subs)))
+            else:
+                cmd_tuple = ()
+
             services.append(
                 ServiceSpec(
                     name=svc_name,
@@ -241,6 +251,7 @@ class ComposeBlueprint:
                     memory_mb=int(getattr(inputs, "memory_limit")) if hasattr(inputs, "memory_limit") and getattr(inputs, "memory_limit") else None,
                     cpu_percent=int(getattr(inputs, "cpu_limit")) if hasattr(inputs, "cpu_limit") and getattr(inputs, "cpu_limit") else None,
                     depends_on=dep_names,
+                    command=cmd_tuple,
                 )
             )
 
