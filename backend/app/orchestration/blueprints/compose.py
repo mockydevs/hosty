@@ -236,10 +236,11 @@ class ComposeBlueprint:
 
             for vol in svc_data.get("volumes", []):
                 if isinstance(vol, dict):
-                    if vol.get("type", "volume") != "volume":
-                        raise SpecValidationError(
-                            f"Service {svc_name!r}: only named volumes are supported"
-                        )
+                    vol_type = vol.get("type", "volume")
+                    if vol_type != "volume":
+                        # bind/tmpfs/npipe mounts are skipped — rootless Podman
+                        # does not support arbitrary host bind mounts safely.
+                        continue
                     v_name, v_path = vol.get("source"), vol.get("target")
                 else:
                     parts = str(vol).split(":", 2)
@@ -248,6 +249,11 @@ class ComposeBlueprint:
                             f"Service {svc_name!r} has an invalid volume mapping {vol!r}"
                         )
                     v_name, v_path = parts[0], parts[1]
+                    # Host bind mounts start with / or ./ — skip silently.
+                    if str(v_name).startswith("/") or str(v_name).startswith("."):
+                        continue
+                if not v_name or not v_path:
+                    continue
                 volumes.append(
                     VolumeSpec(name=str(v_name), service=svc_name, mount_path=str(v_path))
                 )
