@@ -23,6 +23,11 @@ from app.system.tenants import validate_tenant_username
 
 UNIT_SUFFIXES = (".build", ".container", ".network", ".service")
 
+# The podman quadlet user-generator only processes these extensions from the
+# quadlet directory.  All other unit files (plain .service) must go to the
+# tenant's ~/.config/systemd/user/ so the user manager actually loads them.
+_QUADLET_SUFFIXES = frozenset((".container", ".network", ".volume", ".pod", ".kube", ".build"))
+
 
 class StackHostError(RuntimeError):
     pass
@@ -74,12 +79,9 @@ def _stack_files_on_disk(unit_dir: Path, stack: str) -> dict[str, str]:
     return found
 
 
-def sync_units(uid: int, stack: str, desired: dict[str, str]) -> bool:
-    """Make the unit dir hold EXACTLY `desired` for this stack: write every
-    desired file, delete stack-owned files not in the set. Returns True when
-    anything changed (caller decides whether daemon-reload is needed)."""
-    validate_slug(stack, what="stack name")
-    unit_dir = Path(quadlet.unit_dir(uid))
+def _sync_dir(unit_dir: Path, stack: str, desired: dict[str, str]) -> bool:
+    """Sync one directory to hold exactly the desired subset of files for this
+    stack. Creates the directory if absent. Returns True if anything changed."""
     unit_dir.mkdir(parents=True, exist_ok=True)
     existing = _stack_files_on_disk(unit_dir, stack)
     changed = False
@@ -94,35 +96,63 @@ def sync_units(uid: int, stack: str, desired: dict[str, str]) -> bool:
     return changed
 
 
-def remove_units(uid: int, stack: str) -> bool:
+def sync_units(uid: int, stack: str, tenant: str, desired: dict[str, str]) -> bool:
+    """Make the correct unit directories hold EXACTLY `desired` for this stack.
+
+    Plain `.service` files go to ~/.config/systemd/user/ (where the user
+    manager loads them); quadlet files (.container, .network, …) go to the
+    root-managed quadlet directory.  Returns True when anything changed.
+    """
+    validate_slug(stack, what="stack name")
+    validate_tenant_username(tenant)
+
+    quadlet_files = {f: c for f, c in desired.items() if Path(f).suffix in _QUADLET_SUFFIXES}
+    service_files = {f: c for f, c in desired.items() if Path(f).suffix not in _QUADLET_SUFFIXES}
+
+    changed = _sync_dir(Path(quadlet.unit_dir(uid)), stack, quadlet_files)
+    if service_files or _stack_files_on_disk(Path(quadlet.systemd_user_unit_dir(tenant)), stack):
+        svc_dir = Path(quadlet.systemd_user_unit_dir(tenant))
+        changed |= _sync_dir(svc_dir, stack, service_files)
+        if service_files:
+            shutil.chown(str(svc_dir), user=tenant, group=tenant)
+            for fname in service_files:
+                shutil.chown(str(svc_dir / fname), user=tenant, group=tenant)
+    return changed
+
+
+def remove_units(uid: int, stack: str, tenant: str) -> bool:
     """Delete every unit file the marker attributes to the stack."""
-    return sync_units(uid, stack, {})
+    return sync_units(uid, stack, tenant, {})
 
 
-def scan_units(uid: int) -> tuple[UnitFile, ...]:
-    """All hosty-attributable quadlet files in one tenant's unit dir."""
-    unit_dir = Path(quadlet.unit_dir(uid))
+def _collect_units_from_dir(directory: Path) -> list[UnitFile]:
     files: list[UnitFile] = []
-    if not unit_dir.is_dir():
-        return ()
-    for entry in sorted(unit_dir.iterdir()):
+    if not directory.is_dir():
+        return files
+    for entry in sorted(directory.iterdir()):
         if not entry.is_file() or entry.suffix not in UNIT_SUFFIXES:
             continue
         try:
             content = entry.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        stack = quadlet.read_stack_marker(content)
-        if stack is None:
-            continue  # foreign file — never touched, never reported
-        files.append(
-            UnitFile(
-                file_name=entry.name,
-                stack=stack,
-                service=quadlet.read_service_marker(content),
-                spec_hash=quadlet.read_spec_hash(content),
-            )
-        )
+        stack_name = quadlet.read_stack_marker(content)
+        if stack_name is None:
+            continue
+        files.append(UnitFile(
+            file_name=entry.name,
+            stack=stack_name,
+            service=quadlet.read_service_marker(content),
+            spec_hash=quadlet.read_spec_hash(content),
+        ))
+    return files
+
+
+def scan_units(uid: int, tenant: str) -> tuple[UnitFile, ...]:
+    """All hosty-attributable unit files across both the quadlet directory and
+    the tenant's ~/.config/systemd/user/ directory."""
+    files = _collect_units_from_dir(Path(quadlet.unit_dir(uid)))
+    files += _collect_units_from_dir(Path(quadlet.systemd_user_unit_dir(tenant)))
     return tuple(files)
 
 
@@ -267,4 +297,4 @@ def scan_volume_dirs(tenant: str) -> dict[str, frozenset[str]]:
 
 
 def scan_tenant(uid: int, tenant: str) -> TenantScan:
-    return TenantScan(unit_files=scan_units(uid), volume_dirs=scan_volume_dirs(tenant))
+    return TenantScan(unit_files=scan_units(uid, tenant), volume_dirs=scan_volume_dirs(tenant))

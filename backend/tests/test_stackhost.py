@@ -26,8 +26,12 @@ def rooted(tmp_path, monkeypatch):
     def stacks_root(tenant: str) -> str:
         return str(home_root / tenant / "stacks")
 
+    def systemd_user_unit_dir(tenant: str) -> str:
+        return str(home_root / tenant / ".config" / "systemd" / "user")
+
     monkeypatch.setattr(quadlet, "unit_dir", unit_dir)
     monkeypatch.setattr(quadlet, "stacks_root", stacks_root)
+    monkeypatch.setattr(quadlet, "systemd_user_unit_dir", systemd_user_unit_dir)
     # chown needs root and real users — record instead.
     chowns: list[str] = []
     monkeypatch.setattr(
@@ -49,11 +53,11 @@ def spec(name="blog", services=("web",)) -> StackSpec:
 
 def test_sync_writes_the_full_set_and_reports_change(rooted):
     stack = spec()
-    assert stackhost.sync_units(42, "blog", quadlet.unit_files(stack)) is True
-    files = stackhost.scan_units(42)
+    assert stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(stack)) is True
+    files = stackhost.scan_units(42, "hosty-t-7")
     assert {f.file_name for f in files} == {"blog-web.container", "blog.network"}
     # Unchanged content: no-op.
-    assert stackhost.sync_units(42, "blog", quadlet.unit_files(stack)) is False
+    assert stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(stack)) is False
 
 
 def test_sync_tracks_and_removes_build_units(rooted):
@@ -70,40 +74,40 @@ def test_sync_tracks_and_removes_build_units(rooted):
             ),
         ),
     )
-    assert stackhost.sync_units(42, "blog", quadlet.unit_files(built)) is True
-    assert {f.file_name for f in stackhost.scan_units(42)} == {
+    assert stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(built)) is True
+    assert {f.file_name for f in stackhost.scan_units(42, "hosty-t-7")} == {
         "blog-web-build.service",
         "blog-web.container",
         "blog.network",
         "blog-git-sync.service",
     }
-    assert stackhost.sync_units(42, "blog", quadlet.unit_files(spec())) is True
-    scanned = {f.file_name for f in stackhost.scan_units(42)}
+    assert stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(spec())) is True
+    scanned = {f.file_name for f in stackhost.scan_units(42, "hosty-t-7")}
     assert "blog-web-build.service" not in scanned
     assert "blog-git-sync.service" not in scanned
 
 
 def test_sync_removes_stale_stack_files_only(rooted):
     two = spec(services=("web", "worker"))
-    stackhost.sync_units(42, "blog", quadlet.unit_files(two))
+    stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(two))
     other = spec(name="shop")
-    stackhost.sync_units(42, "shop", quadlet.unit_files(other))
+    stackhost.sync_units(42, "shop", "hosty-t-7", quadlet.unit_files(other))
 
     one = spec(services=("web",))
-    assert stackhost.sync_units(42, "blog", quadlet.unit_files(one)) is True
-    names = {f.file_name for f in stackhost.scan_units(42)}
+    assert stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(one)) is True
+    names = {f.file_name for f in stackhost.scan_units(42, "hosty-t-7")}
     assert "blog-worker.container" not in names
     assert {"blog-web.container", "shop-web.container", "shop.network"} <= names
 
 
 def test_remove_units_only_touches_marked_files(rooted, tmp_path):
-    stackhost.sync_units(42, "blog", quadlet.unit_files(spec()))
+    stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(spec()))
     foreign = tmp_path / "units" / "42" / "manual.container"
     foreign.write_text("[Container]\nImage=x\n", encoding="utf-8")
 
-    assert stackhost.remove_units(42, "blog") is True
+    assert stackhost.remove_units(42, "blog", "hosty-t-7") is True
     assert foreign.exists()  # foreign file untouched
-    assert stackhost.scan_units(42) == ()  # unmarked file is not reported either
+    assert stackhost.scan_units(42, "hosty-t-7") == ()  # unmarked file is not reported either
 
 
 def test_hyphenated_names_cannot_cross_stacks(rooted):
@@ -111,17 +115,17 @@ def test_hyphenated_names_cannot_cross_stacks(rooted):
     `a-b-web.container`-adjacent names; markers keep ownership exact."""
     stack_a = spec(name="a", services=("b-web",))
     stack_ab = spec(name="a-b", services=("web",))
-    stackhost.sync_units(42, "a", quadlet.unit_files(stack_a))
-    stackhost.sync_units(42, "a-b", quadlet.unit_files(stack_ab))
+    stackhost.sync_units(42, "a", "hosty-t-7", quadlet.unit_files(stack_a))
+    stackhost.sync_units(42, "a-b", "hosty-t-7", quadlet.unit_files(stack_ab))
     # Removing stack "a" must not touch "a-b"'s files.
-    stackhost.remove_units(42, "a")
-    remaining = {f.stack for f in stackhost.scan_units(42)}
+    stackhost.remove_units(42, "a", "hosty-t-7")
+    remaining = {f.stack for f in stackhost.scan_units(42, "hosty-t-7")}
     assert remaining == {"a-b"}
 
 
 def test_scan_units_attributes_by_marker(rooted):
-    stackhost.sync_units(42, "blog", quadlet.unit_files(spec()))
-    by_name = {f.file_name: f for f in stackhost.scan_units(42)}
+    stackhost.sync_units(42, "blog", "hosty-t-7", quadlet.unit_files(spec()))
+    by_name = {f.file_name: f for f in stackhost.scan_units(42, "hosty-t-7")}
     container = by_name["blog-web.container"]
     assert container.stack == "blog" and container.service == "web"
     assert container.spec_hash is not None
@@ -179,6 +183,6 @@ async def test_remove_volume_dir_removes_data(rooted, tmp_path):
 
 def test_grammar_rejected_before_any_path_is_built(rooted):
     with pytest.raises(SpecValidationError):
-        stackhost.sync_units(42, "Blog", {})
+        stackhost.sync_units(42, "Blog", "hosty-t-7", {})
     with pytest.raises(SpecValidationError):
         stackhost.ensure_volume_dir("hosty-t-7", "blog", "../etc")

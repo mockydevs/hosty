@@ -67,7 +67,7 @@ class FakeHost:
         monkeypatch.setattr(tenants_sys, "exists", exists)
 
         # --- seam: app.system.stackhost (sync fns, called via to_thread) ----------
-        def sync_units(uid, stack, desired):
+        def sync_units(uid, stack, tenant, desired):
             files = host.unit_files.setdefault(uid, {})
             for name in [n for n, c in files.items() if quadlet.read_stack_marker(c) == stack]:
                 if name not in desired:
@@ -75,8 +75,8 @@ class FakeHost:
             files.update(desired)
             return True
 
-        def remove_units(uid, stack):
-            return sync_units(uid, stack, {})
+        def remove_units(uid, stack, tenant):
+            return sync_units(uid, stack, tenant, {})
 
         def sync_env_files(tenant, stack, files):
             prefix = f"/stacks/{stack}/env/"

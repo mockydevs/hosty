@@ -123,10 +123,10 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
             uid = await _uid_for(ctx.db, spec.tenant)
             await ctx.host.sync_env_files(spec.tenant, spec.name, quadlet.env_files(spec))
             git_token = await _resolve_git_token(spec, ctx)
-            await ctx.host.sync_units(uid, spec.name, quadlet.unit_files(spec, git_token=git_token))
+            await ctx.host.sync_units(uid, spec.name, spec.tenant, quadlet.unit_files(spec, git_token=git_token))
         case act.RemoveUnits(tenant=tenant, stack=stack):
             uid = await _uid_for(ctx.db, tenant)
-            await ctx.host.remove_units(uid, stack)
+            await ctx.host.remove_units(uid, stack, tenant)
             await ctx.host.remove_env_files(tenant, stack)
             await ctx.host.remove_stack_containers(uid, stack)
         case act.DaemonReload(tenant=tenant):

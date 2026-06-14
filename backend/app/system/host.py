@@ -42,10 +42,10 @@ class HostContext(ABC):
     # --- stackhost-level operations ------------------------------------------
 
     @abstractmethod
-    async def sync_units(self, uid: int, stack: str, desired: dict[str, str]) -> bool: ...
+    async def sync_units(self, uid: int, stack: str, tenant: str, desired: dict[str, str]) -> bool: ...
 
     @abstractmethod
-    async def remove_units(self, uid: int, stack: str) -> bool: ...
+    async def remove_units(self, uid: int, stack: str, tenant: str) -> bool: ...
 
     @abstractmethod
     async def scan_tenant(self, uid: int, tenant: str): ...  # → TenantScan
@@ -115,13 +115,13 @@ class LocalHost(HostContext):
     async def run(self, argv: list[str], *, timeout: float = 120) -> CommandResult:
         return await runner.run(argv, timeout=timeout)
 
-    async def sync_units(self, uid: int, stack: str, desired: dict[str, str]) -> bool:
+    async def sync_units(self, uid: int, stack: str, tenant: str, desired: dict[str, str]) -> bool:
         from app.system import stackhost
-        return await asyncio.to_thread(stackhost.sync_units, uid, stack, desired)
+        return await asyncio.to_thread(stackhost.sync_units, uid, stack, tenant, desired)
 
-    async def remove_units(self, uid: int, stack: str) -> bool:
+    async def remove_units(self, uid: int, stack: str, tenant: str) -> bool:
         from app.system import stackhost
-        return await asyncio.to_thread(stackhost.remove_units, uid, stack)
+        return await asyncio.to_thread(stackhost.remove_units, uid, stack, tenant)
 
     async def scan_tenant(self, uid: int, tenant: str):
         from app.system import stackhost
@@ -286,17 +286,18 @@ class RemoteSSHHost(HostContext):
     async def run(self, argv: list[str], *, timeout: float = 120) -> CommandResult:
         return await self._ssh_run(argv, timeout=timeout)
 
-    async def sync_units(self, uid: int, stack: str, desired: dict[str, str]) -> bool:
+    async def _sync_remote_dir(
+        self, dir_path: str, stack: str, desired: dict[str, str]
+    ) -> bool:
         from app.system import quadlet, stackhost
-        unit_dir = quadlet.unit_dir(uid)
-        await self._sftp_makedirs(unit_dir)
+        await self._sftp_makedirs(dir_path)
         existing: dict[str, str] = {}
         try:
-            for entry in await self._sftp_listdir(unit_dir):
+            for entry in await self._sftp_listdir(dir_path):
                 if not any(entry.endswith(s) for s in stackhost.UNIT_SUFFIXES):
                     continue
                 try:
-                    content = await self._sftp_read(f"{unit_dir}/{entry}")
+                    content = await self._sftp_read(f"{dir_path}/{entry}")
                     if quadlet.read_stack_marker(content) == stack:
                         existing[entry] = content
                 except Exception:
@@ -306,32 +307,60 @@ class RemoteSSHHost(HostContext):
         changed = False
         for fname, content in desired.items():
             if existing.get(fname) != content:
-                await self._sftp_write(f"{unit_dir}/{fname}", content, 0o644)
+                await self._sftp_write(f"{dir_path}/{fname}", content, 0o644)
                 changed = True
         for fname in existing:
             if fname not in desired:
-                await self._sftp.remove(f"{unit_dir}/{fname}")  # type: ignore[union-attr]
+                await self._sftp.remove(f"{dir_path}/{fname}")  # type: ignore[union-attr]
                 changed = True
         return changed
 
-    async def remove_units(self, uid: int, stack: str) -> bool:
-        return await self.sync_units(uid, stack, {})
-
-    async def scan_tenant(self, uid: int, tenant: str):
+    async def sync_units(self, uid: int, stack: str, tenant: str, desired: dict[str, str]) -> bool:
         from app.system import quadlet, stackhost
-        from app.system.stackhost import TenantScan, UnitFile
-        unit_dir = quadlet.unit_dir(uid)
-        unit_files: list[UnitFile] = []
+        quadlet_files = {f: c for f, c in desired.items() if any(f.endswith(s) for s in stackhost._QUADLET_SUFFIXES)}
+        service_files = {f: c for f, c in desired.items() if not any(f.endswith(s) for s in stackhost._QUADLET_SUFFIXES)}
+
+        changed = await self._sync_remote_dir(quadlet.unit_dir(uid), stack, quadlet_files)
+
+        svc_dir = quadlet.systemd_user_unit_dir(tenant)
+        has_existing = False
         try:
-            for entry in sorted(await self._sftp_listdir(unit_dir)):
+            for entry in await self._sftp_listdir(svc_dir):
+                try:
+                    content = await self._sftp_read(f"{svc_dir}/{entry}")
+                    if quadlet.read_stack_marker(content) == stack:
+                        has_existing = True
+                        break
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        if service_files or has_existing:
+            changed |= await self._sync_remote_dir(svc_dir, stack, service_files)
+            if service_files:
+                await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", svc_dir])
+                for fname in service_files:
+                    await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", f"{svc_dir}/{fname}"])
+        return changed
+
+    async def remove_units(self, uid: int, stack: str, tenant: str) -> bool:
+        return await self.sync_units(uid, stack, tenant, {})
+
+    async def _scan_remote_unit_dir(self, dir_path: str) -> "list":
+        from app.system import quadlet, stackhost
+        from app.system.stackhost import UnitFile
+        files: list[UnitFile] = []
+        try:
+            for entry in sorted(await self._sftp_listdir(dir_path)):
                 if not any(entry.endswith(s) for s in stackhost.UNIT_SUFFIXES):
                     continue
                 try:
-                    content = await self._sftp_read(f"{unit_dir}/{entry}")
+                    content = await self._sftp_read(f"{dir_path}/{entry}")
                     s = quadlet.read_stack_marker(content)
                     if s is None:
                         continue
-                    unit_files.append(UnitFile(
+                    files.append(UnitFile(
                         file_name=entry,
                         stack=s,
                         service=quadlet.read_service_marker(content),
@@ -341,6 +370,13 @@ class RemoteSSHHost(HostContext):
                     continue
         except Exception:
             pass
+        return files
+
+    async def scan_tenant(self, uid: int, tenant: str):
+        from app.system import quadlet, stackhost
+        from app.system.stackhost import TenantScan
+        unit_files = await self._scan_remote_unit_dir(quadlet.unit_dir(uid))
+        unit_files += await self._scan_remote_unit_dir(quadlet.systemd_user_unit_dir(tenant))
         volume_dirs: dict[str, frozenset[str]] = {}
         stacks_root = quadlet.stacks_root(tenant)
         try:

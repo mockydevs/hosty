@@ -39,6 +39,16 @@ def unit_dir(uid: int) -> str:
     return f"/etc/containers/systemd/users/{uid}"
 
 
+def systemd_user_unit_dir(tenant: str) -> str:
+    """~/.config/systemd/user/ for one tenant.
+
+    The podman quadlet user-generator only processes .container/.network/.volume
+    files from the quadlet directory.  Plain .service files (git-sync, build)
+    must live here instead so the user manager actually loads them.
+    """
+    return f"{home_dir_for(validate_tenant_username(tenant))}/.config/systemd/user"
+
+
 def stacks_root(tenant: str) -> str:
     return f"{home_dir_for(validate_tenant_username(tenant))}/stacks"
 
