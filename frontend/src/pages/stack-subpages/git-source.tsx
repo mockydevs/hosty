@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
@@ -129,26 +128,21 @@ export function GitSourceSettings({ stackId, inputs }: { stackId: number, inputs
               ) : (
                 <>
                   <Label>Select GitHub App</Label>
-                  <div className="flex gap-2">
-                    <Select
-                      onValueChange={(val) => linkSource.mutate(Number(val))}
-                      disabled={linkSource.isPending}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Choose a GitHub App…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sources.map((s: any) => (
-                          <SelectItem key={s.id} value={String(s.id)}>
-                            {s.name}
-                            {!s.installation_id && (
-                              <span className="ml-2 text-xs text-amber-500">(not installed)</span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    defaultValue=""
+                    disabled={linkSource.isPending}
+                    onChange={(e) => {
+                      if (e.target.value) linkSource.mutate(Number(e.target.value));
+                    }}
+                  >
+                    <option value="" disabled>Choose a GitHub App…</option>
+                    {sources.map((s: any) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name}{!s.installation_id ? " (not installed)" : ""}
+                      </option>
+                    ))}
+                  </select>
                   <p className="text-xs text-muted-foreground">
                     The GitHub App must have access to the repository above.
                   </p>
