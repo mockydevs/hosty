@@ -19,6 +19,8 @@ depends_on = None
 def upgrade() -> None:
     # Clean up from a potentially aborted previous migration run that left the index behind
     op.execute("DROP INDEX IF EXISTS ix_stacks_server_id")
+    # Clean up from a partially completed batch alter table that left the temp table behind
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_stacks")
     
     with op.batch_alter_table("stacks") as batch_op:
         batch_op.add_column(sa.Column("server_id", sa.Integer(), nullable=True))
