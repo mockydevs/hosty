@@ -88,10 +88,7 @@ def _volume_owner_counts(stack: StackSpec) -> dict[str, int]:
 
 def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
     if service.build_repo:
-        if service.build_tool == "nixpacks":
-            image = f"hosty/{stack.name}-{service.name}:latest"
-        else:
-            image = build_file_name(stack.name, service.name)
+        image = f"hosty/{stack.name}-{service.name}:latest"
     else:
         image = service.image
     lines = [
@@ -103,11 +100,13 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         "[Unit]",
         f"Description=hosty stack {stack.name} — service {service.name}",
     ]
-    
-    if service.build_repo and service.build_tool == "nixpacks":
+
+    if service.build_repo:
+        build_svc_suffix = "nixpacks" if service.build_tool == "nixpacks" else "build"
+        build_unit_name = f"{stack.name}-{service.name}-{build_svc_suffix}.service"
         lines.extend([
-            f"Requires={stack.name}-{service.name}-nixpacks.service",
-            f"After={stack.name}-{service.name}-nixpacks.service",
+            f"Requires={build_unit_name}",
+            f"After={build_unit_name}",
         ])
     # depends_on ordering: start dependencies first. Combined with Restart=always,
     # this handles service_healthy semantics — the dependent container restarts
@@ -192,8 +191,14 @@ def network_unit(stack: StackSpec) -> str:
     )
 
 
-def build_unit(stack: StackSpec, service: ServiceSpec) -> str:
+def dockerfile_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
+    """Plain systemd oneshot service that runs `podman build` after git-sync.
+
+    Replaces the Quadlet `.build` file approach which requires Podman >= 5.0.
+    This works on all Podman versions that support rootless containers (>= 4.4).
+    """
     workspace = f"%h/stacks/{stack.name}/src"
+    image_tag = f"hosty/{stack.name}-{service.name}:latest"
     return "\n".join(
         [
             MANAGED_HEADER,
@@ -202,12 +207,19 @@ def build_unit(stack: StackSpec, service: ServiceSpec) -> str:
             f"{SPEC_HASH_MARKER}{spec_hash(stack, service)}",
             "",
             "[Unit]",
+            f"Description=hosty Dockerfile build {stack.name} — service {service.name}",
             f"After={stack.name}-git-sync.service",
             f"Requires={stack.name}-git-sync.service",
             "",
-            "[Build]",
-            f"ImageTag=hosty/{stack.name}-{service.name}:latest",
-            f"SetWorkingDirectory={workspace}",
+            "[Service]",
+            "Type=oneshot",
+            f"WorkingDirectory={workspace}",
+            f"ExecStart=/usr/bin/podman build --tag {image_tag} .",
+            "RemainAfterExit=yes",
+            "TimeoutStartSec=1800",
+            "",
+            "[Install]",
+            "WantedBy=default.target",
             "",
         ]
     )
@@ -259,7 +271,7 @@ def unit_files(stack: StackSpec, git_clone_url: str | None = None) -> dict[str, 
             if service.build_tool == "nixpacks":
                 files[f"{stack.name}-{service.name}-nixpacks.service"] = nixpacks_build_unit(stack, service)
             else:
-                files[build_file_name(stack.name, service.name)] = build_unit(stack, service)
+                files[f"{stack.name}-{service.name}-build.service"] = dockerfile_build_unit(stack, service)
             needs_git_sync = True
 
     if needs_git_sync:

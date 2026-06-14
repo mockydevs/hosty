@@ -72,12 +72,15 @@ def test_sync_tracks_and_removes_build_units(rooted):
     )
     assert stackhost.sync_units(42, "blog", quadlet.unit_files(built)) is True
     assert {f.file_name for f in stackhost.scan_units(42)} == {
-        "blog-web.build",
+        "blog-web-build.service",
         "blog-web.container",
         "blog.network",
+        "blog-git-sync.service",
     }
     assert stackhost.sync_units(42, "blog", quadlet.unit_files(spec())) is True
-    assert "blog-web.build" not in {f.file_name for f in stackhost.scan_units(42)}
+    scanned = {f.file_name for f in stackhost.scan_units(42)}
+    assert "blog-web-build.service" not in scanned
+    assert "blog-git-sync.service" not in scanned
 
 
 def test_sync_removes_stale_stack_files_only(rooted):

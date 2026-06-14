@@ -50,8 +50,13 @@ async def _observe_tenant(linux_user: str, uid: int) -> Observed:
     for unit_file in scan.unit_files:
         stacks_seen.add(unit_file.stack)
         if unit_file.service is None:
-            continue  # .network file: presence only
-        if unit_file.file_name.endswith(".build"):
+            continue  # .network or git-sync file: presence only
+        _fn = unit_file.file_name
+        if (
+            _fn.endswith(".build")
+            or _fn.endswith("-build.service")
+            or _fn.endswith("-nixpacks.service")
+        ):
             build_units.setdefault(unit_file.stack, {})[unit_file.service] = unit_file.spec_hash
             continue
         units.setdefault(unit_file.stack, {})[unit_file.service] = ObservedUnit(

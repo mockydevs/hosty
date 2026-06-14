@@ -110,7 +110,7 @@ async def test_active_and_inactive_units_with_build_and_volumes(db, fake_host):
             unit_files=(
                 _unit("blog-web.container", "blog", "web", "h_web"),
                 _unit("blog.network", "blog", None, None),  # presence only
-                _unit("blog-api.build", "blog", "api", "h_api_build"),
+                _unit("blog-api-build.service", "blog", "api", "h_api_build"),
                 _unit("blog-api.container", "blog", "api", "h_api"),
             ),
             volume_dirs={"blog": frozenset({"content"})},

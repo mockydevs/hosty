@@ -249,8 +249,8 @@ async def test_create_git_template_persists_build_source(admin_client, stack_hos
     assert stack["endpoints"][0]["domain"] == "git.example.com"
 
     uid = stack_host.users["hosty-t-1"]
-    build = stack_host.unit_files[uid]["git-test-web.build"]
-    assert "SetWorkingDirectory=%h/stacks/git-test/src" in build
+    build = stack_host.unit_files[uid]["git-test-web-build.service"]
+    assert "WorkingDirectory=%h/stacks/git-test/src" in build
 
 
 async def test_dynamic_templates_allocate_distinct_ports(admin_client, stack_host):

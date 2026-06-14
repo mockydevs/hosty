@@ -167,7 +167,11 @@ class FakeHost:
                     stack, {"tenant": linux_user, "units": {}, "builds": {}, "dirs": set()}
                 )
                 service = quadlet.read_service_marker(content)
-                if service is not None and file_name.endswith(".build"):
+                if service is not None and (
+                    file_name.endswith(".build")
+                    or file_name.endswith("-build.service")
+                    or file_name.endswith("-nixpacks.service")
+                ):
                     entry["builds"][service] = quadlet.read_spec_hash(content)
                     continue
                 if service is not None:

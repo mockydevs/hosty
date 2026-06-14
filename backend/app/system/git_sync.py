@@ -1,6 +1,7 @@
 """Systemd service for syncing Git repositories into tenant workspaces."""
 
 from app.domain.specs import StackSpec
+from app.system.quadlet import MANAGED_HEADER
 
 
 def git_sync_unit(stack: StackSpec, clone_url: str | None = None) -> str:
@@ -20,6 +21,9 @@ def git_sync_unit(stack: StackSpec, clone_url: str | None = None) -> str:
     workspace = f"%h/stacks/{stack.name}/src"
 
     return "\n".join([
+        MANAGED_HEADER,
+        f"# hosty-stack={stack.name}",
+        "",
         "[Unit]",
         f"Description=Sync Git repository for stack {stack.name}",
         "After=network-online.target",

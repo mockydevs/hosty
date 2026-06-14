@@ -21,7 +21,7 @@ from app.domain.validate import validate_slug
 from app.system import quadlet, runner
 from app.system.tenants import validate_tenant_username
 
-UNIT_SUFFIXES = (".build", ".container", ".network")
+UNIT_SUFFIXES = (".build", ".container", ".network", ".service")
 
 
 class StackHostError(RuntimeError):
