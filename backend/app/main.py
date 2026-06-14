@@ -70,6 +70,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         engine, factory = create_engine_and_factory(settings.database_url)
+
+        # Warn if the DB schema is behind the current codebase.  A mismatch
+        # means a migration ran partially or was skipped; the app will start
+        # but may behave incorrectly.  This is a warning, not a hard stop.
+        try:
+            from pathlib import Path as _Path
+            from alembic.config import Config as _AlembicCfg
+            from alembic.runtime.migration import MigrationContext as _MCtx
+            from alembic.script import ScriptDirectory as _ScriptDir
+            from sqlalchemy import text as _text
+
+            _ini = _Path(__file__).parent.parent / "alembic.ini"
+            if _ini.exists():
+                _acfg = _AlembicCfg(str(_ini))
+                _script = _ScriptDir.from_config(_acfg)
+                _expected = set(_script.get_heads())
+                async with engine.connect() as _conn:
+                    _current = await _conn.run_sync(
+                        lambda sync_conn: set(
+                            _MCtx.configure(sync_conn).get_current_heads()
+                        )
+                    )
+                if _current != _expected:
+                    structlog.get_logger("hosty.startup").warning(
+                        "db_schema_behind",
+                        current=list(_current),
+                        expected=list(_expected),
+                        hint="run: alembic upgrade head",
+                    )
+        except Exception as _exc:
+            structlog.get_logger("hosty.startup").warning(
+                "db_schema_check_failed", error=str(_exc)
+            )
+
         if settings.create_tables_on_startup:
             # Dev/test convenience; production schemas are managed by Alembic.
             async with engine.begin() as conn:

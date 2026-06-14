@@ -1,6 +1,7 @@
 """Liveness/readiness endpoint with reconciler diagnostics."""
 
 from __future__ import annotations
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select, text
@@ -11,6 +12,36 @@ from app.api.deps import get_db
 from app.db.models import Operation, Stack
 
 router = APIRouter()
+
+
+async def _migration_status(db: AsyncSession) -> dict:
+    """Return current vs expected Alembic heads."""
+    try:
+        from alembic.config import Config as _Cfg
+        from alembic.runtime.migration import MigrationContext as _MCtx
+        from alembic.script import ScriptDirectory as _Script
+
+        ini = Path(__file__).parent.parent.parent.parent / "alembic.ini"
+        if not ini.exists():
+            return {"status": "unknown", "reason": "alembic.ini not found"}
+        cfg = _Cfg(str(ini))
+        script = _Script.from_config(cfg)
+        expected = set(script.get_heads())
+        current = set()
+
+        def _get_heads(sync_conn):
+            return set(_MCtx.configure(sync_conn).get_current_heads())
+
+        current = await db.run_sync(_get_heads)
+        if current == expected:
+            return {"status": "ok", "head": list(current)}
+        return {
+            "status": "behind",
+            "current": list(current),
+            "expected": list(expected),
+        }
+    except Exception as exc:
+        return {"status": "error", "reason": str(exc)}
 
 
 @router.get("/health")
@@ -50,9 +81,12 @@ async def health(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     except Exception:
         pass
 
+    migration = await _migration_status(db)
+
     degraded = any(
         [
             database != "ok",
+            migration.get("status") == "behind",
             stack_counts.get("degraded", 0) > 0,
             op_counts.get("running", 0) > 10,
         ]
@@ -62,6 +96,7 @@ async def health(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
         "status": "degraded" if degraded else "ok",
         "version": __version__,
         "database": database,
+        "migration": migration,
         "reconciler": {
             "queue_depth": queue_depth,
             "enabled": reconciler is not None,

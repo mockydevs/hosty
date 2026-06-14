@@ -38,9 +38,30 @@ log "Backend dependencies"
 (cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync --frozen)
 
 log "Database migrations (alembic upgrade head)"
-(cd "$APP_DIR/backend" \
+# Capture current revision before touching the DB so the operator knows
+# what state to restore if the migration fails.
+_pre_rev=$(cd "$APP_DIR/backend" \
   && set -a && . "$ENV_FILE" && set +a \
-  && UV_PROJECT_ENVIRONMENT=$VENV uv run alembic upgrade head)
+  && UV_PROJECT_ENVIRONMENT=$VENV uv run alembic current 2>/dev/null | awk '{print $1}' | head -1 \
+  || echo "unknown")
+
+if ! (cd "$APP_DIR/backend" \
+  && set -a && . "$ENV_FILE" && set +a \
+  && UV_PROJECT_ENVIRONMENT=$VENV uv run alembic upgrade head); then
+  echo ""
+  echo "┌─────────────────────────────────────────────────────────────┐"
+  echo "│  MIGRATION FAILED — service has NOT been restarted          │"
+  echo "│  The running instance is still serving the old schema.      │"
+  echo "│                                                             │"
+  echo "│  DB was at: $_pre_rev"
+  echo "│                                                             │"
+  echo "│  To rollback the code to match the DB:                     │"
+  echo "│    cd /opt/hosty && git checkout $_pre_rev                  │"
+  echo "│                                                             │"
+  echo "│  Fix the migration then re-run update.sh.                  │"
+  echo "└─────────────────────────────────────────────────────────────┘"
+  exit 1
+fi
 
 # ── Frontend rebuild ─────────────────────────────────────────────────────────
 log "Frontend rebuild"
