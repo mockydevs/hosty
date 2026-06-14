@@ -479,6 +479,12 @@ function ConfigureForm({
         </p>
       </div>
 
+      {/* Repository display (read-only, matches Coolify's configure step) */}
+      <div className="space-y-1.5">
+        <Label>Repository</Label>
+        <Input value={repo} disabled className="font-mono text-xs" />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Branch" htmlFor="cfg-branch">
           <Input
@@ -1084,25 +1090,38 @@ export function StackCreatePage() {
 
               {repos.data && repos.data.length > 0 && (
                 <div className="space-y-6">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="repo-select">Repository</Label>
-                    <select
-                      id="repo-select"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={selectedRepo?.clone_url ?? ""}
-                      onChange={(e) => {
-                        const found = repos.data?.find((r) => r.clone_url === e.target.value);
-                        setSelectedRepo(found ?? null);
-                      }}
-                    >
-                      <option value="">— Select a repository —</option>
-                      {repos.data.map((r) => (
-                        <option key={r.clone_url} value={r.clone_url}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Repository list as clickable cards (matches Coolify Select Repository step) */}
+                  {!selectedRepo && (
+                    <div>
+                      <Label className="mb-3 block">Select a repository</Label>
+                      <div className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1">
+                        {repos.data.map((r) => (
+                          <button
+                            key={r.clone_url}
+                            type="button"
+                            onClick={() => setSelectedRepo(r)}
+                            className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card px-4 py-3 text-left transition-all hover:border-primary hover:bg-primary/5"
+                          >
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted group-hover:border-primary/40 group-hover:bg-primary/10 transition-colors">
+                              <GitBranch className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{r.name}</p>
+                              <p className="text-xs text-muted-foreground truncate font-mono">
+                                {r.clone_url.replace(/^https?:\/\//, "")}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge variant="outline" className="text-xs font-mono">
+                                {r.default_branch}
+                              </Badge>
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {selectedRepo && gitBlueprint && (
                     <ConfigureForm

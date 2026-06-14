@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -38,11 +39,7 @@ import { TagsConfig } from "./stack-subpages/tags";
 import { DeploymentsTab } from "./stack-subpages/deployments";
 import { TerminalTab } from "./stack-subpages/terminal-tab";
 import { LinksTab } from "./stack-subpages/links";
-/**
- * Stack detail (v2/M4): services, endpoints, journald logs viewer, blueprint
- * day-2 actions (with confirm + show-once results), delete with
- * type-to-confirm. Polls while the reconciler is converging.
- */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -66,6 +63,132 @@ type Stack = components["schemas"]["StackResponse"];
 type ActionResult = components["schemas"]["StackActionResponse"];
 type Backup = components["schemas"]["BackupResponse"];
 
+// ─── Sub-nav groups (matches Coolify sidebar order exactly) ──────────────────
+const SUB_NAV_GROUPS: string[][] = [
+  ["General", "Advanced"],
+  ["Environment Variables", "Persistent Storage"],
+  ["Git Source", "Servers"],
+  ["Scheduled Tasks", "Webhooks", "Preview Deployments"],
+  ["Rollback", "Resource Limits", "Resource Operations", "Metrics", "Tags"],
+  ["Danger Zone"],
+];
+
+// ─── GeneralConfigForm ────────────────────────────────────────────────────────
+function GeneralConfigForm({ stack }: { stack: Stack }) {
+  const queryClient = useQueryClient();
+  const inputs = (stack as any).inputs || {};
+  const isGit = stack.blueprint_id === "git";
+
+  const [branch, setBranch] = useState<string>(inputs.branch ?? "main");
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await (api as any).PATCH(`/api/stacks/${stack.id}/config`, {
+        body: { branch },
+      });
+      if (error) {
+        toast.error(apiErrorMessage(error, "Failed to save configuration"));
+        return;
+      }
+      toast.success("Configuration saved.");
+      setDirty(false);
+      await queryClient.invalidateQueries({ queryKey: ["stacks", stack.id] });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">General Configuration</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Deployment Name</Label>
+            <Input value={stack.name} disabled />
+            <p className="text-xs text-muted-foreground">
+              Name cannot be changed after creation.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Blueprint</Label>
+            <Input value={stack.blueprint_id} disabled className="font-mono" />
+          </div>
+        </div>
+
+        {isGit && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Repository</Label>
+                <Input
+                  value={inputs.repo ?? ""}
+                  disabled
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="gen-branch">Branch</Label>
+                <Input
+                  id="gen-branch"
+                  value={branch}
+                  onChange={(e) => {
+                    setBranch(e.target.value);
+                    setDirty(true);
+                  }}
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Build Method</Label>
+                <Input value={inputs.build_method ?? "nixpacks"} disabled />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Port</Label>
+                <Input value={String(inputs.internal_port ?? 3000)} disabled />
+              </div>
+            </div>
+          </>
+        )}
+
+        {!isGit && inputs.image && (
+          <div className="space-y-1.5">
+            <Label>Image</Label>
+            <Input value={inputs.image ?? ""} disabled className="font-mono text-xs" />
+          </div>
+        )}
+
+        {dirty && (
+          <div className="flex items-center gap-3 pt-1">
+            <Button size="sm" onClick={handleSave} loading={saving}>
+              <Save className="h-3.5 w-3.5 mr-2" />
+              Save Configuration
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setBranch(inputs.branch ?? "main");
+                setDirty(false);
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── StackBackupsCard ─────────────────────────────────────────────────────────
 export function StackBackupsCard({
   stack,
   onOperation,
@@ -83,7 +206,7 @@ export function StackBackupsCard({
         params: { path: { stack_id: stack.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load backups"));
-      return data; /* as any */
+      return data;
     },
   });
 
@@ -93,7 +216,7 @@ export function StackBackupsCard({
         params: { path: { stack_id: stack.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Backup failed to start"));
-      return data; /* as any */
+      return data;
     },
     onSuccess: async (data) => {
       onOperation(data.operation_id);
@@ -110,7 +233,7 @@ export function StackBackupsCard({
         body: { scope: "full", confirm_domain: confirm },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Restore failed to start"));
-      return data; /* as any */
+      return data;
     },
     onSuccess: (data) => {
       onOperation(data.operation_id);
@@ -137,7 +260,7 @@ export function StackBackupsCard({
       </CardHeader>
       <CardContent>
         {backups.isPending ? (
-          <LoadingState label="Loading backupsâ€¦" />
+          <LoadingState label="Loading backups…" />
         ) : backups.isError ? (
           <ErrorState message={backups.error.message} onRetry={() => backups.refetch()} />
         ) : backups.data.length === 0 ? (
@@ -197,6 +320,7 @@ export function StackBackupsCard({
   );
 }
 
+// ─── LogsCard ─────────────────────────────────────────────────────────────────
 function LogsCard({ stack }: { stack: Stack }) {
   const [service, setService] = useState(
     stack.services.find((s) => s.is_web)?.name ?? stack.services[0]?.name ?? "",
@@ -208,7 +332,7 @@ function LogsCard({ stack }: { stack: Stack }) {
         params: { path: { stack_id: stack.id }, query: { service, tail: 200 } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load logs"));
-      return data; /* as any */
+      return data;
     },
     enabled: service !== "",
   });
@@ -257,6 +381,7 @@ function LogsCard({ stack }: { stack: Stack }) {
   );
 }
 
+// ─── StackToolsCard ───────────────────────────────────────────────────────────
 function StackToolsCard({ stack }: { stack: Stack }) {
   const hasAdminer = stack.services.some((service) => service.name === "adminer");
   const hasFiles = stack.services.some((service) => service.name === "files");
@@ -322,6 +447,7 @@ function StackToolsCard({ stack }: { stack: Stack }) {
   );
 }
 
+// ─── ActionsCard ──────────────────────────────────────────────────────────────
 function ActionsCard({ stack, actions }: { stack: Stack; actions: string[] }) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -336,7 +462,7 @@ function ActionsCard({ stack, actions }: { stack: Stack; actions: string[] }) {
       if (error || !data) {
         throw new Error(apiErrorMessage(error, `Action failed (${response.status})`));
       }
-      return data; /* as any */
+      return data;
     },
     onSuccess: async (result) => {
       if (result.ok) toast.success(result.message || "Done");
@@ -389,6 +515,7 @@ function ActionsCard({ stack, actions }: { stack: Stack; actions: string[] }) {
   );
 }
 
+// ─── DeleteStackDialog ────────────────────────────────────────────────────────
 function DeleteStackDialog({
   stack,
   open,
@@ -424,7 +551,11 @@ function DeleteStackDialog({
         <DialogTitle>Delete {stack.name}?</DialogTitle>
         <DialogDescription>
           Stops every service and removes containers, volumes and routes. This cannot be undone.
-          Type the stack name <code className="select-all rounded bg-muted px-1 font-mono text-foreground">{stack.name}</code> to confirm.
+          Type the stack name{" "}
+          <code className="select-all rounded bg-muted px-1 font-mono text-foreground">
+            {stack.name}
+          </code>{" "}
+          to confirm.
         </DialogDescription>
         <Input
           aria-label="Confirm stack name"
@@ -452,6 +583,7 @@ function DeleteStackDialog({
   );
 }
 
+// ─── EndpointsCard ────────────────────────────────────────────────────────────
 function EndpointsCard({
   stack,
   onOperation,
@@ -471,7 +603,7 @@ function EndpointsCard({
         body: { domain: value, behind_cloudflare: false },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not set the domain"));
-      return data; /* as any */
+      return data;
     },
     onSuccess: (data) => {
       toast.success("Updating domain…");
@@ -528,7 +660,9 @@ function EndpointsCard({
                   {ep.domain}
                   <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                 </a>
-                <span className="font-mono text-xs text-muted-foreground">→ {ep.service_name}</span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  → {ep.service_name}
+                </span>
                 {ep.behind_cloudflare && <Badge variant="outline">Cloudflare</Badge>}
               </li>
             ))}
@@ -603,6 +737,7 @@ function ConnRow({ label, uri }: { label: string; uri: string }) {
   );
 }
 
+// ─── EnvVarsCard ──────────────────────────────────────────────────────────────
 function EnvVarsCard({
   stack,
   onOperation,
@@ -617,7 +752,7 @@ function EnvVarsCard({
   const updateEnv = useMutation({
     mutationFn: async (envString: string) => {
       const parsedEnv: Record<string, string> = {};
-      envString.split("\n").forEach(line => {
+      envString.split("\n").forEach((line) => {
         const match = line.match(/^([^=]+)=(.*)$/);
         if (match && match[1] && match[2] !== undefined) {
           parsedEnv[match[1].trim()] = match[2].trim();
@@ -627,11 +762,12 @@ function EnvVarsCard({
         params: { path: { stack_id: stack.id } },
         body: { env: parsedEnv },
       });
-      if (error || !data) throw new Error(apiErrorMessage(error, "Could not update environment variables"));
-      return data; /* as any */
+      if (error || !data)
+        throw new Error(apiErrorMessage(error, "Could not update environment variables"));
+      return data;
     },
     onSuccess: (data) => {
-      toast.success("Environment variables updated. Restarting stack...");
+      toast.success("Environment variables updated. Restarting stack…");
       onOperation(data.operation_id);
       setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
@@ -640,7 +776,9 @@ function EnvVarsCard({
   });
 
   const envObj = (stack as any).inputs?.env || {};
-  const currentEnvString = Object.entries(envObj).map(([k, v]) => `${k}=${v}`).join("\n");
+  const currentEnvString = Object.entries(envObj)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
 
   return (
     <Card>
@@ -676,12 +814,13 @@ function EnvVarsCard({
         <DialogContent className="max-w-xl">
           <DialogTitle>Edit Environment Variables</DialogTitle>
           <DialogDescription>
-            Variables must be in <code>KEY=value</code> format, one per line. They will be applied on the next stack restart.
+            Variables must be in <code>KEY=value</code> format, one per line. They will be applied
+            on the next stack restart.
           </DialogDescription>
           <div className="py-2">
             <textarea
               className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="PORT=3000&#10;DATABASE_URL=postgres://..."
+              placeholder={"PORT=3000\nDATABASE_URL=postgres://..."}
               value={envVars}
               onChange={(e) => setEnvVars(e.target.value)}
               spellCheck={false}
@@ -691,10 +830,7 @@ function EnvVarsCard({
             <Button variant="ghost" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button
-              loading={updateEnv.isPending}
-              onClick={() => updateEnv.mutate(envVars)}
-            >
+            <Button loading={updateEnv.isPending} onClick={() => updateEnv.mutate(envVars)}>
               Save & Restart
             </Button>
           </DialogActions>
@@ -704,6 +840,7 @@ function EnvVarsCard({
   );
 }
 
+// ─── ConnectionsCard ──────────────────────────────────────────────────────────
 function ConnectionsCard({
   stack,
   onOperation,
@@ -721,7 +858,7 @@ function ConnectionsCard({
         params: { path: { stack_id: stack.id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load connections"));
-      return data; /* as any */
+      return data;
     },
   });
 
@@ -729,10 +866,13 @@ function ConnectionsCard({
     mutationFn: async ({ service, exposed }: { service: string; exposed: boolean }) => {
       const { data, error } = await api.PUT(
         "/api/stacks/{stack_id}/services/{service_name}/expose" as any,
-        { params: { path: { stack_id: stack.id, service_name: service } }, body: { exposed } },
+        {
+          params: { path: { stack_id: stack.id, service_name: service } },
+          body: { exposed },
+        },
       );
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not change exposure"));
-      return data; /* as any */
+      return data;
     },
     onSuccess: async (data) => {
       setConfirming(null);
@@ -743,7 +883,6 @@ function ConnectionsCard({
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
-  // Only databases with connection metadata produce links.
   if (links.isPending || links.isError || (links.data?.length ?? 0) === 0) return null;
 
   return (
@@ -791,8 +930,7 @@ function ConnectionsCard({
           <DialogTitle>Expose this database to the internet?</DialogTitle>
           <DialogDescription>
             The port will bind your server's public IP — anyone who can reach it with the password
-            can connect. Make sure the password is strong. You can make it private again at any
-            time.
+            can connect. Make sure the password is strong. You can make it private again at any time.
           </DialogDescription>
           <DialogActions>
             <Button variant="ghost" onClick={() => setConfirming(null)}>
@@ -813,6 +951,68 @@ function ConnectionsCard({
   );
 }
 
+// ─── ServicesCard ─────────────────────────────────────────────────────────────
+function ServicesCard({ stack }: { stack: Stack }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Containers</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Service</TableHead>
+              <TableHead>Image</TableHead>
+              <TableHead>Port</TableHead>
+              <TableHead className="w-10" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {stack.services.map((svc) => (
+              <TableRow key={svc.name}>
+                <TableCell className="font-medium">
+                  {svc.name}
+                  {svc.is_web && (
+                    <Badge variant="outline" className="ml-2">
+                      web
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="max-w-56 truncate font-mono text-xs text-muted-foreground">
+                  {svc.image}
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  {svc.internal_port ? `${svc.internal_port}` : "-"}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    title={`Open terminal for ${svc.name}`}
+                    disabled={stack.status !== "ready"}
+                    onClick={() =>
+                      window.open(
+                        `/stacks/${stack.id}/terminal/${svc.name}`,
+                        `terminal-${stack.id}-${svc.name}`,
+                        "width=960,height=600,noopener,noreferrer",
+                      )
+                    }
+                  >
+                    <Terminal className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── StackDetailPage ──────────────────────────────────────────────────────────
 export function StackDetailPage() {
   const { stackId } = useParams();
   const location = useLocation();
@@ -825,6 +1025,7 @@ export function StackDetailPage() {
   const [activeSubTab, setActiveSubTab] = useState("General");
 
   const id = Number(stackId);
+
   const stack = useQuery({
     queryKey: ["stacks", id],
     queryFn: async () => {
@@ -832,7 +1033,7 @@ export function StackDetailPage() {
         params: { path: { stack_id: id } },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load stack"));
-      return data; /* as any */
+      return data;
     },
     enabled: Number.isInteger(id),
     refetchInterval: (q) => (q.state.data && isSettling(q.state.data) ? 3_000 : false),
@@ -843,58 +1044,125 @@ export function StackDetailPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/stacks/blueprints");
       if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load blueprints"));
-      return data; /* as any */
+      return data;
     },
+  });
+
+  // Redeploy — calls the blueprint "rebuild" action (available for git blueprint)
+  const redeploy = useMutation({
+    mutationFn: async () => {
+      const { data: result, error, response } = await api.POST(
+        "/api/stacks/{stack_id}/actions/{action_name}",
+        { params: { path: { stack_id: id, action_name: "rebuild" } } },
+      );
+      if (error || !result)
+        throw new Error(apiErrorMessage(error, `Redeploy failed (${response.status})`));
+      return result;
+    },
+    onSuccess: (result) => {
+      if (result.ok) toast.success(result.message || "Redeploying…");
+      else toast.error(result.message || "Redeploy failed");
+      void queryClient.invalidateQueries({ queryKey: ["stacks"] });
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   if (stack.isPending) return <LoadingState label="Loading stack…" />;
   if (stack.isError) {
     return <ErrorState message={stack.error.message} onRetry={() => stack.refetch()} />;
   }
+
   const data = stack.data;
-  const actions = blueprints.data?.find((bp) => bp.id === data.blueprint_id)?.actions ?? [];
+  const blueprintActions =
+    blueprints.data?.find((bp) => bp.id === data.blueprint_id)?.actions ?? [];
+  const canRedeploy = blueprintActions.includes("rebuild");
+  const inputs = (data as any).inputs || {};
+  const isGit = data.blueprint_id === "git";
 
   const TABS = ["Configuration", "Deployments", "Logs", "Terminal", "Links"];
-  const SUB_TABS = [
-    "General",
-    "Advanced",
-    "Environment Variables",
-    "Persistent Storage",
-    "Git Source",
-    "Servers",
-    "Scheduled Tasks",
-    "Webhooks",
-    "Preview Deployments",
-    "Rollback",
-    "Resource Limits",
-    "Resource Operations",
-    "Metrics",
-    "Tags",
-    "Danger Zone"
-  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/stacks"
-            aria-label="Back to projects"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">{data.name}</h1>
-          <StackStatusBadge stack={data} />
-          <Badge variant="outline">{data.blueprint_id}</Badge>
+    <div>
+      {/* ── Heading (matches Coolify heading.blade.php) ── */}
+      <div className="border-b border-border pb-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {/* Left: back + name + metadata */}
+          <div className="flex items-start gap-3">
+            <Link
+              to="/stacks"
+              aria-label="Back to projects"
+              className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight">{data.name}</h1>
+                <StackStatusBadge stack={data} />
+                <Badge variant="outline" className="font-mono text-xs">
+                  {data.blueprint_id}
+                </Badge>
+              </div>
+
+              {/* Git repo:branch subtitle */}
+              {isGit && inputs.repo && (
+                <p className="mt-1 text-xs font-mono text-muted-foreground">
+                  {inputs.repo.replace(/^https?:\/\//, "")}
+                  {" : "}
+                  <span className="text-foreground/70">{inputs.branch ?? "main"}</span>
+                </p>
+              )}
+
+              {/* Domain link */}
+              {data.endpoints[0]?.domain && (
+                <div className="mt-1 flex items-center gap-1">
+                  <Globe className="h-3 w-3 text-muted-foreground" />
+                  <a
+                    href={`https://${data.endpoints[0].domain}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {data.endpoints[0].domain}
+                  </a>
+                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: action buttons */}
+          {canRedeploy && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                loading={redeploy.isPending}
+                disabled={
+                  data.status === "deleting" ||
+                  data.status === "converging" ||
+                  redeploy.isPending
+                }
+                onClick={() => redeploy.mutate()}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                Redeploy
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* ── Horizontal tab bar ── */}
       <div className="flex border-b border-border">
-        {TABS.map(tab => (
-          <button 
-            key={tab} 
-            className={`px-4 py-3 border-b-2 text-sm transition-colors ${activeTab === tab ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}`} 
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            className={[
+              "px-5 py-3 text-sm border-b-2 transition-colors",
+              activeTab === tab
+                ? "border-primary text-foreground font-medium"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            ].join(" ")}
             onClick={() => setActiveTab(tab)}
           >
             {tab}
@@ -902,119 +1170,139 @@ export function StackDetailPage() {
         ))}
       </div>
 
-      {data.error_message && (
-        <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {data.error_message}
-        </p>
+      {/* ── Banners ── */}
+      {(data.error_message || operationId !== null) && (
+        <div className="mt-4 space-y-3 px-0">
+          {data.error_message && (
+            <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {data.error_message}
+            </p>
+          )}
+          {operationId !== null && (
+            <OperationProgress
+              operationId={operationId}
+              onFinished={async (op) => {
+                await queryClient.invalidateQueries({ queryKey: ["stacks"] });
+                if (op.status === "succeeded") setOperationId(null);
+              }}
+            />
+          )}
+        </div>
       )}
 
-      {operationId !== null && (
-        <OperationProgress
-          operationId={operationId}
-          onFinished={async (op) => {
-            await queryClient.invalidateQueries({ queryKey: ["stacks"] });
-            if (op.status === "succeeded") setOperationId(null);
-          }}
-        />
-      )}
-
+      {/* ── Configuration tab: sub-nav + content ── */}
       {activeTab === "Configuration" && (
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-          <div className="w-full md:w-56 shrink-0 space-y-1">
-            {SUB_TABS.map(sub => (
-              <button 
-                key={sub} 
-                className={`block w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSubTab === sub ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}`} 
-                onClick={() => setActiveSubTab(sub)}
-              >
-                {sub}
-              </button>
+        <div className="flex min-h-[600px]">
+          {/* Left sub-nav (matches Coolify sub-menu-wrapper exactly) */}
+          <nav className="w-52 shrink-0 border-r border-border pt-5 pr-2">
+            {SUB_NAV_GROUPS.map((group, groupIdx) => (
+              <div key={groupIdx}>
+                {groupIdx > 0 && <div className="my-2 border-t border-border/60" />}
+                <div className="space-y-0.5">
+                  {group.map((sub) => {
+                    const isActive = activeSubTab === sub;
+                    const isDanger = sub === "Danger Zone";
+                    return (
+                      <button
+                        key={sub}
+                        className={[
+                          "flex w-full items-center rounded-md px-3 py-2 text-sm transition-colors text-left",
+                          isActive
+                            ? isDanger
+                              ? "bg-destructive/10 text-destructive font-medium"
+                              : "bg-accent text-foreground font-medium"
+                            : isDanger
+                              ? "text-destructive/70 hover:bg-destructive/10 hover:text-destructive"
+                              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                        ].join(" ")}
+                        onClick={() => setActiveSubTab(sub)}
+                      >
+                        {sub}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
-          </div>
+          </nav>
 
-          <div className="flex-1 space-y-8 min-w-0">
+          {/* Right content panel */}
+          <div className="flex-1 min-w-0 pl-8 pt-5 space-y-6">
+            {/* General */}
             {activeSubTab === "General" && (
               <>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Services</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Service</TableHead>
-                          <TableHead>Image</TableHead>
-                          <TableHead>Port</TableHead>
-                          <TableHead className="w-10" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.services.map((svc) => (
-                          <TableRow key={svc.name}>
-                            <TableCell className="font-medium">
-                              {svc.name}
-                              {svc.is_web && (
-                                <Badge variant="outline" className="ml-2">web</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="max-w-56 truncate font-mono text-xs text-muted-foreground">
-                              {svc.image}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs">
-                              {svc.internal_port ? `${svc.internal_port}` : "-"}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                title={`Open terminal for ${svc.name}`}
-                                disabled={data.status !== "ready"}
-                                onClick={() =>
-                                  window.open(
-                                    `/stacks/${data.id}/terminal/${svc.name}`,
-                                    `terminal-${data.id}-${svc.name}`,
-                                    "width=960,height=600,noopener,noreferrer",
-                                  )
-                                }
-                              >
-                                <Terminal className="h-3.5 w-3.5" aria-hidden />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
+                <GeneralConfigForm stack={data} />
                 <EndpointsCard stack={data} onOperation={setOperationId} />
+                <ServicesCard stack={data} />
                 <ConnectionsCard stack={data} onOperation={setOperationId} />
               </>
             )}
 
+            {/* Environment Variables */}
             {activeSubTab === "Environment Variables" && (
               <EnvVarsCard stack={data} onOperation={setOperationId} />
             )}
 
+            {/* Persistent Storage */}
             {activeSubTab === "Persistent Storage" && (
               <StackBackupsCard stack={data} onOperation={setOperationId} />
             )}
 
+            {/* Resource Operations */}
             {activeSubTab === "Resource Operations" && (
-              <ActionsCard stack={data} actions={actions} />
+              <ActionsCard stack={data} actions={blueprintActions} />
             )}
 
+            {/* Advanced */}
+            {activeSubTab === "Advanced" && (
+              <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />
+            )}
+
+            {/* Git Source */}
+            {activeSubTab === "Git Source" && (
+              <GitSourceSettings stackId={Number(id)} inputs={data.inputs} />
+            )}
+
+            {/* Servers */}
+            {activeSubTab === "Servers" && <ServersList />}
+
+            {/* Scheduled Tasks */}
+            {activeSubTab === "Scheduled Tasks" && (
+              <ScheduledTasksList stackId={Number(id)} />
+            )}
+
+            {/* Webhooks */}
+            {activeSubTab === "Webhooks" && <WebhooksConfig stackId={Number(id)} />}
+
+            {/* Preview Deployments */}
+            {activeSubTab === "Preview Deployments" && <PreviewDeploymentsConfig />}
+
+            {/* Rollback */}
+            {activeSubTab === "Rollback" && <RollbackList stackId={Number(id)} />}
+
+            {/* Resource Limits */}
+            {activeSubTab === "Resource Limits" && (
+              <ResourceLimitsConfig stackId={Number(id)} inputs={data.inputs} />
+            )}
+
+            {/* Metrics */}
+            {activeSubTab === "Metrics" && <MetricsView stackId={Number(id)} />}
+
+            {/* Tags */}
+            {activeSubTab === "Tags" && <TagsConfig stackId={Number(id)} />}
+
+            {/* Danger Zone */}
             {activeSubTab === "Danger Zone" && (
               <>
                 <StackToolsCard stack={data} />
                 <Card className="border-destructive/50">
                   <CardHeader>
-                    <CardTitle className="text-destructive text-base">Delete Project</CardTitle>
+                    <CardTitle className="text-destructive text-base">Delete Stack</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Once you delete this project, there is no going back. Please be certain.
+                      Once you delete this stack, there is no going back. All containers, volumes,
+                      and routes will be permanently removed.
                     </p>
                     <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
                       <Trash2 className="h-4 w-4 mr-2" aria-hidden /> Delete {data.name}
@@ -1023,35 +1311,33 @@ export function StackDetailPage() {
                 </Card>
               </>
             )}
-
-            {activeSubTab === "Advanced" && <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />}
-            {activeSubTab === "Git Source" && <GitSourceSettings stackId={Number(id)} inputs={data.inputs} />}
-            {activeSubTab === "Servers" && <ServersList />}
-            {activeSubTab === "Scheduled Tasks" && <ScheduledTasksList stackId={Number(id)} />}
-            {activeSubTab === "Webhooks" && <WebhooksConfig stackId={Number(id)} />}
-            {activeSubTab === "Preview Deployments" && <PreviewDeploymentsConfig />}
-            {activeSubTab === "Rollback" && <RollbackList stackId={Number(id)} />}
-            {activeSubTab === "Resource Limits" && <ResourceLimitsConfig stackId={Number(id)} inputs={data.inputs} />}
-            {activeSubTab === "Metrics" && <MetricsView stackId={Number(id)} />}
-            {activeSubTab === "Tags" && <TagsConfig stackId={Number(id)} />}
           </div>
         </div>
       )}
 
+      {/* ── Other tabs ── */}
       {activeTab === "Logs" && (
-        <LogsCard stack={data} />
+        <div className="mt-5">
+          <LogsCard stack={data} />
+        </div>
       )}
 
       {activeTab === "Deployments" && (
-        <DeploymentsTab stackId={Number(id)} />
+        <div className="mt-5">
+          <DeploymentsTab stackId={Number(id)} />
+        </div>
       )}
 
       {activeTab === "Terminal" && (
-        <TerminalTab />
+        <div className="mt-5">
+          <TerminalTab />
+        </div>
       )}
 
       {activeTab === "Links" && (
-        <LinksTab />
+        <div className="mt-5">
+          <LinksTab />
+        </div>
       )}
 
       <DeleteStackDialog stack={data} open={deleteOpen} onClose={() => setDeleteOpen(false)} />
