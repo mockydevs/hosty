@@ -13,18 +13,18 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index("ix_stacks_status", "stacks", ["status"])
-    op.create_index("ix_stacks_owner_id", "stacks", ["owner_id"])
-    op.create_index("ix_operations_status", "operations", ["status"])
-    op.create_index("ix_operations_stack_id", "operations", ["stack_id"])
-    op.create_index("ix_operations_site_id", "operations", ["site_id"])
-    op.create_index("ix_audit_logs_user_id", "audit_log", ["user_id"])
+    op.create_index("ix_stacks_status", "stacks", ["status"], if_not_exists=True)
+    op.create_index("ix_stacks_owner_id", "stacks", ["owner_id"], if_not_exists=True)
+    op.create_index("ix_operations_status", "operations", ["status"], if_not_exists=True)
+    op.create_index("ix_operations_stack_id", "operations", ["stack_id"], if_not_exists=True)
+    op.create_index("ix_operations_site_id", "operations", ["site_id"], if_not_exists=True)
+    op.create_index("ix_audit_logs_user_id", "audit_log", ["user_id"], if_not_exists=True)
 
 
 def downgrade() -> None:
-    op.drop_index("ix_stacks_status", "stacks")
-    op.drop_index("ix_stacks_owner_id", "stacks")
-    op.drop_index("ix_operations_status", "operations")
-    op.drop_index("ix_operations_stack_id", "operations")
-    op.drop_index("ix_operations_site_id", "operations")
-    op.drop_index("ix_audit_logs_user_id", "audit_log")
+    op.drop_index("ix_stacks_status", "stacks", if_exists=True)
+    op.drop_index("ix_stacks_owner_id", "stacks", if_exists=True)
+    op.drop_index("ix_operations_status", "operations", if_exists=True)
+    op.drop_index("ix_operations_stack_id", "operations", if_exists=True)
+    op.drop_index("ix_operations_site_id", "operations", if_exists=True)
+    op.drop_index("ix_audit_logs_user_id", "audit_log", if_exists=True)
