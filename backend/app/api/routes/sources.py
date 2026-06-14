@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -150,7 +151,7 @@ async def github_manifest(
             "metadata": "read",
             "emails": "read",
             "administration": "read",
-            "pull_requests": "read",
+            "pull_requests": "write",
         },
         "default_events": ["push", "pull_request"],
     }
@@ -181,8 +182,9 @@ async def github_callback(
     app_name = body.name or data.get("slug") or data.get("name") or "github-app"
 
     # Prefer the installation_id from the redirect URL; if absent (GitHub doesn't
-    # always include it when the installation step is separate), fetch it via the
-    # GitHub API using the freshly-created app's JWT.
+    # always include it when the installation step is separate), poll the GitHub
+    # API using the freshly-created app's JWT.  GitHub propagates the installation
+    # asynchronously, so we retry a few times with backoff before giving up.
     installation_id = body.installation_id
     if not installation_id:
         now = int(time.time())
@@ -192,18 +194,22 @@ async def github_callback(
                 data["pem"],
                 algorithm="RS256",
             )
-            async with httpx.AsyncClient() as gh:
-                inst_resp = await gh.get(
-                    "https://api.github.com/app/installations",
-                    headers={
-                        "Authorization": f"Bearer {app_jwt}",
-                        "Accept": "application/vnd.github.v3+json",
-                    },
-                )
-            if inst_resp.status_code == 200:
-                installations = inst_resp.json()
-                if installations:
-                    installation_id = str(installations[0]["id"])
+            for attempt, delay in enumerate((0, 1, 2, 4)):
+                if delay:
+                    await asyncio.sleep(delay)
+                async with httpx.AsyncClient() as gh:
+                    inst_resp = await gh.get(
+                        "https://api.github.com/app/installations",
+                        headers={
+                            "Authorization": f"Bearer {app_jwt}",
+                            "Accept": "application/vnd.github.v3+json",
+                        },
+                    )
+                if inst_resp.status_code == 200:
+                    installations = inst_resp.json()
+                    if installations:
+                        installation_id = str(installations[0]["id"])
+                        break
         except Exception:
             pass  # leave installation_id as None; user can re-register or install manually
 
@@ -368,12 +374,11 @@ async def github_install(
                 await db.commit()
                 return {"status": "ok", "source_id": source.id}
 
-    # Fallback: verify via GitHub API which app owns this installation
+    # Fallback: verify via GitHub API which app owns this installation.
+    # Check ALL sources for this user — not just those missing an installation_id,
+    # because a stale/wrong id from a previous attempt would otherwise be invisible.
     result = await db.execute(
-        select(GitSource).where(
-            GitSource.owner_id == user.id,
-            GitSource.installation_id.is_(None),
-        )
+        select(GitSource).where(GitSource.owner_id == user.id)
     )
     sources = result.scalars().all()
 
