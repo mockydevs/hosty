@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
-  Archive,
   Boxes,
   Database,
   Gauge,
@@ -19,6 +18,11 @@ import {
   UsersRound,
   X,
   GitBranch,
+  MapPin,
+  Cloud,
+  Variable,
+  Tag,
+  Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
@@ -26,21 +30,24 @@ import { toast } from "sonner";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/sites", label: "Sites", icon: Globe },
-  // v2 (ADR-013): blueprint-deployed container workloads.
-  { to: "/stacks", label: "Deployments", icon: Boxes },
-  { to: "/sources", label: "Sources", icon: GitBranch },
-  { to: "/databases", label: "Databases", icon: Database },
+  { to: "/stacks", label: "Projects", icon: Boxes },
   { to: "/servers", label: "Servers", icon: Server, adminOnly: true },
-  // Phase 11b: DNS zones are tenant-scoped — clients manage their own.
+  { to: "/sources", label: "Sources", icon: GitBranch },
+  { to: "/destinations", label: "Destinations", icon: MapPin },
+  { to: "/sites", label: "Web Sites", icon: Globe },
+  { to: "/databases", label: "Databases", icon: Database },
   { to: "/dns", label: "DNS", icon: Network },
-  { to: "/backups", label: "Backups", icon: Archive },
+  { to: "/backups", label: "S3 Storages", icon: Cloud },
+  { to: "/shared-variables", label: "Shared Variables", icon: Variable },
+  { to: "/notifications", label: "Notifications", icon: Bell },
+  { to: "/security", label: "Keys & Tokens", icon: Key },
+  { to: "/tags", label: "Tags", icon: Tag },
+  { to: "/users", label: "Users", icon: UsersRound, adminOnly: true },
   { to: "/usage", label: "Usage", icon: Gauge },
   { to: "/audit", label: "Audit log", icon: ScrollText },
-  { to: "/users", label: "Users", icon: UsersRound, adminOnly: true },
-  { to: "/security", label: "Keys & Tokens", icon: Key },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
 
 /** Phase 11d: loud, persistent banner while an admin acts as a client. */
 function ImpersonationBanner() {

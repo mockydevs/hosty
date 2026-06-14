@@ -67,7 +67,7 @@ export function NotificationsCard() {
           </Badge>
         </h2>
       </div>
-      <div className="grid gap-3">
+      <div className="grid gap-3 max-h-96 overflow-y-auto pr-2">
         {rows.map((n) => {
           const config =
             SEVERITY_CONFIG[n.severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;

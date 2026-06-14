@@ -68,6 +68,10 @@ const TerminalPage = lazy(() =>
 const ServersPage = lazy(() =>
   import("@/pages/servers").then((m) => ({ default: m.ServersPage })),
 );
+const DestinationsPage = lazy(() => import("@/pages/destinations").then((m) => ({ default: m.DestinationsPage })));
+const SharedVariablesPage = lazy(() => import("@/pages/shared-variables").then((m) => ({ default: m.SharedVariablesPage })));
+const TagsPage = lazy(() => import("@/pages/tags").then((m) => ({ default: m.TagsPage })));
+const NotificationsPage = lazy(() => import("@/pages/notifications").then((m) => ({ default: m.NotificationsPage })));
 
 /** Phase 11a: accounts with a temporary password must change it before
  * anything else — the API blocks every other endpoint with 403 anyway. */
@@ -160,6 +164,10 @@ export function App() {
                     </RequireAdmin>
                   }
                 />
+                <Route path="/destinations" element={<DestinationsPage />} />
+                <Route path="/shared-variables" element={<SharedVariablesPage />} />
+                <Route path="/tags" element={<TagsPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/sources/github/callback" element={<GitHubCallbackPage />} />
                 <Route path="/sources/github/install" element={<GitHubInstallPage />} />
                 <Route path="/databases" element={<DatabasesPage />} />

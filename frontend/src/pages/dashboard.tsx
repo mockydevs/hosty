@@ -262,9 +262,6 @@ export function DashboardPage() {
         )}
       </div>
 
-      {isAdmin && <NotificationsCard />}
-      <BackupFailures />
-
       <section aria-label="Resource usage" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.isPending ? (
           <GaugeSkeletons />
@@ -321,6 +318,9 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+
+      {isAdmin && <NotificationsCard />}
+      <BackupFailures />
     </div>
   );
 }

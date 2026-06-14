@@ -298,11 +298,15 @@ describe("StackCreatePage", () => {
         expect(body).toEqual({
           name: "demo-app",
           blueprint_id: "git",
+          server_id: null,
           inputs: {
             repo: "https://github.com/acme/demo-app.git",
             branch: "main",
-            internal_port: 3000,
             domain: "",
+            internal_port: 3000,
+            build_method: "dockerfile",
+            env: {},
+            source_id: null,
           },
         });
         return jsonResponse({
@@ -337,15 +341,19 @@ describe("StackCreatePage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("New deployment")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /Git repository/i })).toBeInTheDocument();
+    expect(await screen.findByText("Create a new Application")).toBeInTheDocument();
+    expect(await screen.findByText("Public Repository")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Public Repository"));
 
     await user.type(
-      screen.getByLabelText("Repository URL"),
+      await screen.findByLabelText("Repository URL (https://)"),
       "https://github.com/acme/demo-app.git",
     );
-    expect(screen.getByLabelText("Deployment name")).toHaveValue("demo-app");
-    await user.click(screen.getByRole("button", { name: "Deploy" }));
+    await user.click(screen.getByRole("button", { name: "Check repository" }));
+
+    expect(await screen.findByLabelText("Deployment Name")).toHaveValue("demo-app");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(fetch).toHaveBeenCalledWith(expect.objectContaining({ method: "POST" }));
   });

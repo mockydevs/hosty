@@ -24,6 +24,20 @@ import type { components } from "@/lib/api/schema";
 import { copyToClipboard } from "@/lib/utils";
 import { ShowOnceDialog } from "@/pages/stack-create";
 import { StackStatusBadge, isSettling } from "@/pages/stacks";
+
+import { AdvancedSettings } from "./stack-subpages/advanced";
+import { GitSourceSettings } from "./stack-subpages/git-source";
+import { ServersList } from "./stack-subpages/servers";
+import { ScheduledTasksList } from "./stack-subpages/scheduled-tasks";
+import { WebhooksConfig } from "./stack-subpages/webhooks";
+import { PreviewDeploymentsConfig } from "./stack-subpages/preview-deployments";
+import { RollbackList } from "./stack-subpages/rollback";
+import { ResourceLimitsConfig } from "./stack-subpages/resource-limits";
+import { MetricsView } from "./stack-subpages/metrics";
+import { TagsConfig } from "./stack-subpages/tags";
+import { DeploymentsTab } from "./stack-subpages/deployments";
+import { TerminalTab } from "./stack-subpages/terminal-tab";
+import { LinksTab } from "./stack-subpages/links";
 /**
  * Stack detail (v2/M4): services, endpoints, journald logs viewer, blueprint
  * day-2 actions (with confirm + show-once results), delete with
@@ -807,6 +821,8 @@ export function StackDetailPage() {
     (location.state as { operationId?: number } | null)?.operationId ?? null,
   );
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("Configuration");
+  const [activeSubTab, setActiveSubTab] = useState("General");
 
   const id = Number(stackId);
   const stack = useQuery({
@@ -838,13 +854,32 @@ export function StackDetailPage() {
   const data = stack.data;
   const actions = blueprints.data?.find((bp) => bp.id === data.blueprint_id)?.actions ?? [];
 
+  const TABS = ["Configuration", "Deployments", "Logs", "Terminal", "Links"];
+  const SUB_TABS = [
+    "General",
+    "Advanced",
+    "Environment Variables",
+    "Persistent Storage",
+    "Git Source",
+    "Servers",
+    "Scheduled Tasks",
+    "Webhooks",
+    "Preview Deployments",
+    "Rollback",
+    "Resource Limits",
+    "Resource Operations",
+    "Metrics",
+    "Tags",
+    "Danger Zone"
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link
             to="/stacks"
-            aria-label="Back to stacks"
+            aria-label="Back to projects"
             className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -853,9 +888,18 @@ export function StackDetailPage() {
           <StackStatusBadge stack={data} />
           <Badge variant="outline">{data.blueprint_id}</Badge>
         </div>
-        <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-          <Trash2 className="h-4 w-4" aria-hidden /> Delete
-        </Button>
+      </div>
+
+      <div className="flex border-b border-border">
+        {TABS.map(tab => (
+          <button 
+            key={tab} 
+            className={`px-4 py-3 border-b-2 text-sm transition-colors ${activeTab === tab ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}`} 
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
       {data.error_message && (
@@ -874,72 +918,142 @@ export function StackDetailPage() {
         />
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Services</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Image</TableHead>
-                  <TableHead>Port</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.services.map((svc) => (
-                  <TableRow key={svc.name}>
-                    <TableCell className="font-medium">
-                      {svc.name}
-                      {svc.is_web && (
-                        <Badge variant="outline" className="ml-2">
-                          web
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-56 truncate font-mono text-xs text-muted-foreground">
-                      {svc.image}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {svc.internal_port ? `${svc.internal_port}` : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title={`Open terminal for ${svc.name}`}
-                        disabled={data.status !== "ready"}
-                        onClick={() =>
-                          window.open(
-                            `/stacks/${data.id}/terminal/${svc.name}`,
-                            `terminal-${data.id}-${svc.name}`,
-                            "width=960,height=600,noopener,noreferrer",
-                          )
-                        }
-                      >
-                        <Terminal className="h-3.5 w-3.5" aria-hidden />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {activeTab === "Configuration" && (
+        <div className="flex flex-col md:flex-row gap-8 items-start">
+          <div className="w-full md:w-56 shrink-0 space-y-1">
+            {SUB_TABS.map(sub => (
+              <button 
+                key={sub} 
+                className={`block w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSubTab === sub ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}`} 
+                onClick={() => setActiveSubTab(sub)}
+              >
+                {sub}
+              </button>
+            ))}
+          </div>
 
-        <EndpointsCard stack={data} onOperation={setOperationId} />
-      </div>
+          <div className="flex-1 space-y-8 min-w-0">
+            {activeSubTab === "General" && (
+              <>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Services</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Service</TableHead>
+                          <TableHead>Image</TableHead>
+                          <TableHead>Port</TableHead>
+                          <TableHead className="w-10" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.services.map((svc) => (
+                          <TableRow key={svc.name}>
+                            <TableCell className="font-medium">
+                              {svc.name}
+                              {svc.is_web && (
+                                <Badge variant="outline" className="ml-2">web</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-56 truncate font-mono text-xs text-muted-foreground">
+                              {svc.image}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {svc.internal_port ? `${svc.internal_port}` : "-"}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title={`Open terminal for ${svc.name}`}
+                                disabled={data.status !== "ready"}
+                                onClick={() =>
+                                  window.open(
+                                    `/stacks/${data.id}/terminal/${svc.name}`,
+                                    `terminal-${data.id}-${svc.name}`,
+                                    "width=960,height=600,noopener,noreferrer",
+                                  )
+                                }
+                              >
+                                <Terminal className="h-3.5 w-3.5" aria-hidden />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+                <EndpointsCard stack={data} onOperation={setOperationId} />
+                <ConnectionsCard stack={data} onOperation={setOperationId} />
+              </>
+            )}
 
-      <ConnectionsCard stack={data} onOperation={setOperationId} />
-      <EnvVarsCard stack={data} onOperation={setOperationId} />
-      <ActionsCard stack={data} actions={actions} />
-      <StackToolsCard stack={data} />
-      <StackBackupsCard stack={data} onOperation={setOperationId} />
-      <LogsCard stack={data} />
+            {activeSubTab === "Environment Variables" && (
+              <EnvVarsCard stack={data} onOperation={setOperationId} />
+            )}
+
+            {activeSubTab === "Persistent Storage" && (
+              <StackBackupsCard stack={data} onOperation={setOperationId} />
+            )}
+
+            {activeSubTab === "Resource Operations" && (
+              <ActionsCard stack={data} actions={actions} />
+            )}
+
+            {activeSubTab === "Danger Zone" && (
+              <>
+                <StackToolsCard stack={data} />
+                <Card className="border-destructive/50">
+                  <CardHeader>
+                    <CardTitle className="text-destructive text-base">Delete Project</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Once you delete this project, there is no going back. Please be certain.
+                    </p>
+                    <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                      <Trash2 className="h-4 w-4 mr-2" aria-hidden /> Delete {data.name}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {activeSubTab === "Advanced" && <AdvancedSettings />}
+            {activeSubTab === "Git Source" && <GitSourceSettings />}
+            {activeSubTab === "Servers" && <ServersList />}
+            {activeSubTab === "Scheduled Tasks" && <ScheduledTasksList />}
+            {activeSubTab === "Webhooks" && <WebhooksConfig />}
+            {activeSubTab === "Preview Deployments" && <PreviewDeploymentsConfig />}
+            {activeSubTab === "Rollback" && <RollbackList />}
+            {activeSubTab === "Resource Limits" && <ResourceLimitsConfig />}
+            {activeSubTab === "Metrics" && <MetricsView />}
+            {activeSubTab === "Tags" && <TagsConfig />}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Logs" && (
+        <LogsCard stack={data} />
+      )}
+
+      {activeTab === "Deployments" && (
+        <DeploymentsTab />
+      )}
+
+      {activeTab === "Terminal" && (
+        <TerminalTab />
+      )}
+
+      {activeTab === "Links" && (
+        <LinksTab />
+      )}
+
       <DeleteStackDialog stack={data} open={deleteOpen} onClose={() => setDeleteOpen(false)} />
     </div>
   );
