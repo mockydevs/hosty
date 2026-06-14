@@ -487,3 +487,31 @@ class GitSource(Base):
     webhook_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+class ScheduledTask(Base):
+    __tablename__ = "scheduled_tasks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stack_id: Mapped[int] = mapped_column(ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    command: Mapped[str] = mapped_column(String(255), nullable=False)
+    cron_schedule: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+class Tag(Base):
+    __tablename__ = "tags"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+
+class StackTag(Base):
+    __tablename__ = "stack_tags"
+    stack_id: Mapped[int] = mapped_column(ForeignKey("stacks.id", ondelete="CASCADE"), primary_key=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+
+class Deployment(Base):
+    __tablename__ = "deployments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stack_id: Mapped[int] = mapped_column(ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True)
+    commit_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False) # e.g., 'success', 'failed', 'running'
+    message: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

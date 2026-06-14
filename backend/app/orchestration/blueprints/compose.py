@@ -222,6 +222,8 @@ class ComposeBlueprint:
                     is_web=svc_name == self._web_service,
                     build_repo=build_repo,
                     build_branch=build_branch,
+                    memory_mb=int(getattr(inputs, "memory_limit")) if hasattr(inputs, "memory_limit") and getattr(inputs, "memory_limit") else None,
+                    cpu_percent=int(getattr(inputs, "cpu_limit")) if hasattr(inputs, "cpu_limit") and getattr(inputs, "cpu_limit") else None,
                 )
             )
 
