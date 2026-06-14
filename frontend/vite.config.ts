@@ -17,7 +17,7 @@ export default defineConfig({
   },
   build: {
     sourcemap: false,
-    chunkSizeWarningLimit: 300,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -25,6 +25,8 @@ export default defineConfig({
           query: ["@tanstack/react-query"],
           icons: ["lucide-react"],
           form: ["react-hook-form", "@hookform/resolvers", "zod"],
+          terminal: ["@xterm/xterm", "@xterm/addon-fit"],
+          charts: ["recharts"],
         },
       },
     },
