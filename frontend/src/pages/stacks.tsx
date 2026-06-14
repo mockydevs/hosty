@@ -59,8 +59,11 @@ function RetryDeleteButton({ stack }: { stack: Stack }) {
   async function retry() {
     setBusy(true);
     try {
-      await api.DELETE(`/api/stacks/${stack.id}` as any, {
-        body: { confirm_name: stack.name } as any,
+      await fetch(`/api/stacks/${stack.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ confirm_name: stack.name }),
       });
       qc.invalidateQueries({ queryKey: ["stacks"] });
     } catch {

@@ -243,9 +243,9 @@ function OpCard({ op, live = false }: { op: StackOp; live?: boolean }) {
         <LogTerminal logLines={op.log_lines} isRunning={isRunning} />
       )}
 
-      {/* Error message (when no log lines to show it) */}
+      {/* Error message for failed ops with no log output (timed out / orphaned) */}
       {op.status === "failed" && op.error && !op.log_lines && (
-        <div className="border-t border-red-500/20 bg-red-500/5 px-4 py-2">
+        <div className="border-t border-red-500/20 bg-red-950/40 px-4 py-2.5 rounded-b-xl">
           <p className="text-xs text-red-400 font-mono break-all">{op.error}</p>
         </div>
       )}

@@ -26,11 +26,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.clock import utcnow
 from app.core.config import Settings
 from app.db.models import Operation, Server, SshKey
 from app.domain.actions import Action
@@ -195,6 +197,11 @@ class Reconciler:
 
     async def run_loop(self) -> None:
         """Interval mode: converge everything, sleep, repeat. Never raises."""
+        # Immediately reap any operations orphaned by a prior server restart.
+        try:
+            await self._reap_stale_operations()
+        except Exception as exc:
+            log.error("stale_op_reap_failed", error=str(exc))
         while True:
             try:
                 await self.converge_all()
@@ -202,7 +209,38 @@ class Reconciler:
                 log.error("reconcile_cycle_failed", error=str(exc))
             await asyncio.sleep(max(5, self._settings.reconcile_interval_seconds))
 
+    async def _reap_stale_operations(self) -> None:
+        """Mark pending/running operations older than operation_timeout_seconds as failed.
+        This recovers background tasks lost on server restart and hard-hung operations."""
+        cutoff = utcnow() - timedelta(seconds=self._settings.operation_timeout_seconds)
+        async with self._sessionmaker() as db:
+            stale = (
+                await db.execute(
+                    select(Operation)
+                    .where(Operation.status.in_(["pending", "running"]))
+                    .where(Operation.created_at < cutoff)
+                )
+            ).scalars().all()
+            if not stale:
+                return
+            for op in stale:
+                log.warning(
+                    "reaping_stale_operation",
+                    op_id=op.id,
+                    kind=op.kind,
+                    status=op.status,
+                    age_s=int((utcnow() - op.created_at).total_seconds()),
+                )
+                op.status = "failed"
+                op.error = (
+                    f"Timed out after {self._settings.operation_timeout_seconds}s "
+                    f"(was {op.status} — likely lost on server restart)"
+                )
+                op.finished_at = utcnow()
+            await db.commit()
+
     async def converge_all(self) -> list[StackOutcome]:
+        await self._reap_stale_operations()
         async with self._sessionmaker() as db:
             desired = await self._load_desired(db)
             local_observed = await self._observe(db)
@@ -315,7 +353,23 @@ class Reconciler:
                 return StackOutcome(stack=name, planned=len(actions), executed=0, error=error)
 
         try:
-            return await self._apply_inner(name, spec, actions, tenants_in_use, operation_id, host)
+            return await asyncio.wait_for(
+                self._apply_inner(name, spec, actions, tenants_in_use, operation_id, host),
+                timeout=self._settings.operation_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            timeout_s = self._settings.operation_timeout_seconds
+            error = f"Operation timed out after {timeout_s}s"
+            log.error("stack_operation_timeout", stack=name, timeout_s=timeout_s)
+            async with self._sessionmaker() as db:
+                if operation_id is not None:
+                    op = await db.get(Operation, operation_id)
+                    if op is not None and op.status not in ("succeeded", "failed"):
+                        await operations.append_log(db, op, f"✗ {error}")
+                        await operations.finish(db, op, status="failed", error=error)
+                fail_status = "deleting" if spec is None else "degraded"
+                await self._on_stack_status(db, name, fail_status, error)
+            return StackOutcome(stack=name, planned=len(actions), executed=0, error=error)
         finally:
             if remote:
                 try:

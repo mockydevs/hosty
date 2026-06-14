@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     reconcile_interval_seconds: int = 60
     reconcile_concurrency: int = 4  # stacks converged in parallel, host-wide
     reconcile_drift_cycles: int = 3  # consecutive diverged cycles before notifying
+    operation_timeout_seconds: int = 600  # hard wall-clock limit per stack operation
     stack_image_auto_update_enabled: bool = True
     stack_image_update_interval_seconds: int = 6 * 3600
 
