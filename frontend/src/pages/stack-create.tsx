@@ -707,12 +707,14 @@ function TemplateCard({
 // ─── TemplateInstallerView ────────────────────────────────────────────────────
 function TemplateInstallerView({
   blueprint,
+  domainConfig,
   onBack,
   onSubmit,
   pending,
   serverError,
 }: {
   blueprint: Blueprint;
+  domainConfig?: DomainConfig | null;
   onBack: () => void;
   onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
   pending: boolean;
@@ -726,6 +728,10 @@ function TemplateInstallerView({
     () => `${blueprint.id}-${Math.random().toString(36).slice(2, 6)}`,
   );
   const [nameError, setNameError] = useState<string | null>(null);
+
+  const hasDomainField = !!(blueprint.inputs_schema as any)?.properties?.domain;
+  const autoDomain = hasDomainField ? suggestedDomain(name, domainConfig) : undefined;
+  const overrideValues = autoDomain ? { domain: autoDomain } : undefined;
 
   return (
     <div className="space-y-6">
@@ -779,6 +785,7 @@ function TemplateInstallerView({
         <SchemaForm
           key={blueprint.id}
           schema={blueprint.inputs_schema as JsonSchema}
+          overrideValues={overrideValues}
           onSubmit={async (inputs) => {
             const slug = name.trim().toLowerCase();
             const err = validateSlug(slug);
@@ -815,6 +822,7 @@ function TemplateInstallerView({
 // ─── TemplateDeployForm ───────────────────────────────────────────────────────
 function TemplateDeployForm({
   blueprints,
+  domainConfig,
   onSubmit,
   pending,
   serverError,
@@ -823,6 +831,7 @@ function TemplateDeployForm({
   onClearTemplate,
 }: {
   blueprints: Blueprint[];
+  domainConfig?: DomainConfig | null;
   onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
   pending: boolean;
   serverError: string | null;
@@ -865,6 +874,7 @@ function TemplateDeployForm({
     return (
       <TemplateInstallerView
         blueprint={installing}
+        domainConfig={domainConfig}
         onBack={onClearTemplate}
         onSubmit={onSubmit}
         pending={pending}
@@ -1451,6 +1461,7 @@ export function StackCreatePage() {
           {step === "template" && (
             <TemplateDeployForm
               blueprints={blueprints.data}
+              domainConfig={domainConfig.data}
               pending={pending}
               serverError={serverError}
               onSubmit={submitBlueprint}

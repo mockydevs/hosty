@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
  *   volumes), and `anyOf [T, null]` optionals (pydantic's `T | None`).
  */
 import { Plus, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 export type JsonSchema = {
   type?: string;
@@ -237,6 +237,7 @@ export function SchemaForm({
   pending = false,
   serverError,
   fieldActions,
+  overrideValues,
   children,
 }: {
   schema: JsonSchema;
@@ -246,15 +247,36 @@ export function SchemaForm({
   serverError?: string | null;
   /** Per-field action buttons keyed by field name (e.g. domain → Autogenerate). */
   fieldActions?: Record<string, FieldAction>;
+  /** Externally computed values (e.g. auto-generated domain). Applied to fields
+   *  the user hasn't manually edited yet; user edits always win. */
+  overrideValues?: Record<string, string>;
   /** Extra fields rendered above the schema-driven ones (e.g. stack name). */
   children?: React.ReactNode;
 }) {
   const fields = schemaFields(schema);
   const [values, setValues] = useState(() => initialState(fields));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Set<string>>(() => new Set());
 
-  const set = (name: string, value: FieldState) =>
+  useEffect(() => {
+    if (!overrideValues) return;
+    setValues((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [name, val] of Object.entries(overrideValues)) {
+        if (!touched.has(name) && prev[name] !== val) {
+          next[name] = val;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [overrideValues, touched]);
+
+  const set = (name: string, value: FieldState) => {
+    setTouched((t) => { const s = new Set(t); s.add(name); return s; });
     setValues((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
