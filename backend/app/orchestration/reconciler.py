@@ -169,6 +169,12 @@ async def _observe_remote(
     return observed
 
 
+def _service_verb(cls: type) -> str:
+    return {"StartService": "Starting", "StopService": "Stopping", "RestartService": "Restarting"}.get(
+        cls.__name__, cls.__name__
+    )
+
+
 class Reconciler:
     def __init__(
         self,
@@ -189,25 +195,88 @@ class Reconciler:
         self._locks: dict[str, asyncio.Lock] = {}
         self._semaphore = asyncio.Semaphore(max(1, settings.reconcile_concurrency))
         self._drift_counts: dict[str, int] = {}
+        # Immediate-trigger queue: API calls enqueue here; run_loop drains before each cycle
+        self._queue: asyncio.Queue[tuple[str, int | None]] = asyncio.Queue()
+        self._wake = asyncio.Event()
 
     def _lock(self, stack: str) -> asyncio.Lock:
         return self._locks.setdefault(stack, asyncio.Lock())
 
+    def enqueue(self, stack_name: str, operation_id: int | None = None) -> None:
+        """Trigger immediate convergence of one stack.  Non-blocking; survives no restart
+        (the stale-op reaper + startup recovery are the durability backstop)."""
+        self._queue.put_nowait((stack_name, operation_id))
+        self._wake.set()
+
+    async def _drain_queue(self) -> None:
+        """Converge all immediately-enqueued stacks (deduped by name, newest op wins)."""
+        pending: dict[str, int | None] = {}
+        while not self._queue.empty():
+            name, op_id = self._queue.get_nowait()
+            pending[name] = op_id  # last enqueue for same stack wins
+        if not pending:
+            return
+        results = await asyncio.gather(
+            *(self.converge_stack(name, operation_id=op_id) for name, op_id in pending.items()),
+            return_exceptions=True,
+        )
+        for name, result in zip(pending, results):
+            if isinstance(result, Exception):
+                log.error("queue_converge_failed", stack=name, error=str(result))
+
+    async def _recover_pending_operations(self) -> None:
+        """On startup: find ops stuck in 'pending' and immediately re-enqueue them.
+        Handles background tasks orphaned by a server restart."""
+        from app.db.models import Stack
+        async with self._sessionmaker() as db:
+            rows = (
+                await db.execute(
+                    select(Operation, Stack)
+                    .join(Stack, Stack.id == Operation.stack_id)
+                    .where(Operation.status == "pending")
+                    .where(Operation.stack_id.isnot(None))
+                )
+            ).all()
+        for op, stack in rows:
+            log.info("recovering_pending_op", stack=stack.name, op_id=op.id)
+            self.enqueue(stack.name, op.id)
+
     # --- entrypoints ----------------------------------------------------------------
 
     async def run_loop(self) -> None:
-        """Interval mode: converge everything, sleep, repeat. Never raises."""
-        # Immediately reap any operations orphaned by a prior server restart.
+        """Event-driven loop: immediate wakeup on enqueue(), interval as safety net."""
+        # On startup: recover ops orphaned by prior restart, then immediate full sweep.
+        try:
+            await self._recover_pending_operations()
+        except Exception as exc:
+            log.error("op_recovery_failed", error=str(exc))
         try:
             await self._reap_stale_operations()
         except Exception as exc:
             log.error("stale_op_reap_failed", error=str(exc))
+
         while True:
+            # Drain the immediate queue first (enqueue() calls from API routes)
+            try:
+                await self._drain_queue()
+            except Exception as exc:
+                log.error("queue_drain_failed", error=str(exc))
+
+            # Full reconcile cycle (catches drift and anything missed)
             try:
                 await self.converge_all()
             except Exception as exc:
                 log.error("reconcile_cycle_failed", error=str(exc))
-            await asyncio.sleep(max(5, self._settings.reconcile_interval_seconds))
+
+            # Sleep until triggered or interval fires
+            try:
+                await asyncio.wait_for(
+                    self._wake.wait(),
+                    timeout=max(5, self._settings.reconcile_interval_seconds),
+                )
+                self._wake.clear()
+            except asyncio.TimeoutError:
+                pass
 
     async def _reap_stale_operations(self) -> None:
         """Mark pending/running operations older than operation_timeout_seconds as failed.
@@ -409,7 +478,67 @@ class Reconciler:
                 host=host,
             )
             executed = 0
-            for action in actions:
+            i = 0
+            while i < len(actions):
+                action = actions[i]
+
+                # Batch consecutive same-type service actions → parallel execution
+                from app.domain.actions import StartService, StopService, RestartService
+                if isinstance(action, (StartService, StopService, RestartService)):
+                    batch_cls = type(action)
+                    batch: list[Action] = []
+                    j = i
+                    while j < len(actions) and type(actions[j]) is batch_cls:
+                        batch.append(actions[j])
+                        j += 1
+
+                    if len(batch) > 1:
+                        step_pairs = [operations.step_for(a) for a in batch]
+                        verb = _service_verb(batch_cls)
+                        if op is not None:
+                            for sn, _ in step_pairs:
+                                await operations.set_step(db, op, sn, "running")
+                            await operations.append_log(
+                                db, op, f"→ {verb} {len(batch)} services in parallel"
+                            )
+                        results = await asyncio.gather(
+                            *(executor.execute(a, ctx) for a in batch),
+                            return_exceptions=True,
+                        )
+                        # Find first error
+                        first_err = next(
+                            (
+                                (step_pairs[k], results[k])
+                                for k in range(len(results))
+                                if isinstance(results[k], Exception)
+                            ),
+                            None,
+                        )
+                        if first_err:
+                            (sn, sl), exc = first_err
+                            error = f"{sn}: {exc}"
+                            log.error("stack_action_failed", stack=name, step=sn, error=str(exc))
+                            if op is not None:
+                                for k, (step_n, _) in enumerate(step_pairs):
+                                    s = "failed" if isinstance(results[k], Exception) else "done"
+                                    await operations.set_step(db, op, step_n, s)
+                                await operations.append_log(db, op, f"✗ {sl}: {exc}")
+                                await operations.finish(db, op, status="failed", error=error[:500])
+                            fail_status = "deleting" if spec is None else "degraded"
+                            await self._on_stack_status(db, name, fail_status, error[:500])
+                            return StackOutcome(
+                                stack=name, planned=len(actions), executed=executed, error=error
+                            )
+                        if op is not None:
+                            for sn, sl in step_pairs:
+                                await operations.set_step(db, op, sn, "done")
+                            past = verb.lower().rstrip("e") + "ed"
+                            await operations.append_log(db, op, f"✓ {len(batch)} services {past}")
+                        executed += len(batch)
+                        i = j
+                        continue
+
+                # Single action (or non-service action) — sequential
                 step_name, step_label = operations.step_for(action)
                 if op is not None:
                     await operations.set_step(db, op, step_name, "running")
@@ -423,8 +552,7 @@ class Reconciler:
                         await operations.set_step(db, op, step_name, "failed")
                         await operations.append_log(db, op, f"✗ {step_label}: {exc}")
                         await operations.finish(db, op, status="failed", error=error[:500])
-                    # Keep "deleting" status during teardown so the row is cleaned up
-                    # once a later retry succeeds; only mark degraded for active stacks.
+                    # Keep "deleting" during teardown so cleanup fires on next success.
                     fail_status = "deleting" if spec is None else "degraded"
                     await self._on_stack_status(db, name, fail_status, error[:500])
                     return StackOutcome(
@@ -434,6 +562,7 @@ class Reconciler:
                     await operations.set_step(db, op, step_name, "done")
                     await operations.append_log(db, op, f"✓ {step_label}")
                 executed += 1
+                i += 1
 
             if op is not None:
                 await operations.append_log(db, op, f"Done — all {executed} steps completed successfully")

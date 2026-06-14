@@ -333,7 +333,7 @@ async def stack_webhook(
     await db.commit()
     await db.refresh(op)
 
-    background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
+    request.app.state.reconciler.enqueue(stack.name, op.id)
     return {"status": "accepted", "operation_id": op.id}
 
 
@@ -627,7 +627,7 @@ async def run_stack_action(
     # An action that edited desired state (rotate_salts, switch_php, ...)
     # bumped the generation — converge it without waiting for the interval.
     if result.ok and stack.generation > stack.observed_generation:
-        background.add_task(request.app.state.reconciler.converge_stack, stack.name)
+        request.app.state.reconciler.enqueue(stack.name)
     return StackActionResponse(
         ok=result.ok, message=result.message, data=result.data, show_once=result.show_once
     )
@@ -724,7 +724,7 @@ async def set_service_exposure(
     await db.commit()
     await db.refresh(op)
 
-    background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
+    request.app.state.reconciler.enqueue(stack.name, op.id)
     return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
 
 # ==============================================================================
@@ -961,7 +961,7 @@ async def rollback_deployment(
     )
     db.add(new_dep)
     await db.commit()
-    background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
+    request.app.state.reconciler.enqueue(stack.name, op.id)
     return {"status": "ok", "operation_id": op.id}
 
 

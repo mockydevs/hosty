@@ -132,12 +132,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.reconciler = reconciler
         reconciler_task: asyncio.Task | None = None
         if settings.reconcile_enabled and settings.env != "test":
-            try:
-                await reconciler.converge_all()
-            except Exception as exc:
-                structlog.get_logger("hosty.startup").warning(
-                    "startup_converge_failed", error=str(exc)
-                )
+            # run_loop() does startup recovery + immediate full sweep before entering
+            # its event-driven wait, so no separate converge_all() call is needed.
             reconciler_task = asyncio.create_task(reconciler.run_loop())
 
         # Ensure a localhost Server row always exists so the servers page
