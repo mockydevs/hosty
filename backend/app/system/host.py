@@ -509,7 +509,7 @@ class RemoteSSHHost(HostContext):
         from app.system import systemd_user
         from app.system.systemd_user import SystemdUserError
         # start waits for git-sync → podman build → container; give it 10 min.
-        timeout = 600.0 if action == "start" else 120.0
+        timeout = 1800.0 if action == "start" else 120.0
         try:
             await self._ssh_run(systemd_user.build_control_argv(user, action, unit), timeout=timeout)
         except _SSHRunError as exc:

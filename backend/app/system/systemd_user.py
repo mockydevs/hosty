@@ -121,7 +121,7 @@ async def daemon_reload(user: str) -> None:
 async def control(user: str, action: str, unit: str, *, timeout: float | None = None) -> None:
     # start must wait for the full dep chain (git-sync → podman build → container);
     # builds can easily exceed 60s, so default to 10 min for start, 60s for the rest.
-    _timeout = timeout if timeout is not None else (600.0 if action == "start" else 60.0)
+    _timeout = timeout if timeout is not None else (1800.0 if action == "start" else 60.0)
     await _run_or_raise(build_control_argv(user, action, unit), f"{action} {unit} for {user}", timeout=_timeout)
 
 
