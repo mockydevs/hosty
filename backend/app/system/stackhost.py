@@ -114,9 +114,23 @@ def sync_units(uid: int, stack: str, tenant: str, desired: dict[str, str]) -> bo
         svc_dir = Path(quadlet.systemd_user_unit_dir(tenant))
         changed |= _sync_dir(svc_dir, stack, service_files)
         if service_files:
-            shutil.chown(str(svc_dir), user=tenant, group=tenant)
+            # Chown ALL intermediate dirs so the user manager can read units:
+            # makedirs creates .config/ and .config/systemd/ as root otherwise.
+            for d in [svc_dir.parent.parent, svc_dir.parent, svc_dir]:
+                if d.is_dir():
+                    shutil.chown(str(d), user=tenant, group=tenant)
             for fname in service_files:
                 shutil.chown(str(svc_dir / fname), user=tenant, group=tenant)
+
+    # For git blueprint stacks, ensure the workspace parent dir exists and is
+    # tenant-owned even when there are no env files (sync_env_files won't run).
+    # git-clone creates stacks/{stack}/src — it needs write access to stack_dir.
+    if any(f.endswith("-git-sync.service") for f in service_files):
+        for d in [quadlet.stacks_root(tenant), quadlet.stack_dir(tenant, stack)]:
+            dp = Path(d)
+            dp.mkdir(parents=True, exist_ok=True)
+            shutil.chown(d, user=tenant, group=tenant)
+
     return changed
 
 
@@ -184,7 +198,12 @@ def sync_env_files(tenant: str, stack: str, files: dict[str, str]) -> bool:
     changed = False
     if desired:
         os.makedirs(env_dir, exist_ok=True)
-        shutil.chown(env_dir, user=tenant, group=tenant)
+        # Chown ALL intermediate dirs so the tenant can write to the stack dir
+        # (e.g. git-sync creating stacks/{stack}/src). makedirs creates them as
+        # root; only chowning the leaf left parents root-owned.
+        for d in [quadlet.stacks_root(tenant), quadlet.stack_dir(tenant, stack), env_dir]:
+            if os.path.isdir(d):
+                shutil.chown(d, user=tenant, group=tenant)
     for path, content in desired.items():
         if existing.get(path) != content:
             _open_write(path, content, 0o600)

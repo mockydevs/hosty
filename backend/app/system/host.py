@@ -339,9 +339,25 @@ class RemoteSSHHost(HostContext):
         if service_files or has_existing:
             changed |= await self._sync_remote_dir(svc_dir, stack, service_files)
             if service_files:
-                await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", svc_dir])
+                # Chown ALL intermediate dirs (.config/, .config/systemd/, .config/systemd/user/)
+                import posixpath
+                for d in [posixpath.dirname(posixpath.dirname(svc_dir)),
+                          posixpath.dirname(svc_dir), svc_dir]:
+                    await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", d],
+                                        ok_codes={0, 1})
                 for fname in service_files:
                     await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", f"{svc_dir}/{fname}"])
+
+        # For git blueprint stacks, ensure the workspace parent dir exists and is
+        # tenant-owned even when there are no env files.
+        if any(f.endswith("-git-sync.service") for f in service_files):
+            from app.system import quadlet as _q
+            stacks_dir = _q.stacks_root(tenant)
+            stack_dir = _q.stack_dir(tenant, stack)
+            for d in [stacks_dir, stack_dir]:
+                await self._sftp_makedirs(d)
+                await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", d])
+
         return changed
 
     async def remove_units(self, uid: int, stack: str, tenant: str) -> bool:
@@ -407,7 +423,10 @@ class RemoteSSHHost(HostContext):
             pass
         if files:
             await self._sftp_makedirs(env_dir)
-            await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", env_dir])
+            from app.system import quadlet as _q
+            for d in [_q.stacks_root(tenant), _q.stack_dir(tenant, stack), env_dir]:
+                await self._ssh_run(["chown", f"{tenant}:{tenant}", "--", d],
+                                    ok_codes={0, 1})
         changed = False
         for path, content in files.items():
             if existing.get(path) != content:
