@@ -28,6 +28,7 @@ import {
   Globe2,
   Rocket,
   Search,
+  Server,
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
@@ -643,6 +644,9 @@ export function StackCreatePage() {
   const [publicRepoUrl, setPublicRepoUrl] = useState("");
   const [publicChecked, setPublicChecked] = useState(false);
 
+  // server selection (multi-server deployment)
+  const [serverId, setServerId] = useState<number | null>(null);
+
   // submit state
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -666,6 +670,15 @@ export function StackCreatePage() {
       if (error || !data) return [];
       return data as any[];
     },
+  });
+
+  const servers = useQuery({
+    queryKey: ["servers"],
+    queryFn: async () => {
+      const { data } = await (api as any).GET("/api/servers");
+      return (data ?? []) as { id: number; name: string; is_localhost: boolean; status: string }[];
+    },
+    staleTime: 30_000,
   });
 
   const domainConfig = useQuery({
@@ -709,7 +722,7 @@ export function StackCreatePage() {
     setPending(true);
     try {
       const { data, error, response } = await api.POST("/api/stacks", {
-        body: { name, blueprint_id: blueprint.id, inputs },
+        body: { name, blueprint_id: blueprint.id, inputs, server_id: serverId ?? null },
       });
       if (error || !data) {
         setServerError(apiErrorMessage(error, `Deploy failed (${response.status})`));
@@ -788,6 +801,28 @@ export function StackCreatePage() {
               <span className="text-foreground">{selectedRepo.name}</span>
             </>
           )}
+        </div>
+      )}
+
+      {/* Server picker — shown when multiple servers are available */}
+      {(servers.data ?? []).length > 1 && (
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
+          <Server className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="text-sm font-medium">Deploy to:</span>
+          <select
+            value={serverId ?? ""}
+            onChange={(e) => setServerId(e.target.value ? Number(e.target.value) : null)}
+            className="ml-auto h-8 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">Localhost (default)</option>
+            {(servers.data ?? [])
+              .filter((s) => !s.is_localhost)
+              .map((s) => (
+                <option key={s.id} value={s.id} disabled={s.status !== "connected"}>
+                  {s.name}{s.status !== "connected" ? " (not connected)" : ""}
+                </option>
+              ))}
+          </select>
         </div>
       )}
 

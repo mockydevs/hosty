@@ -131,6 +131,7 @@ def spec_for(
         name=stack.name,
         tenant=tenant_for(stack.owner_id),
         loopback_ip=stack.loopback_ip,
+        server_id=stack.server_id,
         services=tuple(
             ServiceSpec(
                 name=svc.name,

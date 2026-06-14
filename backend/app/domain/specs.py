@@ -117,6 +117,7 @@ class StackSpec:
     volumes: tuple[VolumeSpec, ...] = ()
     endpoints: tuple[EndpointSpec, ...] = ()
     suspended: bool = False
+    server_id: int | None = None  # None = localhost (default)
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="stack name")

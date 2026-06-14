@@ -3,15 +3,15 @@ one adapter call, structured log line per action. Ordering belongs to the
 planner; retry/undo policy belongs to the reconciler (there is no undo —
 failures surface and the next cycle replans).
 
-Blocking filesystem work (stackhost) runs in a worker thread so a large
-unit set never stalls the event loop.
+All host I/O is routed through `ctx.host` (a HostContext).  The default is
+`LocalHost()`, so every existing caller that omits `host=` is unchanged.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import structlog
 from sqlalchemy import select
@@ -22,7 +22,9 @@ from app.core.secrets import decrypt_secret
 from app.db.models import SshKey, Tenant, User
 from app.domain import actions as act
 from app.services import tenancy
-from app.system import podman, quadlet, stackhost, systemd_user
+from app.system import quadlet
+from app.system.host import HostContext, LocalHost
+from app.system.systemd_user import SystemdUserError
 
 log = structlog.get_logger("hosty.executor")
 
@@ -38,12 +40,13 @@ class ExecContext:
     `sync_caddy` rebuilds + applies the full ingress config (injected: the
     config owner differs before/after M6). `tenant_in_use` answers "does
     DESIRED state still hold stacks for this tenant" — only the caller can
-    see the whole desired set."""
+    see the whole desired set.  `host` routes all I/O to the right server."""
 
     db: AsyncSession
     settings: Settings
     sync_caddy: Callable[[], Awaitable[None]]
     tenant_in_use: Callable[[str], Awaitable[bool]]
+    host: HostContext = field(default_factory=LocalHost)
 
 
 def _tenant_user_id(linux_user: str) -> int:
@@ -66,14 +69,13 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
             user = await ctx.db.get(User, _tenant_user_id(tenant))
             if user is None:
                 raise ExecutorError(f"No user account for tenant {tenant}")
-            await tenancy.ensure_tenant(ctx.db, user)
+            await tenancy.ensure_tenant(ctx.db, user, host=ctx.host)
             keys = (
                 (await ctx.db.execute(select(SshKey).where(SshKey.owner_id == user.id)))
                 .scalars()
                 .all()
             )
-            await asyncio.to_thread(
-                stackhost.sync_ssh_keys,
+            await ctx.host.sync_ssh_keys(
                 tenant,
                 [
                     (key.name, decrypt_secret(key.private_key_encrypted, ctx.settings.secret_key))
@@ -81,31 +83,26 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
                 ],
             )
         case act.EnsureVolumeDir(tenant=tenant, stack=stack, volume=volume):
-            await asyncio.to_thread(stackhost.ensure_volume_dir, tenant, stack, volume)
+            await ctx.host.ensure_volume_dir(tenant, stack, volume)
         case act.WriteUnits(stack=spec):
             uid = await _uid_for(ctx.db, spec.tenant)
-            await asyncio.to_thread(
-                stackhost.sync_env_files, spec.tenant, spec.name, quadlet.env_files(spec)
-            )
-            await asyncio.to_thread(stackhost.sync_units, uid, spec.name, quadlet.unit_files(spec))
+            await ctx.host.sync_env_files(spec.tenant, spec.name, quadlet.env_files(spec))
+            await ctx.host.sync_units(uid, spec.name, quadlet.unit_files(spec))
         case act.RemoveUnits(tenant=tenant, stack=stack):
             uid = await _uid_for(ctx.db, tenant)
-            await asyncio.to_thread(stackhost.remove_units, uid, stack)
-            await asyncio.to_thread(stackhost.remove_env_files, tenant, stack)
-            # Safety net: force-remove any leftover container for this stack so
-            # an orphan can't keep its published port bound (the next stack to
-            # reuse that port would fail with "address already in use").
-            await podman.remove_stack_containers(uid, stack)
+            await ctx.host.remove_units(uid, stack)
+            await ctx.host.remove_env_files(tenant, stack)
+            await ctx.host.remove_stack_containers(uid, stack)
         case act.DaemonReload(tenant=tenant):
-            await systemd_user.daemon_reload(tenant)
+            await ctx.host.daemon_reload(tenant)
         case act.StartService(tenant=tenant, stack=stack, service=service):
             await _control_service(ctx, tenant, stack, service, "start")
         case act.StopService(tenant=tenant, stack=stack, service=service):
-            await systemd_user.control(tenant, "stop", quadlet.service_unit_name(stack, service))
+            await ctx.host.control_service(tenant, "stop", quadlet.service_unit_name(stack, service))
         case act.RestartService(tenant=tenant, stack=stack, service=service):
             await _control_service(ctx, tenant, stack, service, "restart")
         case act.RemoveVolumeDir(tenant=tenant, stack=stack, volume=volume):
-            await stackhost.remove_volume_dir(tenant, stack, volume)
+            await ctx.host.remove_volume_dir(tenant, stack, volume)
         case act.RemoveTenantIfEmpty(tenant=tenant):
             await _remove_tenant_if_empty(tenant, ctx)
         case act.SyncCaddy():
@@ -136,19 +133,17 @@ async def _control_service(
     ctx: ExecContext, tenant: str, stack: str, service: str, action: str
 ) -> None:
     unit = quadlet.service_unit_name(stack, service)
-    last_exc: systemd_user.SystemdUserError | None = None
+    last_exc: SystemdUserError | None = None
     for delay in (None, *_REGENERATE_RETRY_DELAYS):
         if delay is not None:
-            # The unit was missing on the previous attempt: give the user
-            # manager a moment, re-run the quadlet generator, then retry.
             await asyncio.sleep(delay)
-            await systemd_user.daemon_reload(tenant)
+            await ctx.host.daemon_reload(tenant)
         try:
-            await systemd_user.control(tenant, action, unit)
+            await ctx.host.control_service(tenant, action, unit)
             return
-        except systemd_user.SystemdUserError as exc:
+        except SystemdUserError as exc:
             if not _is_unit_missing(exc):
-                raise  # a genuine start failure (image pull, crash loop, …) — surface as-is
+                raise
             last_exc = exc
             log.warning("unit_not_generated_retrying", unit=unit, tenant=tenant, action=action)
     uid = await _uid_for(ctx.db, tenant)
@@ -169,13 +164,10 @@ async def _remove_tenant_if_empty(tenant: str, ctx: ExecContext) -> None:
         await ctx.db.execute(select(Tenant).where(Tenant.linux_user == tenant))
     ).scalar_one_or_none()
     if row is None:
-        return  # never provisioned (or already released)
+        return
     if row.uid is not None:
-        # Belt and braces: never delete a tenant user that still has host
-        # artifacts — a unit file or volume left behind means a bug or an
-        # in-flight teardown; keep the user and let the next cycle decide.
-        scan = await asyncio.to_thread(stackhost.scan_tenant, row.uid, tenant)
+        scan = await ctx.host.scan_tenant(row.uid, tenant)
         if scan.unit_files or scan.volume_dirs:
             log.warning("tenant_gc_skipped_artifacts_remain", tenant=tenant)
             return
-    await tenancy.remove_tenant(ctx.db, row.user_id)
+    await tenancy.remove_tenant(ctx.db, row.user_id, host=ctx.host)

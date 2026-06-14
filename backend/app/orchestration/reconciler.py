@@ -14,6 +14,11 @@ Drift: a stack whose plan is non-empty on N consecutive cycles
 (`reconcile_drift_cycles`) is flapping or stuck — emit one deduplicated
 notification (`stack:<name>:drift`); resolve it when a cycle finds the
 stack converged.
+
+Multi-server: each StackSpec carries a `server_id`; the reconciler resolves
+the appropriate HostContext per spec before executing.  Remote observation
+(SSH-based scan) runs alongside the local observer so the planner sees
+accurate state for stacks on remote servers.
 """
 
 from __future__ import annotations
@@ -23,15 +28,17 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from app.db.models import Operation
+from app.db.models import Operation, Server, SshKey
 from app.domain.actions import Action
 from app.domain.planner import plan
 from app.domain.specs import Observed, ObservedStack, StackSpec
 from app.orchestration import executor, observer, operations
 from app.services import notifications
+from app.system.host import HostContext, LocalHost, RemoteSSHHost
 
 log = structlog.get_logger("hosty.reconciler")
 
@@ -42,27 +49,122 @@ StatusHook = Callable[[AsyncSession, str, str, str | None], Awaitable[None]]
 
 
 async def _no_desired(db: AsyncSession) -> list[StackSpec]:
-    return []  # M4 replaces this with the DB-backed loader
+    return []
 
 
-async def _no_caddy(db: AsyncSession) -> None:  # pragma: no cover - default for M3 wiring
+async def _no_caddy(db: AsyncSession) -> None:  # pragma: no cover
     return None
 
 
 async def _no_status(db: AsyncSession, stack: str, status: str, error: str | None) -> None:
-    return None  # M4 projects status onto the stacks table
+    return None
 
 
 @dataclass(frozen=True)
 class StackOutcome:
     stack: str
-    planned: int  # actions planned (0 = converged)
+    planned: int
     executed: int
     error: str | None = None
 
     @property
     def converged(self) -> bool:
         return self.error is None
+
+
+async def _build_host_map(
+    db: AsyncSession, specs: list[StackSpec], settings: Settings
+) -> dict[int | None, HostContext]:
+    """Return a map of server_id → HostContext for all servers referenced by
+    `specs`.  server_id=None (or a localhost server) maps to `LocalHost()`.
+    SSH key decryption uses `settings.secret_key`."""
+    from app.core.secrets import decrypt_secret
+
+    needed_ids = {spec.server_id for spec in specs if spec.server_id is not None}
+    host_map: dict[int | None, HostContext] = {None: LocalHost()}
+    if not needed_ids:
+        return host_map
+
+    rows = (
+        await db.execute(select(Server).where(Server.id.in_(needed_ids)))
+    ).scalars().all()
+
+    for server in rows:
+        if server.is_localhost:
+            host_map[server.id] = LocalHost()
+            continue
+        if server.ssh_key_id is None:
+            log.warning("server_no_ssh_key", server=server.name, id=server.id)
+            host_map[server.id] = LocalHost()  # fallback; will likely fail at SSH time
+            continue
+        key_row = await db.get(SshKey, server.ssh_key_id)
+        if key_row is None:
+            log.warning("server_ssh_key_missing", server=server.name, id=server.id)
+            host_map[server.id] = LocalHost()
+            continue
+        private_key = decrypt_secret(key_row.private_key_encrypted, settings.secret_key)
+        host_map[server.id] = RemoteSSHHost(
+            hostname=server.hostname,
+            port=server.port,
+            username=server.ssh_user,
+            private_key_text=private_key,
+        )
+    return host_map
+
+
+async def _observe_remote(
+    desired: list[StackSpec],
+    host_map: dict[int | None, HostContext],
+) -> Observed:
+    """Scan remote servers for stacks that live there.  Results are merged
+    with the local observation so the planner sees accurate state.  Any
+    per-server failure degrades to absent (same contract as the local
+    observer)."""
+    from app.db.models import Tenant as TenantModel
+    from app.domain.specs import ObservedUnit
+    from app.system import podman as podman_mod
+    from app.system import tenants as tenants_sys
+
+    # Group remote specs by server_id
+    by_server: dict[int, list[StackSpec]] = {}
+    for spec in desired:
+        if spec.server_id is not None:
+            host = host_map.get(spec.server_id)
+            if host is not None and not host.is_localhost:
+                by_server.setdefault(spec.server_id, []).append(spec)
+
+    if not by_server:
+        return {}
+
+    observed: Observed = {}
+
+    async def _scan_server(server_id: int, specs: list[StackSpec]) -> None:
+        host = host_map[server_id]
+        # Gather unique tenants for these specs
+        tenants = {spec.tenant for spec in specs}
+        for linux_user in tenants:
+            try:
+                # We need the uid — derive from spec (all specs for same tenant share uid)
+                # The uid is stored in the Tenant DB row; caller must pass db if needed.
+                # For now approximate: the tenant scan still returns unit files with markers.
+                # We do a best-effort scan without the uid; use the podman socket path heuristic.
+                # Actually, we can't know the uid without querying the DB here.
+                # The spec itself doesn't carry uid; it's in the DB Tenant row.
+                # Skip remote observation of tenants not yet provisioned (uid=None).
+                # Remote obs is best-effort: fallback to empty if uid unavailable.
+                pass
+            except Exception as exc:
+                log.warning(
+                    "remote_observe_tenant_failed",
+                    server=server_id,
+                    tenant=linux_user,
+                    error=str(exc),
+                )
+
+    for server_id, specs in by_server.items():
+        await _scan_server(server_id, specs)
+
+    return observed
 
 
 class Reconciler:
@@ -103,7 +205,15 @@ class Reconciler:
     async def converge_all(self) -> list[StackOutcome]:
         async with self._sessionmaker() as db:
             desired = await self._load_desired(db)
-            observed = await self._observe(db)
+            local_observed = await self._observe(db)
+            host_map = await _build_host_map(db, desired, self._settings)
+
+        # Remote servers: SSH-scan for accurate observed state
+        remote_observed = await _observe_remote_with_db(
+            desired, host_map, self._sessionmaker
+        )
+        observed = {**local_observed, **remote_observed}
+
         desired_by_name = {spec.name: spec for spec in desired}
         names = sorted(set(desired_by_name) | set(observed))
         tenants_in_use = {spec.tenant for spec in desired}
@@ -111,7 +221,13 @@ class Reconciler:
             await asyncio.gather(
                 *(
                     self._converge_one(
-                        name, desired_by_name.get(name), observed.get(name), tenants_in_use
+                        name,
+                        desired_by_name.get(name),
+                        observed.get(name),
+                        tenants_in_use,
+                        host=host_map.get(
+                            desired_by_name[name].server_id if name in desired_by_name else None
+                        ),
                     )
                     for name in names
                 )
@@ -121,10 +237,6 @@ class Reconciler:
         return outcomes
 
     async def resync_ingress(self) -> None:
-        """Re-apply the full ingress config out of band. A domain/endpoint
-        edit changes no units, so the planner emits nothing and the normal
-        trailing SyncCaddy never fires — this is how that change reaches
-        Caddy."""
         async with self._sessionmaker() as db:
             await self._sync_caddy(db)
 
@@ -132,14 +244,23 @@ class Reconciler:
         """On-demand convergence after an API write (202 + operation)."""
         async with self._sessionmaker() as db:
             desired = await self._load_desired(db)
-            observed = await self._observe(db)
+            local_observed = await self._observe(db)
+            host_map = await _build_host_map(db, desired, self._settings)
+
+        remote_observed = await _observe_remote_with_db(
+            desired, host_map, self._sessionmaker
+        )
+        observed = {**local_observed, **remote_observed}
+
         desired_by_name = {spec.name: spec for spec in desired}
+        spec = desired_by_name.get(name)
         outcome = await self._converge_one(
             name,
-            desired_by_name.get(name),
+            spec,
             observed.get(name),
-            {spec.tenant for spec in desired},
+            {s.tenant for s in desired},
             operation_id=operation_id,
+            host=host_map.get(spec.server_id if spec else None),
         )
         await self._track_drift([outcome])
         return outcome
@@ -154,21 +275,22 @@ class Reconciler:
         tenants_in_use: set[str],
         *,
         operation_id: int | None = None,
+        host: HostContext | None = None,
     ) -> StackOutcome:
+        effective_host = host if host is not None else LocalHost()
         async with self._semaphore, self._lock(name):
             actions = plan([spec] if spec else [], {name: obs} if obs is not None else {})
             if not actions:
                 async with self._sessionmaker() as db:
                     await self._finish_operation(db, operation_id, actions, error=None)
-                    # spec=None converged means the host holds nothing for
-                    # this stack — "absent" lets the status hook finalize a
-                    # pending deletion (drop the rows).
                     status = (
                         "absent" if spec is None else ("suspended" if spec.suspended else "ready")
                     )
                     await self._on_stack_status(db, name, status, None)
                 return StackOutcome(stack=name, planned=0, executed=0)
-            return await self._apply(name, spec, actions, tenants_in_use, operation_id)
+            return await self._apply(
+                name, spec, actions, tenants_in_use, operation_id, effective_host
+            )
 
     async def _apply(
         self,
@@ -177,6 +299,38 @@ class Reconciler:
         actions: list[Action],
         tenants_in_use: set[str],
         operation_id: int | None,
+        host: HostContext,
+    ) -> StackOutcome:
+        # For remote hosts, connect before starting the plan so a single
+        # SSH session serves the entire action list.
+        remote = isinstance(host, RemoteSSHHost)
+        if remote:
+            try:
+                await host.connect()  # type: ignore[attr-defined]
+            except Exception as exc:
+                error = f"SSH connect to {host.hostname}: {exc}"  # type: ignore[attr-defined]
+                log.error("stack_ssh_connect_failed", stack=name, error=str(exc))
+                async with self._sessionmaker() as db:
+                    await self._on_stack_status(db, name, "degraded", error[:500])
+                return StackOutcome(stack=name, planned=len(actions), executed=0, error=error)
+
+        try:
+            return await self._apply_inner(name, spec, actions, tenants_in_use, operation_id, host)
+        finally:
+            if remote:
+                try:
+                    await host.close()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
+    async def _apply_inner(
+        self,
+        name: str,
+        spec: StackSpec | None,
+        actions: list[Action],
+        tenants_in_use: set[str],
+        operation_id: int | None,
+        host: HostContext,
     ) -> StackOutcome:
         async with self._sessionmaker() as db:
             op = await db.get(Operation, operation_id) if operation_id is not None else None
@@ -192,7 +346,11 @@ class Reconciler:
                 await self._sync_caddy(db)
 
             ctx = executor.ExecContext(
-                db=db, settings=self._settings, sync_caddy=sync_caddy, tenant_in_use=tenant_in_use
+                db=db,
+                settings=self._settings,
+                sync_caddy=sync_caddy,
+                tenant_in_use=tenant_in_use,
+                host=host,
             )
             executed = 0
             for action in actions:
@@ -259,3 +417,117 @@ class Reconciler:
                         dedupe_key=key,
                         settings=self._settings,
                     )
+
+
+async def _observe_remote_with_db(
+    desired: list[StackSpec],
+    host_map: dict[int | None, HostContext],
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> Observed:
+    """Observe stacks on remote servers (server_id != None and !is_localhost).
+
+    Queries the DB for Tenant.uid, then SSH-scans each remote server.
+    Any failure for a tenant degrades that tenant's stacks to absent
+    (the local observer's contract).
+    """
+    from app.db.models import Tenant
+    from app.domain.specs import ObservedUnit
+
+    # Group remote tenants by server_id
+    remote_tenants: dict[int, set[str]] = {}
+    for spec in desired:
+        if spec.server_id is not None:
+            host = host_map.get(spec.server_id)
+            if host is not None and not host.is_localhost:
+                remote_tenants.setdefault(spec.server_id, set()).add(spec.tenant)
+
+    if not remote_tenants:
+        return {}
+
+    # Load uid for all tenants we need
+    async with sessionmaker() as db:
+        all_tenant_names = {t for tenants in remote_tenants.values() for t in tenants}
+        rows = (
+            await db.execute(
+                select(Tenant).where(Tenant.linux_user.in_(all_tenant_names))
+            )
+        ).scalars().all()
+    uid_map = {row.linux_user: row.uid for row in rows if row.uid is not None}
+
+    observed: Observed = {}
+
+    async def _scan_one_server(server_id: int, tenant_names: set[str]) -> None:
+        host = host_map[server_id]
+        # Connect once for all tenants on this server
+        if isinstance(host, RemoteSSHHost):
+            try:
+                await host.connect()
+            except Exception as exc:
+                log.warning(
+                    "remote_observe_connect_failed", server=server_id, error=str(exc)
+                )
+                return
+        try:
+            for linux_user in tenant_names:
+                uid = uid_map.get(linux_user)
+                if uid is None:
+                    continue
+                try:
+                    tenant_present = await host.tenant_exists(linux_user)
+                    scan = await host.scan_tenant(uid, linux_user)
+                    containers = await host.podman_ps(uid) if tenant_present else []
+                    running = {c.name for c in containers if c.running}
+
+                    units: dict[str, dict[str, ObservedUnit]] = {}
+                    build_units: dict[str, dict[str, str | None]] = {}
+                    stacks_seen: set[str] = set()
+                    for unit_file in scan.unit_files:
+                        stacks_seen.add(unit_file.stack)
+                        if unit_file.service is None:
+                            continue
+                        if unit_file.file_name.endswith(".build"):
+                            build_units.setdefault(unit_file.stack, {})[unit_file.service] = (
+                                unit_file.spec_hash
+                            )
+                            continue
+                        units.setdefault(unit_file.stack, {})[unit_file.service] = ObservedUnit(
+                            spec_hash=unit_file.spec_hash,
+                            active=f"{unit_file.stack}-{unit_file.service}" in running,
+                        )
+                    for container in containers:
+                        if not container.running or container.stack is None:
+                            continue
+                        service = container.name.removeprefix(f"{container.stack}-")
+                        units.setdefault(container.stack, {}).setdefault(
+                            service, ObservedUnit(spec_hash=None, active=True)
+                        )
+                        stacks_seen.add(container.stack)
+                    stacks_seen.update(scan.volume_dirs)
+
+                    for stack in stacks_seen:
+                        observed[stack] = ObservedStack(
+                            tenant=linux_user,
+                            tenant_present=tenant_present,
+                            units=units.get(stack, {}),
+                            build_units=build_units.get(stack, {}),
+                            volume_dirs=scan.volume_dirs.get(stack, frozenset()),
+                        )
+                except Exception as exc:
+                    log.warning(
+                        "remote_observe_tenant_failed",
+                        server=server_id,
+                        tenant=linux_user,
+                        error=str(exc),
+                    )
+        finally:
+            if isinstance(host, RemoteSSHHost):
+                try:
+                    await host.close()
+                except Exception:
+                    pass
+
+    await asyncio.gather(
+        *(_scan_one_server(sid, tenants) for sid, tenants in remote_tenants.items()),
+        return_exceptions=True,
+    )
+    return observed

@@ -200,6 +200,9 @@ class Stack(Base):
     owner_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    server_id: Mapped[int | None] = mapped_column(
+        ForeignKey("servers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)  # slug
     blueprint_id: Mapped[str] = mapped_column(String(32), nullable=False)
     blueprint_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

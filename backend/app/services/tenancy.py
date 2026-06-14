@@ -11,12 +11,17 @@ state exists that no ledger row explains.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Tenant, User
 from app.system import tenants as tenants_sys
+
+if TYPE_CHECKING:
+    from app.system.host import HostContext
 
 log = structlog.get_logger("hosty.tenancy")
 
@@ -40,9 +45,19 @@ async def get_tenant(db: AsyncSession, user_id: int) -> Tenant | None:
     return await db.get(Tenant, user_id)
 
 
-async def ensure_tenant(db: AsyncSession, user: User) -> Tenant:
+async def ensure_tenant(
+    db: AsyncSession, user: User, *, host: "HostContext | None" = None
+) -> Tenant:
     """Idempotent: returns the existing tenant (repairing host state if
-    needed) or allocates + provisions a new one."""
+    needed) or allocates + provisions a new one.
+
+    `host` is the deployment target; None means localhost (default,
+    compatible with all existing callers).
+    """
+    from app.system.host import LocalHost
+
+    effective_host = host if host is not None else LocalHost()
+
     tenant = await db.get(Tenant, user.id)
     if tenant is None:
         start, count = await _allocate_range(db)
@@ -57,7 +72,7 @@ async def ensure_tenant(db: AsyncSession, user: User) -> Tenant:
         await db.commit()
         await db.refresh(tenant)
 
-    info = await tenants_sys.provision(
+    info = await effective_host.provision_tenant(
         tenant.linux_user,
         subuid_start=tenant.subuid_start,
         subuid_count=tenant.subuid_count,
@@ -69,13 +84,19 @@ async def ensure_tenant(db: AsyncSession, user: User) -> Tenant:
     return tenant
 
 
-async def remove_tenant(db: AsyncSession, user_id: int) -> bool:
+async def remove_tenant(
+    db: AsyncSession, user_id: int, *, host: "HostContext | None" = None
+) -> bool:
     """Tear down the host user, then release the ledger row (in that order:
     the range stays reserved until the host user is confirmed gone)."""
+    from app.system.host import LocalHost
+
+    effective_host = host if host is not None else LocalHost()
+
     tenant = await db.get(Tenant, user_id)
     if tenant is None:
         return False
-    await tenants_sys.remove(tenant.linux_user)
+    await effective_host.remove_tenant(tenant.linux_user)
     await db.delete(tenant)
     await db.commit()
     log.info("tenant_removed", linux_user=tenant.linux_user)

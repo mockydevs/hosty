@@ -95,12 +95,14 @@ class StackResponse(BaseModel):
     volumes: list[StackVolumeResponse]
     endpoints: list[StackEndpointResponse]
     inputs: dict[str, Any]
+    server_id: int | None = None
 
 
 class CreateStackRequest(BaseModel):
     name: str = Field(min_length=1, max_length=32)
     blueprint_id: str = Field(min_length=1, max_length=32)
     inputs: dict[str, Any] = Field(default_factory=dict)
+    server_id: int | None = None  # None = deploy to localhost
 
 class SetStackEnvRequest(BaseModel):
     env: dict[str, str]
@@ -182,6 +184,7 @@ async def stack_response(db: AsyncSession, stack: Stack, request: Request) -> St
         volumes=[StackVolumeResponse.model_validate(v) for v in volumes],
         endpoints=[StackEndpointResponse.model_validate(e) for e in endpoints],
         inputs=inputs,
+        server_id=stack.server_id,
     )
 
 
@@ -402,6 +405,7 @@ async def create_stack(
 
     stack = Stack(
         owner_id=user.id,
+        server_id=body.server_id,
         name=name,
         blueprint_id=blueprint.id,
         blueprint_version=blueprint.version,
