@@ -220,6 +220,15 @@ class ComposeBlueprint:
                         f"Service {svc_name!r} has an invalid container port {p!r}"
                     ) from exc
 
+            # Parse depends_on — supports both list and dict (condition) forms.
+            raw_deps = svc_data.get("depends_on", [])
+            if isinstance(raw_deps, list):
+                dep_names = tuple(str(d) for d in raw_deps)
+            elif isinstance(raw_deps, dict):
+                dep_names = tuple(raw_deps.keys())
+            else:
+                dep_names = ()
+
             services.append(
                 ServiceSpec(
                     name=svc_name,
@@ -231,6 +240,7 @@ class ComposeBlueprint:
                     build_branch=build_branch,
                     memory_mb=int(getattr(inputs, "memory_limit")) if hasattr(inputs, "memory_limit") and getattr(inputs, "memory_limit") else None,
                     cpu_percent=int(getattr(inputs, "cpu_limit")) if hasattr(inputs, "cpu_limit") and getattr(inputs, "cpu_limit") else None,
+                    depends_on=dep_names,
                 )
             )
 

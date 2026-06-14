@@ -109,6 +109,15 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
             f"Requires={stack.name}-{service.name}-nixpacks.service",
             f"After={stack.name}-{service.name}-nixpacks.service",
         ])
+    # depends_on ordering: start dependencies first. Combined with Restart=always,
+    # this handles service_healthy semantics — the dependent container restarts
+    # until the dependency is up and accepting connections.
+    for dep in service.depends_on:
+        dep_unit = f"{stack.name}-{dep}.service"
+        lines.extend([
+            f"Requires={dep_unit}",
+            f"After={dep_unit}",
+        ])
         
     lines.extend([
         "",

@@ -64,6 +64,10 @@ class ServiceSpec:
     # public IP) instead of loopback-only — opt-in external access for e.g. a
     # database. Requires a published port.
     exposed: bool = False
+    # Services that must be started before this one (from compose depends_on).
+    # Quadlet emits After=/Requires= directives; combined with Restart=always
+    # this handles service_healthy ordering without a separate health-probe unit.
+    depends_on: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
@@ -151,6 +155,13 @@ class StackSpec:
         endpoint_domains = [e.domain for e in self.endpoints]
         if len(set(endpoint_domains)) != len(endpoint_domains):
             raise SpecValidationError(f"Stack {self.name!r}: duplicate endpoint domains")
+        for svc in self.services:
+            for dep in svc.depends_on:
+                if dep not in known:
+                    raise SpecValidationError(
+                        f"Stack {self.name!r}: service {svc.name!r} depends_on "
+                        f"unknown service {dep!r}"
+                    )
         by_name = {s.name: s for s in self.services}
         for endpoint in self.endpoints:
             if endpoint.service not in known:
@@ -192,6 +203,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "loopback_ip": stack.loopback_ip,  # changing IP rewrites PublishPort bind
         "network": stack.network,
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
+        "depends_on": list(service.depends_on),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:32]
