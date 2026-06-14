@@ -30,7 +30,7 @@ services:
     - mattermost-data-bleve-indexes:/mattermost/bleve-indexes:rw
     environment:
 
-    - MM_SERVICESETTINGS_SITEURL=${domain}
+    - MM_SERVICESETTINGS_SITEURL=https://${domain}
     - TZ=${TZ:-UTC}
     - MM_SQLSETTINGS_DRIVERNAME=postgres
     - MM_SQLSETTINGS_DATASOURCE=postgres://${postgres_user}:${postgres_password}@postgres:5432/$POSTGRES_DB?sslmode=disable&connect_timeout=10

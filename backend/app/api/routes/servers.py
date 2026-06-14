@@ -16,7 +16,7 @@ from app.api.deps import get_db, require_admin
 from app.core.clock import utcnow
 from app.core.errors import ConflictError, NotFoundError
 from app.core.secrets import decrypt_secret
-from app.db.models import Server, SshKey, User
+from app.db.models import Server, SshKey, Stack, User
 
 router = APIRouter()
 
@@ -271,6 +271,13 @@ async def delete_server(
         raise NotFoundError("Server not found")
     if server.is_localhost:
         raise ConflictError("The localhost server cannot be deleted")
+    stacks_on_server = (await db.execute(
+        select(Stack).where(Stack.server_id == server_id).where(Stack.status != "deleting")
+    )).scalars().all()
+    if stacks_on_server:
+        raise ConflictError(
+            f"{len(stacks_on_server)} stack(s) are deployed on this server. Remove them first."
+        )
     await db.delete(server)
     await db.commit()
 

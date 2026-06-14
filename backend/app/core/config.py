@@ -146,6 +146,11 @@ class Settings(BaseSettings):
                 "Set a random 32+ character value via HOSTY_SECRET_KEY before "
                 "running in production."
             )
+        if self.is_prod and not self.cookie_secure:
+            raise RuntimeError(
+                "HOSTY_COOKIE_SECURE must be True in production — "
+                "set HOSTY_COOKIE_SECURE=true in your environment."
+            )
 
 
 @lru_cache

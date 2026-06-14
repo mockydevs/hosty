@@ -290,23 +290,38 @@ class Reconciler:
                     .where(Operation.created_at < cutoff)
                 )
             ).scalars().all()
-            if not stale:
-                return
-            for op in stale:
-                log.warning(
-                    "reaping_stale_operation",
-                    op_id=op.id,
-                    kind=op.kind,
-                    status=op.status,
-                    age_s=int((utcnow() - op.created_at).total_seconds()),
+            if stale:
+                for op in stale:
+                    log.warning(
+                        "reaping_stale_operation",
+                        op_id=op.id,
+                        kind=op.kind,
+                        status=op.status,
+                        age_s=int((utcnow() - op.created_at).total_seconds()),
+                    )
+                    op.status = "failed"
+                    op.error = (
+                        f"Timed out after {self._settings.operation_timeout_seconds}s "
+                        f"(was {op.status} — likely lost on server restart)"
+                    )
+                    op.finished_at = utcnow()
+                await db.commit()
+
+            # Clean up orphaned operations (parent stack/site was deleted)
+            orphaned = (await db.execute(
+                select(Operation).where(
+                    Operation.stack_id.is_(None),
+                    Operation.site_id.is_(None),
+                    Operation.status.in_(["pending", "running"]),
                 )
+            )).scalars().all()
+            for op in orphaned:
                 op.status = "failed"
-                op.error = (
-                    f"Timed out after {self._settings.operation_timeout_seconds}s "
-                    f"(was {op.status} — likely lost on server restart)"
-                )
+                op.error = "Parent stack/site was deleted"
                 op.finished_at = utcnow()
-            await db.commit()
+            if orphaned:
+                await db.commit()
+                log.info("reaped_orphaned_operations", count=len(orphaned))
 
     async def converge_all(self) -> list[StackOutcome]:
         await self._reap_stale_operations()

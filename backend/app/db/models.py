@@ -209,7 +209,7 @@ class Stack(Base):
     # Fernet-encrypted JSON of the user's blueprint inputs (incl. secrets).
     inputs_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     # converging | ready | degraded | suspended | deleting | error
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="converging")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="converging", index=True)
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     observed_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -295,7 +295,7 @@ class Operation(Base):
     )
     domain: Mapped[str] = mapped_column(String(253), nullable=False)
     # pending | running | succeeded | failed
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
     # JSON list of {"name": str, "label": str, "status": "pending|running|done|failed|rolled_back"}
     steps_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -388,7 +388,7 @@ class AuditLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     username: Mapped[str | None] = mapped_column(String(32), nullable=True)
     method: Mapped[str] = mapped_column(String(8), nullable=False)

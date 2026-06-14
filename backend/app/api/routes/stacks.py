@@ -17,10 +17,11 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
-from pydantic import BaseModel, Field, ValidationError
+from fastapi import APIRouter, Depends, Query, Request, status
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from app.api.routes.servers import ServerResponse
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, is_admin
@@ -176,6 +177,7 @@ async def stack_response(db: AsyncSession, stack: Stack, request: Request) -> St
     try:
         inputs = stacks_service.decrypt_inputs(stack, request.app.state.settings)
     except SecretDecryptionError:
+        log.warning("stack_inputs_decrypt_failed", stack_id=stack.id)
         inputs = {}
     return StackResponse(
         id=stack.id,
@@ -298,7 +300,6 @@ async def analyze_git_repo(
 @router.post("/webhooks/{stack_id}", status_code=status.HTTP_202_ACCEPTED)
 async def stack_webhook(
     stack_id: int,
-    background: BackgroundTasks,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
@@ -311,6 +312,12 @@ async def stack_webhook(
 
     settings = request.app.state.settings
     inputs = stacks_service.decrypt_inputs(stack, settings)
+
+    if not inputs.get("source_id"):
+        token = request.headers.get("X-Hosty-Token", "")
+        webhook_secret = inputs.get("webhook_secret", "")
+        if not webhook_secret or not hmac.compare_digest(token, webhook_secret):
+            raise NotFoundError("Stack not found")  # 404 to avoid enumeration
 
     if inputs.get("source_id"):
         source = await db.get(GitSource, inputs["source_id"])
@@ -362,13 +369,46 @@ async def get_suggested_domain(
 
 @router.get("", response_model=list[StackResponse])
 async def list_stacks(
-    request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> Any:
-    query = select(Stack).order_by(Stack.name)
+    query = select(Stack).order_by(Stack.name).limit(limit).offset(offset)
     if not is_admin(user):
         query = query.where(Stack.owner_id == user.id)
     stacks = (await db.execute(query)).scalars().all()
-    return [await stack_response(db, stack, request) for stack in stacks]
+    if not stacks:
+        return []
+    svc_map, vol_map, ep_map = await stacks_service._bulk_children(db, [s.id for s in stacks])
+    settings = _settings(request)
+    result = []
+    for stack in stacks:
+        try:
+            inputs = stacks_service.decrypt_inputs(stack, settings)
+        except SecretDecryptionError:
+            log.warning("stack_inputs_decrypt_failed", stack_id=stack.id)
+            inputs = {}
+        result.append(
+            StackResponse(
+                id=stack.id,
+                name=stack.name,
+                blueprint_id=stack.blueprint_id,
+                blueprint_version=stack.blueprint_version,
+                status=stack.status,
+                error_message=stack.error_message,
+                generation=stack.generation,
+                observed_generation=stack.observed_generation,
+                created_at=stack.created_at,
+                services=[StackServiceResponse.model_validate(s) for s in svc_map[stack.id]],
+                volumes=[StackVolumeResponse.model_validate(v) for v in vol_map[stack.id]],
+                endpoints=[StackEndpointResponse.model_validate(e) for e in ep_map[stack.id]],
+                inputs=inputs,
+                server_id=stack.server_id,
+            )
+        )
+    return result
 
 
 @router.get("/{stack_id}", response_model=StackResponse)
@@ -385,7 +425,6 @@ async def stack_get(
 async def create_stack(
     request: Request,
     body: CreateStackRequest,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -440,12 +479,15 @@ async def create_stack(
         domain=spec.endpoints[0].domain if spec.endpoints else stack.name,
     )
     db.add(op)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        raise ConflictError("A stack with this name already exists")
     await db.refresh(stack)
     await db.refresh(op)
 
     reconciler = request.app.state.reconciler
-    background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
+    reconciler.enqueue(stack.name, op.id)
     return StackOperationAccepted(
         stack=await stack_response(db, stack, request), operation_id=op.id, show_once=alloc.secrets
     )
@@ -458,7 +500,6 @@ async def delete_stack(
     request: Request,
     stack_id: int,
     body: DeleteStackRequest,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -479,7 +520,7 @@ async def delete_stack(
     await db.refresh(op)
 
     reconciler = request.app.state.reconciler
-    background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
+    reconciler.enqueue(stack.name, op.id)
     return StackOperationAccepted(stack=response, operation_id=op.id)
 
 
@@ -498,7 +539,6 @@ async def set_stack_domain(
     request: Request,
     stack_id: int,
     body: SetStackDomainRequest,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -544,10 +584,10 @@ async def set_stack_domain(
     await db.refresh(op)
 
     reconciler = request.app.state.reconciler
-    background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
+    reconciler.enqueue(stack.name, op.id)
     # A domain change alters no units, so converge plans nothing and would not
     # touch Caddy — re-sync ingress explicitly so the new route goes live.
-    background.add_task(reconciler.resync_ingress)
+    asyncio.create_task(reconciler.resync_ingress())
     return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
 
 
@@ -556,7 +596,6 @@ async def set_stack_env(
     request: Request,
     stack_id: int,
     body: SetStackEnvRequest,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -578,7 +617,7 @@ async def set_stack_env(
     await db.refresh(op)
 
     reconciler = request.app.state.reconciler
-    background.add_task(reconciler.converge_stack, stack.name, operation_id=op.id)
+    reconciler.enqueue(stack.name, op.id)
     return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
 
 
@@ -587,7 +626,6 @@ async def run_stack_action(
     request: Request,
     stack_id: int,
     action_name: str,
-    background: BackgroundTasks,
     body: StackActionRequest | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -700,7 +738,6 @@ async def set_service_exposure(
     stack_id: int,
     service_name: str,
     body: ExposeServiceRequest,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Any:
@@ -834,9 +871,18 @@ async def get_scheduled_tasks(
 
 
 class ScheduledTaskCreate(BaseModel):
-    name: str
-    command: str
-    cron_schedule: str
+    name: str = Field(..., max_length=64)
+    command: str = Field(..., max_length=512, pattern=r'^[a-zA-Z0-9_./ \-]+$')
+    cron_schedule: str = Field(..., max_length=64)
+    enabled: bool = True
+
+    @field_validator("cron_schedule")
+    @classmethod
+    def validate_cron(cls, v: str) -> str:
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError("cron_schedule must have exactly 5 fields (minute hour dom month dow)")
+        return v.strip()
 
 
 @router.post("/{stack_id}/scheduled-tasks")
@@ -937,7 +983,6 @@ async def rollback_deployment(
     stack_id: int,
     deployment_id: int,
     request: Request,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):

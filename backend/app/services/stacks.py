@@ -40,7 +40,9 @@ class StackValidationError(AppError):
     code = "invalid_stack"
 
 
-def tenant_for(owner_id: int) -> str:
+def tenant_for(owner_id: int | None) -> str:
+    if owner_id is None:
+        raise ValueError("Stack has no owner; cannot derive tenant")
     return f"hosty-t-{int(owner_id)}"
 
 

@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,7 @@ from app.api.deps import get_db, require_admin
 from app.core.clock import utcnow
 from app.core.errors import ConflictError, NotFoundError
 from app.core.security import create_access_token, hash_password
-from app.db.models import AuditLog, Database, Operation, Plan, RefreshToken, Site, User
+from app.db.models import AuditLog, Database, Operation, Plan, RefreshToken, Site, Stack, User
 from app.services import mail, quotas
 from app.services import sites as sites_service
 from app.services.sites import DELETE_STEPS, initial_steps
@@ -213,8 +213,12 @@ async def _revoke_sessions(db: AsyncSession, user_id: int) -> None:
 
 
 @router.get("", response_model=list[UserAdminResponse])
-async def list_users(db: AsyncSession = Depends(get_db)) -> Any:
-    users = (await db.execute(select(User).order_by(User.username))).scalars().all()
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> Any:
+    users = (await db.execute(select(User).order_by(User.username).limit(limit).offset(offset))).scalars().all()
     counts = await _counts(db, [u.id for u in users])
     plans = {p.id: p for p in (await db.execute(select(Plan))).scalars().all()}
     return [_response(u, counts[u.id], plans.get(u.plan_id or -1)) for u in users]
@@ -412,6 +416,11 @@ async def delete_user(
             await db.flush()
             operation_ids.append(op.id)
             jobs.append((site.id, op.id))
+    active_stacks = (await db.execute(
+        select(Stack).where(Stack.owner_id == user_id).where(Stack.status != "deleting")
+    )).scalars().all()
+    if active_stacks:
+        raise ConflictError(f"User has {len(active_stacks)} active stack(s). Delete them first.")
     await _revoke_sessions(db, user.id)
     await db.delete(user)
     await db.commit()

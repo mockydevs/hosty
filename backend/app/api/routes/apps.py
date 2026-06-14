@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, is_admin
@@ -186,7 +187,10 @@ async def create_app(
         steps_json=initial_steps(apps_service.CREATE_APP_STEPS),
     )
     db.add(op)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        raise ConflictError("An app with this name or domain already exists")
     await db.refresh(app)
     await db.refresh(op)
 

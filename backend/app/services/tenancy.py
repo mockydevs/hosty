@@ -96,7 +96,11 @@ async def remove_tenant(
     tenant = await db.get(Tenant, user_id)
     if tenant is None:
         return False
-    await effective_host.remove_tenant(tenant.linux_user)
+    try:
+        await effective_host.remove_tenant(tenant.linux_user)
+    except Exception:
+        log.error("tenant_host_removal_failed", linux_user=tenant.linux_user)
+        raise
     await db.delete(tenant)
     await db.commit()
     log.info("tenant_removed", linux_user=tenant.linux_user)
