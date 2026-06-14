@@ -252,12 +252,12 @@ def nixpacks_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
     )
 
 
-def unit_files(stack: StackSpec, git_clone_url: str | None = None) -> dict[str, str]:
+def unit_files(stack: StackSpec, git_token: str | None = None) -> dict[str, str]:
     """The COMPLETE desired unit-file set for a stack: what WriteUnits syncs
     the quadlet directory to (write these, delete any other file of this
     stack).
 
-    `git_clone_url` is an optional authenticated override for the git-sync
+    `git_token` is an optional authenticated override for the git-sync
     clone command (e.g. with a GitHub App installation token injected).
     """
     from app.system.git_sync import git_sync_unit
@@ -275,7 +275,7 @@ def unit_files(stack: StackSpec, git_clone_url: str | None = None) -> dict[str, 
             needs_git_sync = True
 
     if needs_git_sync:
-        files[f"{stack.name}-git-sync.service"] = git_sync_unit(stack, clone_url=git_clone_url)
+        files[f"{stack.name}-git-sync.service"] = git_sync_unit(stack, token=git_token)
 
     return files
 

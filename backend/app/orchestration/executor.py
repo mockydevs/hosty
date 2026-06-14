@@ -23,7 +23,7 @@ from app.db.models import GitSource, SshKey, Stack, Tenant, User
 from app.domain import actions as act
 from app.domain.specs import StackSpec
 from app.services import stacks as stacks_service, tenancy
-from app.services.github import authenticated_clone_url, get_installation_token
+from app.services.github import get_installation_token
 from app.system import quadlet
 from app.system.host import HostContext, LocalHost
 from app.system.systemd_user import SystemdUserError
@@ -64,13 +64,13 @@ async def _uid_for(db: AsyncSession, linux_user: str) -> int:
     return row.uid
 
 
-async def _resolve_git_clone_url(spec: StackSpec, ctx: ExecContext) -> str | None:
-    """Return an authenticated clone URL for private-repo stacks, else None.
+async def _resolve_git_token(spec: StackSpec, ctx: ExecContext) -> str | None:
+    """Return an authenticated GitHub App installation token for private-repo stacks, else None.
 
     Looks up the stack's source_id from its encrypted inputs.  When present,
-    generates a fresh GitHub App installation token and injects it into the
-    HTTPS clone URL.  Any failure (missing source, bad token) is logged and
-    returns None so the unauthenticated URL is used as a fallback.
+    generates a fresh GitHub App installation token and returns it.  Any failure 
+    (missing source, bad token) is logged and returns None so the unauthenticated 
+    flow is used as a fallback.
     """
     any_build = any(s.build_repo for s in spec.services)
     if not any_build:
@@ -91,12 +91,9 @@ async def _resolve_git_clone_url(spec: StackSpec, ctx: ExecContext) -> str | Non
         source = await ctx.db.get(GitSource, int(source_id))
         if not source or not source.installation_id:
             return None
-        token = await get_installation_token(source, ctx.settings)
-        # Use the canonical repo from the spec (spec_hash-stable), just add auth.
-        build_svc = next(s for s in spec.services if s.build_repo)
-        return authenticated_clone_url(build_svc.build_repo, token)
+        return await get_installation_token(source, ctx.settings)
     except Exception:
-        log.warning("git_clone_url_resolve_failed", stack=spec.name, exc_info=True)
+        log.warning("git_token_resolve_failed", stack=spec.name, exc_info=True)
         return None
 
 
@@ -125,8 +122,8 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
         case act.WriteUnits(stack=spec):
             uid = await _uid_for(ctx.db, spec.tenant)
             await ctx.host.sync_env_files(spec.tenant, spec.name, quadlet.env_files(spec))
-            git_clone_url = await _resolve_git_clone_url(spec, ctx)
-            await ctx.host.sync_units(uid, spec.name, quadlet.unit_files(spec, git_clone_url=git_clone_url))
+            git_token = await _resolve_git_token(spec, ctx)
+            await ctx.host.sync_units(uid, spec.name, quadlet.unit_files(spec, git_token=git_token))
         case act.RemoveUnits(tenant=tenant, stack=stack):
             uid = await _uid_for(ctx.db, tenant)
             await ctx.host.remove_units(uid, stack)

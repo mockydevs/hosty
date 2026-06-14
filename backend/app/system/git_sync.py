@@ -4,21 +4,29 @@ from app.domain.specs import StackSpec
 from app.system.quadlet import MANAGED_HEADER
 
 
-def git_sync_unit(stack: StackSpec, clone_url: str | None = None) -> str:
+def git_sync_unit(stack: StackSpec, token: str | None = None) -> str:
     """Generates a systemd service that syncs the repository to local disk.
 
-    `clone_url` overrides the URL used in the ExecStart git clone command —
-    pass an authenticated URL (https://x-access-token:{token}@github.com/…)
-    for private repos.  The token is NOT in the spec_hash so reconvergence
-    with a refreshed token rewrites the unit without triggering extra cycles.
+    `token` is an optional GitHub App installation token. When provided,
+    it is injected via git's insteadOf configuration. This allows submodules
+    on the same host to automatically authenticate without persisting the
+    token into the workspace's .git/config.
     """
     svc = next((s for s in stack.services if s.build_repo), None)
     if not svc:
         return ""
 
-    repo = clone_url or svc.build_repo
+    repo = svc.build_repo
     branch = svc.build_branch or "main"
     workspace = f"%h/stacks/{stack.name}/src"
+    
+    git_bin = "/usr/bin/git"
+    if token and repo.startswith("https://"):
+        from urllib.parse import urlparse
+        parsed = urlparse(repo)
+        scheme = parsed.scheme
+        host = parsed.netloc
+        git_bin = f"/usr/bin/git -c url.{scheme}://x-access-token:{token}@{host}/.insteadOf={scheme}://{host}/"
 
     return "\n".join([
         MANAGED_HEADER,
@@ -32,7 +40,7 @@ def git_sync_unit(stack: StackSpec, clone_url: str | None = None) -> str:
         "[Service]",
         "Type=oneshot",
         f"ExecStartPre=-/usr/bin/rm -rf {workspace}",
-        f"ExecStart=/usr/bin/git clone --depth 1 --branch {branch} --single-branch {repo} {workspace}",
+        f"ExecStart={git_bin} clone --depth 1 --branch {branch} --single-branch --recurse-submodules --shallow-submodules {repo} {workspace}",
         "RemainAfterExit=yes",
         "",
         "[Install]",
