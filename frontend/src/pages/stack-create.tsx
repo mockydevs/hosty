@@ -17,22 +17,34 @@ import type { components } from "@/lib/api/schema";
 import { copyToClipboard } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   ArrowLeft,
+  BarChart2,
   Boxes,
-  Plus,
-  Trash2,
+  BrainCircuit,
   ChevronRight,
+  Code2,
   Container,
   Copy,
+  Cpu,
+  Database,
   FileCode2,
   Github,
   GitBranch,
   Globe2,
+  HardDrive,
+  Mail,
+  MessageSquare,
+  Plus,
   Rocket,
   Search,
   Server,
+  Sparkles,
   ToggleLeft,
   ToggleRight,
+  Trash2,
+  Wrench,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
@@ -612,116 +624,180 @@ export function ShowOnceDialog({
   );
 }
 
-// ─── TemplateDeployForm ───────────────────────────────────────────────────────
-function TemplateDeployForm({
-  blueprints,
+// ─── getCategoryIcon ──────────────────────────────────────────────────────────
+type LucideIcon = typeof Boxes;
+
+function getCategoryIcon(category?: string): LucideIcon {
+  if (!category) return Boxes;
+  const key = category.toLowerCase();
+  const map: Record<string, LucideIcon> = {
+    database: Database,
+    databases: Database,
+    cache: Zap,
+    cms: Globe2,
+    monitoring: Activity,
+    analytics: BarChart2,
+    automation: Cpu,
+    ai: BrainCircuit,
+    ml: BrainCircuit,
+    devtools: Code2,
+    "developer tools": Code2,
+    tools: Wrench,
+    mail: Mail,
+    email: Mail,
+    storage: HardDrive,
+    messaging: MessageSquare,
+    queues: MessageSquare,
+    search: Search,
+    security: Sparkles,
+  };
+  return map[key] ?? Boxes;
+}
+
+// ─── TemplateCard ─────────────────────────────────────────────────────────────
+function TemplateCard({
+  blueprint,
+  onClick,
+}: {
+  blueprint: Blueprint;
+  onClick: () => void;
+}) {
+  const meta = blueprint as BlueprintWithMeta;
+  const Icon = getCategoryIcon(meta.category);
+  const displayName = blueprintDisplayName(blueprint);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex flex-col gap-4 rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary hover:bg-primary/5 hover:shadow-md active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {/* Icon + name row */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted transition-colors group-hover:border-primary/40 group-hover:bg-primary/10">
+          <Icon
+            className="h-6 w-6 text-muted-foreground transition-colors group-hover:text-primary"
+            aria-hidden
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-sm leading-tight">{displayName}</p>
+          {meta.category && (
+            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {meta.category}
+            </p>
+          )}
+        </div>
+        <ChevronRight
+          className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden
+        />
+      </div>
+
+      {/* Description */}
+      {meta.description && (
+        <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
+          {meta.description}
+        </p>
+      )}
+    </button>
+  );
+}
+
+// ─── TemplateInstallerView ────────────────────────────────────────────────────
+function TemplateInstallerView({
+  blueprint,
+  onBack,
   onSubmit,
   pending,
   serverError,
 }: {
-  blueprints: Blueprint[];
+  blueprint: Blueprint;
+  onBack: () => void;
   onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
   pending: boolean;
   serverError: string | null;
 }) {
-  const templates = blueprints.filter((bp) => !["git", "raw-image"].includes(bp.id));
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Blueprint | null>(templates[0] ?? null);
-  const [name, setName] = useState("");
+  const meta = blueprint as BlueprintWithMeta;
+  const Icon = getCategoryIcon(meta.category);
+  const displayName = blueprintDisplayName(blueprint);
+
+  const [name, setName] = useState(
+    () => `${blueprint.id}-${Math.random().toString(36).slice(2, 6)}`,
+  );
   const [nameError, setNameError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (selected) {
-      setName(`${selected.id}-${Math.random().toString(36).slice(2, 6)}`);
-      setNameError(null);
-    }
-  }, [selected]);
-
-  const filtered = templates.filter((bp) => {
-    const term = query.trim().toLowerCase();
-    return !term || bp.id.includes(term) || blueprintDisplayName(bp).toLowerCase().includes(term);
-  });
-
-  if (!selected) return <ErrorState message="No one-click templates are available." />;
-
   return (
-    <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-      <div className="space-y-3">
-        <h2 className="font-bold text-lg">Templates</h2>
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            aria-label="Search templates"
-            placeholder="Search templates"
-            className="pl-9"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+    <div className="space-y-6">
+      {/* Back + template header */}
+      <div className="flex items-center gap-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Back to templates"
+          onClick={onBack}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted">
+            <Icon className="h-5 w-5 text-muted-foreground" aria-hidden />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold leading-tight">{displayName}</h2>
+            {meta.category && (
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {meta.category}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
-          {filtered.map((bp) => {
-            const active = selected.id === bp.id;
-            const meta = bp as BlueprintWithMeta;
-            return (
-              <button
-                type="button"
-                key={bp.id}
-                onClick={() => setSelected(bp)}
-                className={[
-                  "flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:border-primary/60 hover:bg-accent/50",
-                ].join(" ")}
-              >
-                <Boxes
-                  className={[
-                    "h-5 w-5 shrink-0",
-                    active ? "text-primary-foreground" : "text-muted-foreground",
-                  ].join(" ")}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {blueprintDisplayName(bp)}
-                  </span>
-                  <span
-                    className={[
-                      "block text-xs",
-                      active ? "opacity-80" : "text-muted-foreground",
-                    ].join(" ")}
-                  >
-                    {meta.category || "Template"}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {meta.category && (
+          <Badge variant="outline" className="ml-auto hidden sm:inline-flex">
+            {meta.category}
+          </Badge>
+        )}
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-5">
+      {/* Description banner */}
+      {meta.description && (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <p className="text-sm text-muted-foreground">{meta.description}</p>
+        </div>
+      )}
+
+      {/* Full-width deployment form */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="mb-5">
+          <h3 className="font-semibold">Deploy {displayName}</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Configure this deployment. All settings can be changed after launch.
+          </p>
+        </div>
+
         <SchemaForm
-          key={selected.id}
-          schema={selected.inputs_schema as JsonSchema}
+          key={blueprint.id}
+          schema={blueprint.inputs_schema as JsonSchema}
           onSubmit={async (inputs) => {
             const slug = name.trim().toLowerCase();
-            const slugError = validateSlug(slug);
-            if (slugError) {
-              setNameError(slugError);
+            const err = validateSlug(slug);
+            if (err) {
+              setNameError(err);
               return;
             }
             setNameError(null);
-            await onSubmit(selected, slug, inputs);
+            await onSubmit(blueprint, slug, inputs);
           }}
-          submitLabel={`Deploy ${blueprintDisplayName(selected)}`}
+          submitLabel={`Deploy ${displayName}`}
           pending={pending}
           serverError={serverError}
         >
-          <FormField label="Deployment name" htmlFor="template-name" error={nameError ?? undefined}>
+          <FormField
+            label="Deployment name"
+            htmlFor="template-name"
+            error={nameError ?? undefined}
+          >
             <Input
               id="template-name"
               autoComplete="off"
@@ -732,6 +808,138 @@ function TemplateDeployForm({
           </FormField>
         </SchemaForm>
       </div>
+    </div>
+  );
+}
+
+// ─── TemplateDeployForm ───────────────────────────────────────────────────────
+function TemplateDeployForm({
+  blueprints,
+  onSubmit,
+  pending,
+  serverError,
+  installing,
+  onSelectTemplate,
+  onClearTemplate,
+}: {
+  blueprints: Blueprint[];
+  onSubmit: (blueprint: Blueprint, name: string, inputs: Record<string, unknown>) => Promise<void>;
+  pending: boolean;
+  serverError: string | null;
+  installing: Blueprint | null;
+  onSelectTemplate: (bp: Blueprint) => void;
+  onClearTemplate: () => void;
+}) {
+  const templates = blueprints.filter((bp) => !["git", "raw-image"].includes(bp.id));
+  const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    for (const bp of templates) {
+      const cat = (bp as BlueprintWithMeta).category;
+      if (cat) cats.add(cat);
+    }
+    return ["All", ...Array.from(cats).sort()];
+  }, [templates]);
+
+  const filtered = templates.filter((bp) => {
+    const term = query.trim().toLowerCase();
+    const meta = bp as BlueprintWithMeta;
+    const matchSearch =
+      !term ||
+      bp.id.includes(term) ||
+      blueprintDisplayName(bp).toLowerCase().includes(term) ||
+      (meta.description ?? "").toLowerCase().includes(term);
+    const matchCat =
+      activeCategory === "All" || meta.category === activeCategory;
+    return matchSearch && matchCat;
+  });
+
+  if (templates.length === 0) {
+    return <ErrorState message="No one-click templates are available." />;
+  }
+
+  // ── Installer view ──
+  if (installing) {
+    return (
+      <TemplateInstallerView
+        blueprint={installing}
+        onBack={onClearTemplate}
+        onSubmit={onSubmit}
+        pending={pending}
+        serverError={serverError}
+      />
+    );
+  }
+
+  // ── Grid browse view ──
+  return (
+    <div className="space-y-5">
+      {/* Search + category filter bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            aria-label="Search templates"
+            placeholder="Search templates…"
+            className="pl-9"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        {categories.length > 2 && (
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={[
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  activeCategory === cat
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                ].join(" ")}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Results count */}
+      {query && (
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} result{filtered.length !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
+        </p>
+      )}
+
+      {/* Responsive card grid (matches Coolify xl:grid-cols-3) */}
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-16 text-center">
+          <Boxes className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden />
+          <p className="font-medium">No templates match your search.</p>
+          <button
+            type="button"
+            className="mt-2 text-sm text-primary hover:underline"
+            onClick={() => { setQuery(""); setActiveCategory("All"); }}
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((bp) => (
+            <TemplateCard key={bp.id} blueprint={bp} onClick={() => onSelectTemplate(bp)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -751,6 +959,8 @@ export function StackCreatePage() {
   } | null>(null);
   const [publicRepoUrl, setPublicRepoUrl] = useState("");
   const [publicChecked, setPublicChecked] = useState(false);
+  // template installer — tracked at wizard level for breadcrumb
+  const [selectedTemplate, setSelectedTemplate] = useState<Blueprint | null>(null);
 
   // server selection (multi-server deployment)
   const [serverId, setServerId] = useState<number | null>(null);
@@ -858,7 +1068,9 @@ export function StackCreatePage() {
   };
 
   const goBack = () => {
-    if (step === "repository") {
+    if (step === "template" && selectedTemplate) {
+      setSelectedTemplate(null);
+    } else if (step === "repository") {
       setSelectedRepo(null);
       setStep("github_app");
     } else {
@@ -866,13 +1078,14 @@ export function StackCreatePage() {
       setSelectedSourceId(null);
       setSelectedRepo(null);
       setPublicChecked(false);
+      setSelectedTemplate(null);
     }
     setServerError(null);
   };
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
@@ -902,7 +1115,21 @@ export function StackCreatePage() {
             New Resource
           </button>
           <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-          <span className="text-foreground">{stepLabels[step]}</span>
+          {step === "template" && selectedTemplate ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setSelectedTemplate(null)}
+                className="hover:text-foreground hover:underline"
+              >
+                {stepLabels[step]}
+              </button>
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+              <span className="text-foreground">{blueprintDisplayName(selectedTemplate)}</span>
+            </>
+          ) : (
+            <span className="text-foreground">{stepLabels[step]}</span>
+          )}
           {step === "repository" && selectedRepo && (
             <>
               <ChevronRight className="h-3.5 w-3.5" aria-hidden />
@@ -1227,6 +1454,12 @@ export function StackCreatePage() {
               pending={pending}
               serverError={serverError}
               onSubmit={submitBlueprint}
+              installing={selectedTemplate}
+              onSelectTemplate={(bp) => {
+                setSelectedTemplate(bp);
+                setServerError(null);
+              }}
+              onClearTemplate={() => setSelectedTemplate(null)}
             />
           )}
         </>

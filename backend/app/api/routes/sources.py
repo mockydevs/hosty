@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.core.errors import ConflictError, NotFoundError
-from app.core.secrets import decrypt_secret, encrypt_secret
+from app.core.secrets import SecretDecryptionError, decrypt_secret, encrypt_secret
 from app.db.models import GitSource, User
 
 router = APIRouter()
@@ -237,7 +237,13 @@ async def refresh_installation(
         raise NotFoundError("Source not found")
 
     settings = request.app.state.settings
-    private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+    try:
+        private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+    except SecretDecryptionError:
+        raise ConflictError(
+            "Cannot decrypt this source's credentials — HOSTY_SECRET_KEY may have changed. "
+            "Please delete and re-register the GitHub App."
+        )
     now = int(time.time())
     app_jwt = pyjwt.encode(
         {"iat": now - 60, "exp": now + 540, "iss": str(source.app_id)},
@@ -286,7 +292,13 @@ async def list_source_repos(
         raise ConflictError("This source has no installation ID — the GitHub App may not be installed yet.")
 
     settings = request.app.state.settings
-    private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+    try:
+        private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+    except SecretDecryptionError:
+        raise ConflictError(
+            "Cannot decrypt this source's credentials — HOSTY_SECRET_KEY may have changed. "
+            "Please delete and re-register the GitHub App."
+        )
 
     now = int(time.time())
     app_jwt = pyjwt.encode(

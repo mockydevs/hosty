@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, is_admin
 from app.core.errors import ConflictError, NotFoundError
-from app.core.secrets import decrypt_secret
+from app.core.secrets import SecretDecryptionError, decrypt_secret
 from app.db.models import App, GitSource, Operation, Site, Stack, StackEndpoint, User, ScheduledTask, Tag, StackTag, Deployment
 from app.domain.validate import SpecValidationError, validate_domain_name, validate_slug
 from app.orchestration.blueprints import list_blueprints
@@ -173,7 +173,10 @@ def _settings(request: Request):
 
 async def stack_response(db: AsyncSession, stack: Stack, request: Request) -> StackResponse:
     services, volumes, endpoints = await stacks_service.stack_children(db, stack.id)
-    inputs = stacks_service.decrypt_inputs(stack, request.app.state.settings)
+    try:
+        inputs = stacks_service.decrypt_inputs(stack, request.app.state.settings)
+    except SecretDecryptionError:
+        inputs = {}
     return StackResponse(
         id=stack.id,
         name=stack.name,
