@@ -125,10 +125,6 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         f"ContainerName={stack.name}-{service.name}",
         f"Image={image}",
         f"Network={network_file_name(stack.name)}",
-        # Alias = compose service name so containers reach each other by
-        # short name (e.g. "postgres") not full name ("stack-abc-postgres").
-        # Maps to podman run --network-alias; matches Docker Compose DNS.
-        f"NetworkAlias={service.name}",
         # Hardening — unconditional.
         "NoNewPrivileges=true",
         "LogDriver=journald",
@@ -154,13 +150,17 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         host_dir = volume_host_dir(stack.tenant, stack.name, volume.name)
         suffix = ":U" if volume.name in exclusive else ""
         lines.append(f"Volume={host_dir}:{volume.mount_path}{suffix}")
-    podman_args: list[str] = []
+    # Always register a network alias equal to the compose service name so
+    # other containers in the stack can resolve it by short name (e.g.
+    # "postgres" instead of "mattermost-abc-postgres").  Using PodmanArgs
+    # rather than the Quadlet NetworkAlias= key because NetworkAlias= was
+    # added in Podman 4.7 while PodmanArgs= works with all Podman >= 4.4.
+    podman_args: list[str] = [f"--network-alias={service.name}"]
     if service.memory_mb is not None:
         podman_args.append(f"--memory={int(service.memory_mb)}m")
     if service.cpu_percent is not None:
         podman_args.append(f"--cpus={int(service.cpu_percent) / 100:g}")
-    if podman_args:
-        lines.append(f"PodmanArgs={' '.join(podman_args)}")
+    lines.append(f"PodmanArgs={' '.join(podman_args)}")
     lines += [
         "",
         "[Service]",
