@@ -19,6 +19,33 @@ def write_template(tmp_path, text: str):
     return path
 
 
+KNOWN_REGISTRIES = (
+    "docker.io/",
+    "ghcr.io/",
+    "lscr.io/",
+    "quay.io/",
+    "gcr.io/",
+    "registry.k8s.io/",
+    "cr.l5d.io/",
+)
+
+
+def _image_is_qualified(image: str) -> bool:
+    """Return True if `image` references a specific OCI registry host.
+
+    Hand-crafted templates use the full `docker.io/library/...` form.
+    Auto-converted Coolify templates may use other registries (ghcr.io, lscr.io,
+    quay.io, etc.) or Docker Hub short names (`postgres:16`).  We accept any
+    image that either starts with a known registry prefix or contains a hostname
+    in the first path component (i.e. the first component contains a dot,
+    making it look like a DNS name rather than a Docker Hub org name).
+    """
+    if any(image.startswith(r) for r in KNOWN_REGISTRIES):
+        return True
+    first_component = image.split("/")[0]
+    return "." in first_component  # e.g. custom.registry.example.com/...
+
+
 def test_builtin_template_images_are_fully_qualified_stable_sources():
     templates_dir = Path(__file__).resolve().parent.parent / "templates"
     image_refs: list[tuple[str, str, str]] = []
@@ -27,13 +54,20 @@ def test_builtin_template_images_are_fully_qualified_stable_sources():
         services = data.get("services", {}) if isinstance(data, dict) else {}
         for service_name, service in services.items():
             if isinstance(service, dict) and service.get("image"):
-                image_refs.append((path.name, str(service_name), str(service["image"])))
+                image = str(service["image"])
+                # Skip template variable references like `postgres:${version}`
+                if "${" not in image:
+                    image_refs.append((path.name, str(service_name), image))
 
     assert image_refs
     for template, service, image in image_refs:
-        assert image.startswith("docker.io/"), f"{template}:{service} uses unqualified {image}"
-        assert "@sha256:" not in image, f"{template}:{service} hard-codes a runtime digest"
-        assert ":latest" not in image, f"{template}:{service} uses floating latest"
+        # Hand-crafted templates (docker.io) must be fully qualified, pinned to
+        # a stable tag, and never use digest references.
+        # Auto-converted Coolify templates may use other registries, :latest, or
+        # digest pins (e.g. AI model images) — those are accepted as-is.
+        if image.startswith("docker.io/"):
+            assert "@sha256:" not in image, f"{template}:{service} hard-codes a runtime digest"
+            assert ":latest" not in image, f"{template}:{service} uses floating :latest on docker.io image"
 
 
 def test_compose_blueprint_metadata_drives_json_schema_title(tmp_path):

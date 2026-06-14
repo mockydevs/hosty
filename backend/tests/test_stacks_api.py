@@ -219,9 +219,9 @@ async def test_create_dynamic_uptime_kuma_template(admin_client, stack_host):
 
     stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
     service = stack["services"][0]
-    assert service["name"] == "web"
-    assert service["image"] == "docker.io/louislam/uptime-kuma:1"
-    assert service["image_digest"].startswith("docker.io/louislam/uptime-kuma:1@sha256:")
+    assert service["name"] == "uptime-kuma"
+    assert service["image"] == "docker.io/louislam/uptime-kuma:2"
+    assert service["image_digest"].startswith("docker.io/louislam/uptime-kuma:2@sha256:")
     assert service["internal_port"] == 3001
     assert service["internal_port"] is not None
     assert stack["volumes"][0]["mount_path"] == "/app/data"

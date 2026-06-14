@@ -1336,7 +1336,7 @@ export function StackDetailPage() {
 
       {activeTab === "Links" && (
         <div className="mt-5">
-          <LinksTab />
+          <LinksTab stackId={id} endpoints={data.endpoints} />
         </div>
       )}
 
