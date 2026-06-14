@@ -168,11 +168,16 @@ class ComposeBlueprint:
             raw_build = svc_data.get("build")
             if raw_build and isinstance(raw_build, str):
                 build_str = _substitute(raw_build, subs)
-
-                if "#" in build_str:
-                    build_repo, build_branch = build_str.split("#", 1)
+                if build_str.startswith(("https://", "git@", "ssh://")):
+                    # Remote git URL — use as build_repo
+                    if "#" in build_str:
+                        build_repo, build_branch = build_str.split("#", 1)
+                    else:
+                        build_repo = build_str
                 else:
-                    build_repo = build_str
+                    # Local path like "." or "./subdir" — marker for git.py blueprint to fill in
+                    image = "hosty-build-target"
+                    build_repo = None
             elif isinstance(raw_build, dict):
                 context = raw_build.get("context")
                 if isinstance(context, str) and context.startswith(("https://", "git@", "ssh://")):
@@ -181,10 +186,10 @@ class ComposeBlueprint:
                         build_repo, build_branch = build_str.split("#", 1)
                     else:
                         build_repo = build_str
-                elif not svc_data.get("image"):
-                    raise SpecValidationError(
-                        f"Service {svc_name!r} uses a local build context without a fallback image"
-                    )
+                else:
+                    # Local build context dict (context: .) — marker for git.py blueprint
+                    image = "hosty-build-target"
+                    build_repo = None
 
             env_vars = {}
             raw_env = svc_data.get("environment", {})
