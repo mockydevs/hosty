@@ -38,25 +38,63 @@ log "Backend dependencies"
 (cd "$APP_DIR/backend" && UV_PROJECT_ENVIRONMENT=$VENV uv sync --frozen)
 
 log "Database migrations (alembic upgrade head)"
-# Capture current revision before touching the DB so the operator knows
-# what state to restore if the migration fails.
-_pre_rev=$(cd "$APP_DIR/backend" \
-  && set -a && . "$ENV_FILE" && set +a \
-  && UV_PROJECT_ENVIRONMENT=$VENV uv run alembic current 2>/dev/null | awk '{print $1}' | head -1 \
-  || echo "unknown")
 
-if ! (cd "$APP_DIR/backend" \
-  && set -a && . "$ENV_FILE" && set +a \
-  && UV_PROJECT_ENVIRONMENT=$VENV uv run alembic upgrade head); then
+# ── Migration helper ─────────────────────────────────────────────────────────
+_alembic() { cd "$APP_DIR/backend" && set -a && . "$ENV_FILE" && set +a \
+             && UV_PROJECT_ENVIRONMENT=$VENV uv run alembic "$@"; }
+
+# Capture the DB revision before touching it so we know what to restore on failure.
+_pre_rev=$(_alembic current 2>/dev/null | awk '{print $1}' | head -1 || echo "unknown")
+
+# Run migrations with auto-heal: if a migration fails because an object
+# (index, table, column) already exists in the DB, stamp that revision as
+# applied and retry — up to 5 times.  This handles the common case where
+# SQLAlchemy's create_tables_on_startup (or a previous partial run) already
+# created the object the migration wants to create.
+_heal_attempts=0
+_max_heals=5
+while true; do
+  _out=$(_alembic upgrade head 2>&1) && break   # success → exit loop
+
+  # Check if it's a recoverable "already exists" conflict.
+  if echo "$_out" | grep -qiE "already exists|duplicate (column|key|index|table)"; then
+    if [ $_heal_attempts -ge $_max_heals ]; then
+      echo "ERROR: still failing after $_max_heals auto-heal attempts." >&2
+      echo "$_out" >&2
+      break   # fall through to the failure block below
+    fi
+    _heal_attempts=$((_heal_attempts + 1))
+
+    # Extract the target revision from "Running upgrade X -> Y" in the output.
+    _fail_rev=$(echo "$_out" | grep -oE "Running upgrade [^ ]+ -> [^ ]+" \
+                | tail -1 | awk '{print $NF}')
+    if [ -z "$_fail_rev" ]; then
+      echo "ERROR: could not identify failing revision; manual fix required." >&2
+      echo "$_out" >&2
+      break
+    fi
+
+    echo "    Auto-heal attempt $_heal_attempts: stamping '$_fail_rev' (object already exists)."
+    _alembic stamp "$_fail_rev" 2>/dev/null || true
+    continue
+  fi
+
+  # Not a recoverable error — print it and fall through to the failure block.
+  echo "$_out" >&2
+  break
+done
+
+# Verify we are actually at head now.
+if ! _alembic check >/dev/null 2>&1; then
   echo ""
   echo "┌─────────────────────────────────────────────────────────────┐"
   echo "│  MIGRATION FAILED — service has NOT been restarted          │"
   echo "│  The running instance is still serving the old schema.      │"
   echo "│                                                             │"
-  echo "│  DB was at: $_pre_rev"
+  printf  "│  DB was at: %-48s│\n" "$_pre_rev"
   echo "│                                                             │"
   echo "│  To rollback the code to match the DB:                     │"
-  echo "│    cd /opt/hosty && git checkout $_pre_rev                  │"
+  printf  "│    cd /opt/hosty && git checkout %-27s│\n" "$_pre_rev"
   echo "│                                                             │"
   echo "│  Fix the migration then re-run update.sh.                  │"
   echo "└─────────────────────────────────────────────────────────────┘"
