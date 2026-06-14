@@ -37,3 +37,10 @@ async def get_installation_token(source: object, settings: object) -> str:
     return resp.json()["token"]
 
 
+def authenticated_clone_url(clone_url: str, token: str) -> str:
+    """Inject an x-access-token credential into an HTTPS clone URL.
+    Used for transient operations like git ls-remote in analysis."""
+    if clone_url.startswith("https://"):
+        return clone_url.replace("https://", f"https://x-access-token:{token}@", 1)
+    return clone_url
+
