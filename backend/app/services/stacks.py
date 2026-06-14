@@ -22,12 +22,12 @@ from app.core.clock import utcnow
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.secrets import decrypt_secret, encrypt_secret
-from app.db.models import Stack, StackEndpoint, StackService, StackVolume, User
+from app.db.models import SharedVariable, Stack, StackEndpoint, StackService, StackVolume, User
 from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec, derive_host_port
 from app.domain.validate import SpecValidationError
 from app.orchestration.blueprints import get_blueprint
 from app.orchestration.blueprints.base import Allocation, Blueprint
-from app.services import caddy, ports, stack_images
+from app.services import caddy, stack_images
 
 log = structlog.get_logger("hosty.stacks")
 
@@ -84,6 +84,12 @@ def decrypt_env(service: StackService, settings: Settings) -> dict[str, str]:
     if not service.env_encrypted:
         return {}
     return json.loads(decrypt_secret(service.env_encrypted, settings.secret_key))
+
+
+def decrypt_json_map(value: str | None, settings: Settings) -> dict[str, str]:
+    if not value:
+        return {}
+    return json.loads(decrypt_secret(value, settings.secret_key))
 
 
 def encrypt_inputs(inputs: dict, settings: Settings) -> str:
@@ -145,7 +151,14 @@ def spec_for(
                 is_web=svc.is_web,
                 build_repo=svc.build_repo,
                 build_branch=svc.build_branch,
+                build_tool=svc.build_tool,
+                build_context=svc.build_context,
+                dockerfile_path=svc.dockerfile_path,
+                build_args=tuple(
+                    sorted(decrypt_json_map(svc.build_args_encrypted, settings).items())
+                ),
                 exposed=svc.publicly_exposed,
+                depends_on=tuple(json.loads(svc.depends_on_json or "[]")),
             )
             for svc in sorted(services, key=lambda s: s.name)
         ),
@@ -329,13 +342,16 @@ async def allocate(
 ) -> Allocation:
     """Generated secrets and loopback IP for one render."""
     secrets = {name: generate_secret() for name in blueprint.secrets_needed(inputs)}
-    
-    from sqlalchemy import select
-    from app.db.models import SharedVariable
+
     sv_res = await db.execute(select(SharedVariable))
     shared_vars = {sv.key: sv.value for sv in sv_res.scalars().all()}
-    
-    return Allocation(tenant=tenant_for(stack.owner_id), loopback_ip=stack.loopback_ip, secrets=secrets, shared_variables=shared_vars)
+
+    return Allocation(
+        tenant=tenant_for(stack.owner_id),
+        loopback_ip=stack.loopback_ip,
+        secrets=secrets,
+        shared_variables=shared_vars,
+    )
 
 
 async def persist_rendered(
@@ -352,11 +368,17 @@ async def persist_rendered(
                 image_digest=image_locks.get(svc.name),
                 build_repo=svc.build_repo,
                 build_branch=svc.build_branch,
+                build_tool=svc.build_tool,
+                build_context=svc.build_context,
+                dockerfile_path=svc.dockerfile_path,
+                build_args_encrypted=encrypt_env(dict(svc.build_args), settings),
                 internal_port=svc.internal_port,
                 env_encrypted=encrypt_env(dict(svc.env), settings),
                 memory_mb=svc.memory_mb,
                 cpu_percent=svc.cpu_percent,
                 is_web=svc.is_web,
+                publicly_exposed=svc.exposed,
+                depends_on_json=json.dumps(list(svc.depends_on)) if svc.depends_on else None,
             )
         )
     for vol in spec.volumes:
@@ -437,11 +459,21 @@ def connection_links(
                 database,
             ),
             host_uri=_build_uri(
-                scheme, user, password, stack.loopback_ip, derive_host_port(target.internal_port), database
+                scheme,
+                user,
+                password,
+                stack.loopback_ip,
+                derive_host_port(target.internal_port),
+                database,
             ),
             public_uri=(
                 _build_uri(
-                    scheme, user, password, public_ip, derive_host_port(target.internal_port), database
+                    scheme,
+                    user,
+                    password,
+                    public_ip,
+                    derive_host_port(target.internal_port),
+                    database,
                 )
                 if target.publicly_exposed and public_ip
                 else None

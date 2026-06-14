@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from app.domain.validate import (
     SpecValidationError,
+    validate_build_path,
     validate_domain_name,
     validate_env_key,
     validate_env_value,
@@ -60,6 +61,9 @@ class ServiceSpec:
     build_repo: str | None = None
     build_branch: str | None = None
     build_tool: str = "dockerfile"
+    build_context: str = "."
+    dockerfile_path: str = "Dockerfile"
+    build_args: tuple[tuple[str, str], ...] = ()
     # When True the published port binds 0.0.0.0 (reachable on the server's
     # public IP) instead of loopback-only — opt-in external access for e.g. a
     # database. Requires a published port.
@@ -82,6 +86,23 @@ class ServiceSpec:
             validate_git_repo(self.build_repo)
             if self.build_branch:
                 validate_git_ref(self.build_branch)
+            if self.build_tool not in ("dockerfile", "nixpacks"):
+                raise SpecValidationError(f"Service {self.name!r}: invalid build tool")
+            object.__setattr__(
+                self,
+                "build_context",
+                validate_build_path(self.build_context, what="build context", allow_dot=True),
+            )
+            object.__setattr__(
+                self,
+                "dockerfile_path",
+                validate_build_path(self.dockerfile_path, what="Dockerfile path"),
+            )
+            for key, value in self.build_args:
+                validate_env_key(key)
+                validate_env_value(key, value)
+            if list(self.build_args) != sorted(self.build_args):
+                raise SpecValidationError("Service build args must be sorted (canonical form)")
         else:
             # validate_image_ref validates AND qualifies (e.g. redis:7.2 →
             # docker.io/library/redis:7.2); frozen dataclass needs __setattr__.
@@ -165,7 +186,6 @@ class StackSpec:
                         f"Stack {self.name!r}: service {svc.name!r} depends_on "
                         f"unknown service {dep!r}"
                     )
-        by_name = {s.name: s for s in self.services}
         for endpoint in self.endpoints:
             if endpoint.service not in known:
                 raise SpecValidationError(
@@ -174,7 +194,8 @@ class StackSpec:
             target = next(s for s in self.services if s.name == endpoint.service)
             if target.internal_port is None:
                 raise SpecValidationError(
-                    f"Endpoint {endpoint.domain!r} targets service {endpoint.service!r} which has no internal_port"
+                    f"Endpoint {endpoint.domain!r} targets service {endpoint.service!r} "
+                    "which has no internal_port"
                 )
 
     @property
@@ -203,6 +224,9 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "build_repo": service.build_repo,
         "build_branch": service.build_branch,
         "build_tool": service.build_tool,
+        "build_context": service.build_context,
+        "dockerfile_path": service.dockerfile_path,
+        "build_args": list(service.build_args),
         "loopback_ip": stack.loopback_ip,  # changing IP rewrites PublishPort bind
         "network": stack.network,
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
@@ -240,6 +264,7 @@ class ObservedStack:
 
 # Observed world: stack name -> ObservedStack
 Observed = dict[str, ObservedStack]
+
 
 def derive_host_port(internal_port: int) -> int:
     return internal_port + 20000 if internal_port < 1024 else internal_port

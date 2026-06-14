@@ -1,16 +1,29 @@
-from typing import Any
-from pydantic import BaseModel, Field
-
-from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec
-from app.domain.validate import SpecValidationError
-from app.orchestration.blueprints.base import ActionHandler, ActionResult, Allocation, Blueprint, StackHealth
+import tempfile
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field, create_model
+
+from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec
+from app.domain.validate import SpecValidationError
+from app.orchestration.blueprints.base import (
+    ActionHandler,
+    ActionResult,
+    Allocation,
+    Blueprint,
+    StackHealth,
+)
 
 
 class GitBlueprintInputs(BaseModel):
-    repo: str = Field(..., title="Repository URL", description="e.g. https://github.com/org/repo.git")
+    repo: str = Field(
+        ..., title="Repository URL", description="e.g. https://github.com/org/repo.git"
+    )
     branch: str = Field("main", title="Branch")
-    build_method: str = Field("dockerfile", title="Build Method", description="dockerfile, compose, or nixpacks")
+    build_method: str = Field(
+        "dockerfile", title="Build Method", description="dockerfile, compose, or nixpacks"
+    )
     internal_port: int = Field(3000, title="Application Port")
     domain: str = Field("", title="Domain (optional)")
     env: dict[str, str] = Field(default_factory=dict)
@@ -47,11 +60,11 @@ class GitBlueprint(Blueprint):
                 env=tuple(sorted(inputs.env.items())),
                 is_web=True,
             )
-            
+
             endpoints = []
             if inputs.domain:
                 endpoints.append(EndpointSpec(domain=inputs.domain, service="web"))
-                
+
             return StackSpec(
                 name=name,
                 tenant=alloc.tenant,
@@ -59,51 +72,51 @@ class GitBlueprint(Blueprint):
                 services=(svc,),
                 endpoints=tuple(endpoints),
             )
-        
+
         # Compose rendering
         if inputs.build_method == "compose":
             from app.orchestration.blueprints.compose import ComposeBlueprint
-            import tempfile
-            from pydantic import create_model
-            
+
             if not inputs.compose_file_content:
                 raise SpecValidationError("Docker Compose build method requires a compose file")
-                
+
             with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as f:
                 f.write(inputs.compose_file_content)
                 temp_path = f.name
-                
+
             try:
                 compose_bp = ComposeBlueprint(Path(temp_path))
-                
+
                 # Create dummy inputs from the env dictionary to satisfy render substitution
-                DummyInputs = create_model('DummyInputs', **{k: (str, v) for k, v in inputs.env.items()})
+                DummyInputs = create_model(
+                    "DummyInputs", **{k: (str, v) for k, v in inputs.env.items()}
+                )
                 dummy_inputs = DummyInputs(**inputs.env)
-                
+
                 spec = compose_bp.render(name, dummy_inputs, alloc)
-                
+
                 # Override build repository for services that should be built from this repo
-                # In standard Compose setups from Git, `build: .` is common. The ComposeBlueprint 
-                # will set build_repo="." or similar. We overwrite any non-None build_repo or 
+                # In standard Compose setups from Git, `build: .` is common. The ComposeBlueprint
+                # will set build_repo="." or similar. We overwrite any non-None build_repo or
                 # hosty-build-target image to use this Git repository.
                 new_services = []
                 for svc in spec.services:
-                    if svc.build_repo or svc.image == "hosty-build-target":
-                        # Dataclass requires replace
-                        from dataclasses import replace
+                    if svc.build_repo or svc.image in (
+                        "hosty-build-target",
+                        "docker.io/library/hosty-build-target",
+                    ):
                         svc = replace(
-                            svc, 
-                            build_repo=inputs.repo, 
+                            svc,
+                            build_repo=inputs.repo,
                             build_branch=inputs.branch,
-                            build_tool="dockerfile"
+                            build_tool="dockerfile",
                         )
                     new_services.append(svc)
-                
-                from dataclasses import replace
+
                 return replace(spec, services=tuple(new_services))
             finally:
                 Path(temp_path).unlink(missing_ok=True)
-                
+
         raise SpecValidationError(f"Unknown build method: {inputs.build_method}")
 
     async def rebuild(
@@ -116,7 +129,9 @@ class GitBlueprint(Blueprint):
     ) -> ActionResult:
         # Re-converge with bumped generation to force unit execution
         stack.generation += 1
-        return ActionResult(ok=True, message="Triggering repository pull and image rebuild in the background.")
+        return ActionResult(
+            ok=True, message="Triggering repository pull and image rebuild in the background."
+        )
 
     def actions(self) -> dict[str, ActionHandler]:
         return {

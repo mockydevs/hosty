@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import create_model
 
 from app.domain.validate import SpecValidationError
 from app.orchestration.blueprints.base import Allocation
@@ -67,7 +68,9 @@ def test_builtin_template_images_are_fully_qualified_stable_sources():
         # digest pins (e.g. AI model images) — those are accepted as-is.
         if image.startswith("docker.io/"):
             assert "@sha256:" not in image, f"{template}:{service} hard-codes a runtime digest"
-            assert ":latest" not in image, f"{template}:{service} uses floating :latest on docker.io image"
+            assert ":latest" not in image, (
+                f"{template}:{service} uses floating :latest on docker.io image"
+            )
 
 
 def test_compose_blueprint_metadata_drives_json_schema_title(tmp_path):
@@ -165,7 +168,9 @@ services:
         )
     )
     spec = blueprint.render(
-        "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1")
+        "app",
+        blueprint.inputs().model_validate({}),
+        Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1"),
     )
     assert spec.volumes[0].mount_path == "/usr/share/nginx/html"
 
@@ -176,7 +181,7 @@ def test_compose_blueprint_rejects_malformed_structure(tmp_path, text):
         ComposeBlueprint(write_template(tmp_path, text))
 
 
-def test_compose_blueprint_rejects_unsupported_local_build_without_image(tmp_path):
+def test_compose_blueprint_preserves_local_build_without_image(tmp_path):
     blueprint = ComposeBlueprint(
         write_template(
             tmp_path,
@@ -189,10 +194,14 @@ services:
 """,
         )
     )
-    with pytest.raises(SpecValidationError, match="local build context"):
-        blueprint.render(
-            "app", blueprint.inputs().model_validate({}), Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1")
-        )
+    spec = blueprint.render(
+        "app",
+        blueprint.inputs().model_validate({}),
+        Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1"),
+    )
+    assert spec.services[0].image == "docker.io/library/hosty-build-target"
+    assert spec.services[0].build_context == "."
+    assert spec.services[0].dockerfile_path == "Dockerfile"
 
 
 def test_compose_blueprint_rejects_missing_required_variable(tmp_path):
@@ -266,3 +275,46 @@ services:
     assert service.internal_port == 3000
     assert service.is_web is True
     assert spec.endpoints[0].domain == "app.example.com"
+
+
+def test_compose_blueprint_preserves_multiservice_build_configuration(tmp_path):
+    blueprint = ComposeBlueprint(
+        write_template(
+            tmp_path,
+            """
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    expose: ["8000"]
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    expose: ["3000"]
+    depends_on:
+      backend:
+        condition: service_healthy
+""",
+        )
+    )
+    inputs = create_model(
+        "ComposeInputs", NEXT_PUBLIC_API_URL=(str, "https://api.example.com")
+    ).model_validate({})
+    spec = blueprint.render(
+        "a2p",
+        inputs,
+        Allocation(tenant="hosty-t-7", loopback_ip="127.1.0.1"),
+    )
+
+    services = {service.name: service for service in spec.services}
+    assert services["backend"].build_context == "backend"
+    assert services["backend"].dockerfile_path == "Dockerfile"
+    assert services["backend"].internal_port == 8000
+    assert services["frontend"].build_context == "frontend"
+    assert services["frontend"].build_args == (("NEXT_PUBLIC_API_URL", "https://api.example.com"),)
+    assert services["frontend"].internal_port == 3000
+    assert services["frontend"].depends_on == ("backend",)

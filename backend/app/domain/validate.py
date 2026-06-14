@@ -12,6 +12,7 @@ nothing else may define input grammars.
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath
 
 # Conservative subset of the OCI image reference grammar:
 # [registry[:port]/]repo[/repo...][:tag][@sha256:digest]
@@ -30,9 +31,7 @@ ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 OBJECT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
 # User-chosen short names (stacks, services, volumes): strict slug.
 SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
-GIT_HTTPS_RE = re.compile(
-    r"^https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~/-]+(?:\.git)?$"
-)
+GIT_HTTPS_RE = re.compile(r"^https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~/-]+(?:\.git)?$")
 GIT_SSH_RE = re.compile(
     r"^(?:ssh://)?git@[A-Za-z0-9.-]+(?::[0-9]{1,5})?[:/][A-Za-z0-9._~/-]+(?:\.git)?$"
 )
@@ -98,6 +97,25 @@ def validate_git_ref(ref: str) -> str:
     ):
         raise SpecValidationError(f"Invalid Git branch or ref: {ref!r}")
     return ref
+
+
+def validate_build_path(path: str, *, what: str, allow_dot: bool = False) -> str:
+    """Validate and normalize a repository-relative build path."""
+    if (
+        not isinstance(path, str)
+        or not path
+        or len(path) > 255
+        or path.startswith(("/", "-"))
+        or "\\" in path
+        or "\x00" in path
+        or "\n" in path
+        or not re.fullmatch(r"[A-Za-z0-9._/-]+", path)
+    ):
+        raise SpecValidationError(f"Invalid {what}: {path!r}")
+    normalized = str(PurePosixPath(path))
+    if ".." in PurePosixPath(normalized).parts or (normalized == "." and not allow_dot):
+        raise SpecValidationError(f"Invalid {what}: {path!r}")
+    return normalized
 
 
 def validate_object_name(name: str) -> str:

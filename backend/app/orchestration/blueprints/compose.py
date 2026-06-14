@@ -10,7 +10,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from app.domain.specs import EndpointSpec, ServiceSpec, StackSpec, VolumeSpec
-from app.domain.validate import SpecValidationError
+from app.domain.validate import SpecValidationError, validate_build_path
 from app.orchestration.blueprints.base import ActionHandler, Allocation, StackHealth
 
 _VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-?])(.*?))?\}")
@@ -157,14 +157,15 @@ class ComposeBlueprint:
             subs[k] = v
         for k, v in dict(inputs).items():
             subs[k] = str(v)
-            
-        shared_vars_env = [f"{k}={v}" for k, v in alloc.shared_variables.items()]
 
         for svc_name, svc_data in services_data.items():
             image = _substitute(svc_data.get("image", "hosty-build-target"), subs)
 
             build_repo = None
             build_branch = None
+            build_context = "."
+            dockerfile_path = "Dockerfile"
+            build_args: dict[str, str] = {}
             raw_build = svc_data.get("build")
             if raw_build and isinstance(raw_build, str):
                 build_str = _substitute(raw_build, subs)
@@ -178,6 +179,7 @@ class ComposeBlueprint:
                     # Local path like "." or "./subdir" — marker for git.py blueprint to fill in
                     image = "hosty-build-target"
                     build_repo = None
+                    build_context = build_str
             elif isinstance(raw_build, dict):
                 context = raw_build.get("context")
                 if isinstance(context, str) and context.startswith(("https://", "git@", "ssh://")):
@@ -190,6 +192,26 @@ class ComposeBlueprint:
                     # Local build context dict (context: .) — marker for git.py blueprint
                     image = "hosty-build-target"
                     build_repo = None
+                    build_context = _substitute(context or ".", subs)
+                    dockerfile_path = _substitute(raw_build.get("dockerfile", "Dockerfile"), subs)
+                    raw_args = raw_build.get("args", {})
+                    if isinstance(raw_args, dict):
+                        for key, value in raw_args.items():
+                            build_args[str(key)] = (
+                                subs.get(str(key), "")
+                                if value is None
+                                else _substitute(value, subs)
+                            )
+                    elif isinstance(raw_args, list):
+                        for raw_arg in raw_args:
+                            key, separator, value = str(raw_arg).partition("=")
+                            build_args[key] = (
+                                _substitute(value, subs) if separator else subs.get(key, "")
+                            )
+                    elif raw_args:
+                        raise SpecValidationError(
+                            f"Service {svc_name!r} build args must be a mapping or list"
+                        )
 
             env_vars = {}
             raw_env = svc_data.get("environment", {})
@@ -203,8 +225,8 @@ class ComposeBlueprint:
                         env_vars[item] = subs.get(item, "")
             elif isinstance(raw_env, dict):
                 env_vars = dict(raw_env)
-                
-            # Inject global shared variables (overriding if they exist, or maybe shouldn't override?)
+
+            # Inject global shared variables unless the service overrides them.
             for gk, gv in alloc.shared_variables.items():
                 if gk not in env_vars:
                     env_vars[gk] = gv
@@ -212,8 +234,9 @@ class ComposeBlueprint:
             env_vars = {str(ek): _substitute(ev, subs) for ek, ev in env_vars.items()}
 
             internal_port = None
-            if svc_data.get("ports"):
-                raw_port = svc_data["ports"][0]
+            published_ports = svc_data.get("ports") or svc_data.get("expose")
+            if published_ports:
+                raw_port = published_ports[0]
                 if isinstance(raw_port, dict):
                     raw_port = raw_port.get("target")
                 if raw_port is None:
@@ -253,8 +276,17 @@ class ComposeBlueprint:
                     is_web=svc_name == self._web_service,
                     build_repo=build_repo,
                     build_branch=build_branch,
-                    memory_mb=int(getattr(inputs, "memory_limit")) if hasattr(inputs, "memory_limit") and getattr(inputs, "memory_limit") else None,
-                    cpu_percent=int(getattr(inputs, "cpu_limit")) if hasattr(inputs, "cpu_limit") and getattr(inputs, "cpu_limit") else None,
+                    build_context=validate_build_path(
+                        build_context, what="build context", allow_dot=True
+                    ),
+                    dockerfile_path=validate_build_path(dockerfile_path, what="Dockerfile path"),
+                    build_args=tuple(sorted(build_args.items())),
+                    memory_mb=int(inputs.memory_limit)
+                    if hasattr(inputs, "memory_limit") and inputs.memory_limit
+                    else None,
+                    cpu_percent=int(inputs.cpu_limit)
+                    if hasattr(inputs, "cpu_limit") and inputs.cpu_limit
+                    else None,
                     depends_on=dep_names,
                     command=cmd_tuple,
                 )

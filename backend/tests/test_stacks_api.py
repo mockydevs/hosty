@@ -163,8 +163,7 @@ async def test_create_stack_happy_path(admin_client, stack_host):
     assert all("NODE_ENV" not in content for content in stack_host.unit_files[uid].values())
     # Published ingress routes the domain to the loopback port.
     assert any(
-        "app.example.com" in str(cfg) and "127." in str(cfg)
-        for cfg in stack_host.caddy.configs
+        "app.example.com" in str(cfg) and "127." in str(cfg) for cfg in stack_host.caddy.configs
     )
 
 
@@ -251,6 +250,66 @@ async def test_create_git_template_persists_build_source(admin_client, stack_hos
     uid = stack_host.users["hosty-t-1"]
     build = stack_host.unit_files[uid]["git-test-web-build.service"]
     assert "WorkingDirectory=%h/stacks/git-test/src" in build
+
+
+async def test_create_git_compose_persists_build_context_and_dependencies(
+    admin_client, stack_host, app
+):
+    compose = """
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    expose: ["8000"]
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    expose: ["3000"]
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      backend:
+        condition: service_healthy
+"""
+    body = {
+        "name": "a2p",
+        "blueprint_id": "git",
+        "inputs": {
+            "repo": "https://github.com/example/a2p.git",
+            "branch": "main",
+            "build_method": "compose",
+            "env": {"NEXT_PUBLIC_API_URL": "https://api.example.com"},
+            "compose_file_content": compose,
+        },
+    }
+    response = await admin_client.post("/api/stacks", json=body)
+    assert response.status_code == 202, response.text
+    payload = response.json()
+    outcome = await app.state.reconciler.converge_stack("a2p", operation_id=payload["operation_id"])
+    assert outcome.error is None
+
+    uid = stack_host.users["hosty-t-1"]
+    backend = stack_host.unit_files[uid]["a2p-backend-build.service"]
+    frontend = stack_host.unit_files[uid]["a2p-frontend-build.service"]
+    frontend_container = stack_host.unit_files[uid]["a2p-frontend.container"]
+    assert "WorkingDirectory=%h/stacks/a2p/src/backend" in backend
+    assert "WorkingDirectory=%h/stacks/a2p/src/frontend" in frontend
+    assert "--build-arg NEXT_PUBLIC_API_URL ." in frontend
+    assert "Requires=a2p-backend.service" in frontend_container
+    assert "After=a2p-backend.service" in frontend_container
+    assert (
+        stack_host.env_files["/home/hosty-t-1/stacks/a2p/env/frontend.build.env"]
+        == "NEXT_PUBLIC_API_URL=https://api.example.com\n"
+    )
+
+    stack = (await admin_client.get(f"/api/stacks/{payload['stack']['id']}")).json()
+    services = {service["name"]: service for service in stack["services"]}
+    assert services["backend"]["internal_port"] == 8000
+    assert services["frontend"]["internal_port"] == 3000
 
 
 async def test_dynamic_templates_allocate_distinct_ports(admin_client, stack_host):
@@ -470,10 +529,7 @@ class EchoBlueprint:
             is_web=True,
         )
         return StackSpec(
-            name=name,
-            tenant=alloc.tenant,
-            loopback_ip=alloc.loopback_ip,
-            services=(service,)
+            name=name, tenant=alloc.tenant, loopback_ip=alloc.loopback_ip, services=(service,)
         )
 
     def actions(self):

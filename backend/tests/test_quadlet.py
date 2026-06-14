@@ -60,7 +60,7 @@ def test_container_unit_snapshot_full():
         "PublishPort=127.1.0.1:20080:80\n"
         "EnvironmentFile=/home/hosty-t-7/stacks/blog/env/web.env\n"
         "Volume=/home/hosty-t-7/stacks/blog/volumes/content:/var/www/html:U\n"
-        "PodmanArgs=--memory=512m --cpus=1.5\n"
+        "PodmanArgs=--network-alias=web --memory=512m --cpus=1.5\n"
         "\n"
         "[Service]\n"
         "Restart=always\n"
@@ -93,6 +93,7 @@ def test_container_unit_snapshot_minimal():
         "Label=hosty.stack=blog\n"
         "Label=hosty.managed=1\n"
         "Volume=/home/hosty-t-7/stacks/blog/volumes/dbdata:/var/lib/mysql:U\n"
+        "PodmanArgs=--network-alias=db\n"
         "\n"
         "[Service]\n"
         "Restart=always\n"
@@ -136,9 +137,7 @@ def test_volume_chown_flag_only_for_single_owner_volumes():
 def test_exposed_service_binds_all_interfaces():
     """An exposed service publishes on 0.0.0.0 (reachable on the public IP);
     the default stays loopback-only."""
-    base = dict(
-        name="db", image="docker.io/library/postgres:16", internal_port=5432
-    )
+    base = dict(name="db", image="docker.io/library/postgres:16", internal_port=5432)
     stack = StackSpec(
         name="pg",
         tenant="hosty-t-7",
@@ -147,7 +146,9 @@ def test_exposed_service_binds_all_interfaces():
     )
     assert "PublishPort=0.0.0.0:5432:5432\n" in quadlet.container_unit(stack, stack.services[0])
 
-    loopback = StackSpec(name="pg", tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(ServiceSpec(**base),))
+    loopback = StackSpec(
+        name="pg", tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(ServiceSpec(**base),)
+    )
     assert "PublishPort=127.1.0.1:5432:5432\n" in quadlet.container_unit(
         loopback, loopback.services[0]
     )
@@ -176,6 +177,47 @@ def test_env_files_only_for_services_with_env():
     assert env_files["/home/hosty-t-7/stacks/blog/env/web.env"] == (
         "APP_ENV=prod\nWP_HOME=https://blog.example.com\n"
     )
+
+
+def test_dockerfile_build_uses_compose_context_dockerfile_and_args():
+    service = ServiceSpec(
+        name="backend",
+        image="hosty-build-target",
+        build_repo="https://github.com/example/a2p.git",
+        build_branch="main",
+        build_context="./backend",
+        dockerfile_path="Dockerfile",
+        build_args=(("API_URL", "https://api.example.com"),),
+    )
+    stack = StackSpec(
+        name="a2p",
+        tenant="hosty-t-7",
+        loopback_ip="127.1.0.1",
+        services=(service,),
+    )
+
+    unit = quadlet.dockerfile_build_unit(stack, service)
+    assert "WorkingDirectory=%h/stacks/a2p/src/backend" in unit
+    assert "EnvironmentFile=/home/hosty-t-7/stacks/a2p/env/backend.build.env" in unit
+    assert (
+        "ExecStart=/usr/bin/podman build --file Dockerfile "
+        "--tag hosty/a2p-backend:latest --build-arg API_URL ."
+    ) in unit
+    assert (
+        quadlet.env_files(stack)["/home/hosty-t-7/stacks/a2p/env/backend.build.env"]
+        == "API_URL=https://api.example.com\n"
+    )
+
+
+@pytest.mark.parametrize("path", ["../backend", "/backend", "-f", "backend dir"])
+def test_build_context_rejects_unsafe_paths(path):
+    with pytest.raises(SpecValidationError, match="build context"):
+        ServiceSpec(
+            name="web",
+            image="hosty-build-target",
+            build_repo="https://github.com/example/app.git",
+            build_context=path,
+        )
 
 
 def test_spec_hash_marker_round_trips():
@@ -237,4 +279,9 @@ def test_injection_cannot_reach_unit_text():
     with pytest.raises(SpecValidationError):
         VolumeSpec(name="data", service="web", mount_path="/data/../../etc")
     with pytest.raises(SpecValidationError):
-        StackSpec(name="blog\n", tenant="hosty-t-7", loopback_ip="127.1.0.1", services=(ServiceSpec("web", "nginx"),))
+        StackSpec(
+            name="blog\n",
+            tenant="hosty-t-7",
+            loopback_ip="127.1.0.1",
+            services=(ServiceSpec("web", "nginx"),),
+        )

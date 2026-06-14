@@ -209,7 +209,9 @@ class Stack(Base):
     # Fernet-encrypted JSON of the user's blueprint inputs (incl. secrets).
     inputs_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     # converging | ready | degraded | suspended | deleting | error
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="converging", index=True)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="converging", index=True
+    )
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     observed_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -244,6 +246,11 @@ class StackService(Base):
     image_digest: Mapped[str | None] = mapped_column(String(512), nullable=True)
     build_repo: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     build_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    build_tool: Mapped[str] = mapped_column(String(16), nullable=False, default="dockerfile")
+    build_context: Mapped[str] = mapped_column(String(255), nullable=False, default=".")
+    dockerfile_path: Mapped[str] = mapped_column(String(255), nullable=False, default="Dockerfile")
+    build_args_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    depends_on_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     internal_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     env_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     memory_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -478,7 +485,7 @@ class GitSource(Base):
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False, default="github")
-    
+
     # GitHub App Specifics
     app_id: Mapped[str] = mapped_column(String(64), nullable=False)
     app_slug: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -487,36 +494,49 @@ class GitSource(Base):
     client_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     private_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     webhook_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    
+
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
 
 class ScheduledTask(Base):
     __tablename__ = "scheduled_tasks"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    stack_id: Mapped[int] = mapped_column(ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True)
+    stack_id: Mapped[int] = mapped_column(
+        ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     command: Mapped[str] = mapped_column(String(255), nullable=False)
     cron_schedule: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
 
 class Tag(Base):
     __tablename__ = "tags"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
 
+
 class StackTag(Base):
     __tablename__ = "stack_tags"
-    stack_id: Mapped[int] = mapped_column(ForeignKey("stacks.id", ondelete="CASCADE"), primary_key=True)
+    stack_id: Mapped[int] = mapped_column(
+        ForeignKey("stacks.id", ondelete="CASCADE"), primary_key=True
+    )
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+
 
 class Deployment(Base):
     __tablename__ = "deployments"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    stack_id: Mapped[int] = mapped_column(ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True)
+    stack_id: Mapped[int] = mapped_column(
+        ForeignKey("stacks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     commit_sha: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False) # e.g., 'success', 'failed', 'running'
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )  # e.g., 'success', 'failed', 'running'
     message: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
 
 class SharedVariable(Base):
     __tablename__ = "shared_variables"
