@@ -269,10 +269,15 @@ function EnvVarsEditor({
 }) {
   const [devView, setDevView] = useState(false);
 
-  // Parse KEY=value string into array of objects
+  // Parse KEY=value string into array of objects (comment and blank lines are skipped)
   const parseEnvVars = (str: string) => {
     if (!str.trim()) return [{ key: "", value: "" }];
-    return str.split("\n").map((line) => {
+    const lines = str.split("\n").filter((line) => {
+      const t = line.trim();
+      return t && !t.startsWith("#");
+    });
+    if (lines.length === 0) return [{ key: "", value: "" }];
+    return lines.map((line) => {
       const idx = line.indexOf("=");
       if (idx === -1) return { key: line.trim(), value: "" };
       return { key: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
@@ -393,6 +398,7 @@ function ConfigureForm({
   const [branch, setBranch] = useState(defaultBranch || "main");
   const [buildPack, setBuildPack] = useState("nixpacks");
   const [composeContent, setComposeContent] = useState<string | null>(null);
+  const [composeText, setComposeText] = useState("");
   const [name, setName] = useState(() => slugFromRepo(repo));
   const [manualName, setManualName] = useState(false);
   const [port, setPort] = useState("3000");
@@ -400,18 +406,19 @@ function ConfigureForm({
   const [manualDomain, setManualDomain] = useState(false);
   const [envVars, setEnvVars] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
+  const [composeError, setComposeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!manualName && repo) setName(slugFromRepo(repo));
   }, [repo, manualName]);
 
   const analyze = useQuery({
-    queryKey: ["git-analyze", repo, branch],
+    queryKey: ["git-analyze", repo, branch, sourceId],
     enabled: !!repo && !!branch,
     queryFn: async () => {
       // @ts-ignore
       const { data, error } = await api.POST("/api/stacks/git/analyze", {
-        body: { repo, branch },
+        body: { repo, branch, source_id: sourceId ?? undefined },
       });
       if (error) return null;
       return data;
@@ -422,7 +429,9 @@ function ConfigureForm({
     if (analyze.data) {
       if (analyze.data.has_compose) {
         setBuildPack("compose");
-        setComposeContent(analyze.data.compose_file_content || null);
+        const content = analyze.data.compose_file_content || "";
+        setComposeContent(content);
+        setComposeText(content);
       } else if (analyze.data.has_dockerfile) {
         setBuildPack("dockerfile");
       } else {
@@ -465,9 +474,18 @@ function ConfigureForm({
 
     const parsedEnv: Record<string, string> = {};
     for (const line of envVars.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
       const m = line.match(/^([^=]+)=(.*)/);
       if (m && m[1]?.trim()) parsedEnv[m[1].trim()] = m[2]?.trim() ?? "";
     }
+
+    const finalCompose = buildPack === "compose" ? composeText.trim() : "";
+    if (buildPack === "compose" && !finalCompose) {
+      setComposeError("Paste your docker-compose.yml content to deploy.");
+      return;
+    }
+    setComposeError(null);
 
     await onSubmit(slug, {
       ...inputDefaults((blueprint.inputs_schema || {}) as JsonSchema),
@@ -478,7 +496,7 @@ function ConfigureForm({
       domain: domain.trim(),
       env: parsedEnv,
       source_id: sourceId,
-      compose_file_content: composeContent || "",
+      compose_file_content: finalCompose,
     });
   };
 
@@ -507,8 +525,50 @@ function ConfigureForm({
             spellCheck={false}
           />
         </FormField>
-        <BuildPackSelect value={buildPack} onChange={setBuildPack} />
+        <div className="space-y-1.5">
+          <BuildPackSelect value={buildPack} onChange={(v) => {
+            setBuildPack(v);
+            if (v === "compose" && composeContent) setComposeText(composeContent);
+          }} />
+          {analyze.isPending && (
+            <p className="text-xs text-muted-foreground">Detecting build pack…</p>
+          )}
+        </div>
       </div>
+
+      {buildPack === "compose" && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="cfg-compose">
+              docker-compose.yml
+              <span className="ml-1 text-destructive">*</span>
+            </Label>
+            {composeContent && (
+              <span className="text-xs text-green-600 dark:text-green-400">Auto-detected from repo</span>
+            )}
+            {!composeContent && analyze.data && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">Not found in repo — paste manually</span>
+            )}
+          </div>
+          <textarea
+            id="cfg-compose"
+            value={composeText}
+            onChange={(e) => { setComposeText(e.target.value); setComposeError(null); }}
+            rows={12}
+            spellCheck={false}
+            placeholder={"services:\n  web:\n    image: my-app:latest\n    ports:\n      - 3000:3000"}
+            className={[
+              "flex w-full rounded-md border bg-background px-3 py-2.5 font-mono text-xs ring-offset-background",
+              "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2",
+              "focus-visible:ring-ring focus-visible:ring-offset-2 resize-y",
+              composeError ? "border-destructive" : "border-input",
+            ].join(" ")}
+          />
+          {composeError && (
+            <p className="text-xs text-destructive">{composeError}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Port" htmlFor="cfg-port">

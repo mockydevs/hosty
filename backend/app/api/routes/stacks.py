@@ -32,6 +32,7 @@ from app.domain.validate import SpecValidationError, validate_domain_name, valid
 from app.orchestration.blueprints import list_blueprints
 from app.orchestration.blueprints.base import ActionResult, Blueprint
 from app.services import image_versions, quotas, tenancy, git
+from app.services.github import authenticated_clone_url, get_installation_token
 from app.services import stacks as stacks_service
 from app.services.stacks import StackValidationError
 from app.system import quadlet, systemd_user
@@ -145,6 +146,7 @@ class StackLogsResponse(BaseModel):
 class GitAnalyzeRequest(BaseModel):
     repo: str
     branch: str
+    source_id: int | None = None
 
 
 class GitAnalyzeResponse(BaseModel):
@@ -282,10 +284,21 @@ async def get_blueprints() -> Any:
 @router.post("/git/analyze", response_model=GitAnalyzeResponse)
 async def analyze_git_repo(
     body: GitAnalyzeRequest,
+    request: Request,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> GitAnalyzeResponse:
+    clone_url = body.repo
+    if body.source_id is not None:
+        source = await db.get(GitSource, body.source_id)
+        if source and source.owner_id == user.id and source.installation_id:
+            try:
+                token = await get_installation_token(source, request.app.state.settings)
+                clone_url = authenticated_clone_url(body.repo, token)
+            except Exception:
+                pass  # fall through to unauthenticated clone; will fail with a clear error
     try:
-        result = await git.analyze_repo(body.repo, body.branch)
+        result = await git.analyze_repo(clone_url, body.branch)
         return GitAnalyzeResponse(
             has_dockerfile=result.has_dockerfile,
             has_compose=result.has_compose,

@@ -9,7 +9,7 @@ from typing import Any
 import structlog
 from pydantic import BaseModel
 
-from app.system.runner import run
+from app.system.runner import CommandNotFoundError, CommandTimeoutError, run
 
 log = structlog.get_logger("hosty.git")
 
@@ -26,24 +26,21 @@ class GitAnalysisResult(BaseModel):
 async def _clone_shallow(url: str, branch: str) -> AsyncGenerator[str, None]:
     """Clones a single branch of a repository into a temporary directory."""
     with tempfile.TemporaryDirectory(prefix="hosty-git-") as tmpdir:
-        # Shallow clone of just the target branch
         cmd = [
-            "git",
-            "clone",
-            "--depth",
-            "1",
-            "--branch",
-            branch,
-            "--single-branch",
-            url,
-            tmpdir,
+            "git", "clone", "--depth", "1", "--branch", branch,
+            "--single-branch", url, tmpdir,
         ]
         try:
-            await run(cmd, timeout=30.0)
-            yield tmpdir
-        except CommandFailedError as e:
-            log.error("git_clone_failed", url=url, branch=branch, stderr=e.stderr)
-            raise ValueError(f"Failed to clone repository: {e.stderr}") from e
+            result = await run(cmd, timeout=60.0)
+        except CommandTimeoutError as exc:
+            raise ValueError("Repository clone timed out after 60 seconds") from exc
+        except CommandNotFoundError as exc:
+            raise ValueError("git is not installed on this server") from exc
+        if not result.ok:
+            stderr_snippet = (result.stderr or "").strip()[:500]
+            log.error("git_clone_failed", url=url, branch=branch, stderr=stderr_snippet)
+            raise ValueError(f"Failed to clone repository: {stderr_snippet}")
+        yield tmpdir
 
 
 def _extract_env_keys(compose_data: dict[str, Any]) -> list[str]:

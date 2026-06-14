@@ -19,6 +19,7 @@ from app.api.deps import get_current_user, get_db
 from app.core.errors import ConflictError, NotFoundError
 from app.core.secrets import SecretDecryptionError, decrypt_secret, encrypt_secret
 from app.db.models import GitSource, User
+from app.services.github import get_installation_token
 
 router = APIRouter()
 
@@ -293,32 +294,14 @@ async def list_source_repos(
 
     settings = request.app.state.settings
     try:
-        private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
+        access_token = await get_installation_token(source, settings)
     except SecretDecryptionError:
         raise ConflictError(
             "Cannot decrypt this source's credentials — HOSTY_SECRET_KEY may have changed. "
             "Please delete and re-register the GitHub App."
         )
 
-    now = int(time.time())
-    app_jwt = pyjwt.encode(
-        {"iat": now - 60, "exp": now + 540, "iss": str(source.app_id)},
-        private_key,
-        algorithm="RS256",
-    )
-
     async with httpx.AsyncClient() as client:
-        token_resp = await client.post(
-            f"https://api.github.com/app/installations/{source.installation_id}/access_tokens",
-            headers={
-                "Authorization": f"Bearer {app_jwt}",
-                "Accept": "application/vnd.github.v3+json",
-            },
-        )
-        if token_resp.status_code != 201:
-            raise ConflictError(f"Could not obtain installation token: {token_resp.text[:200]}")
-        access_token = token_resp.json()["token"]
-
         repos_resp = await client.get(
             "https://api.github.com/installation/repositories",
             headers={
