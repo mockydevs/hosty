@@ -17,19 +17,20 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("stacks", sa.Column("server_id", sa.Integer(), nullable=True))
-    op.create_index(op.f("ix_stacks_server_id"), "stacks", ["server_id"], unique=False)
-    op.create_foreign_key(
-        "fk_stacks_server_id",
-        "stacks",
-        "servers",
-        ["server_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
+    with op.batch_alter_table("stacks") as batch_op:
+        batch_op.add_column(sa.Column("server_id", sa.Integer(), nullable=True))
+        batch_op.create_index(batch_op.f("ix_stacks_server_id"), ["server_id"], unique=False)
+        batch_op.create_foreign_key(
+            "fk_stacks_server_id",
+            "servers",
+            ["server_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_stacks_server_id", "stacks", type_="foreignkey")
-    op.drop_index(op.f("ix_stacks_server_id"), table_name="stacks")
-    op.drop_column("stacks", "server_id")
+    with op.batch_alter_table("stacks") as batch_op:
+        batch_op.drop_constraint("fk_stacks_server_id", type_="foreignkey")
+        batch_op.drop_index(batch_op.f("ix_stacks_server_id"))
+        batch_op.drop_column("server_id")

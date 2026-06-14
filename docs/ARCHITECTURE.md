@@ -402,3 +402,11 @@ tenancy enforced in software; userns-remap is global and the socket is
 root-equivalent); Kubernetes/k3s (wrong weight class, again); YAML
 blueprint DSL (stringly-typed, injection-prone, untestable); greenfield
 repo (re-porting the business layer buys nothing the in-repo cut doesn't).
+
+### ADR-014: Multi-server Architecture via HostContext abstraction
+
+**Status:** accepted (2026-06-14). **Context:** Hosty needed to expand beyond managing a single local host to support multiple remote servers under a unified control plane.
+
+**Decision:** We introduced a database `servers` table to track nodes, and a `HostContext` abstraction in `app/system/host.py` that provides a unified capability surface for command execution and file I/O. The system routes commands to `LocalHost` (using local `runner` and `pathlib`) or `RemoteSSHHost` (using `asyncssh` and SFTP) based on the `server_id` attached to the `StackSpec`.
+
+**Consequences:** The executor and reconciler logic remain completely agnostic to where they are running. Tests for the reconciler continue to work unchanged. Host dependencies and networking configuration are managed securely over standard SSH, allowing the control panel to scale horizontally to multiple compute nodes without installing heavy agents.
