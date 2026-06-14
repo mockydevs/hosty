@@ -267,9 +267,8 @@ async def on_stack_status(db: AsyncSession, name: str, status: str, error: str |
     if stack is None:
         return  # observed-only stack (teardown of host remnants)
     if status == "absent":
-        if stack.status == "deleting":
-            await db.delete(stack)
-            await db.commit()
+        await db.delete(stack)
+        await db.commit()
         return
     stack.status = status
     stack.error_message = error

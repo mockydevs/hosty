@@ -369,7 +369,10 @@ class Reconciler:
                         await operations.set_step(db, op, step_name, "failed")
                         await operations.append_log(db, op, f"✗ {step_label}: {exc}")
                         await operations.finish(db, op, status="failed", error=error[:500])
-                    await self._on_stack_status(db, name, "degraded", error[:500])
+                    # Keep "deleting" status during teardown so the row is cleaned up
+                    # once a later retry succeeds; only mark degraded for active stacks.
+                    fail_status = "deleting" if spec is None else "degraded"
+                    await self._on_stack_status(db, name, fail_status, error[:500])
                     return StackOutcome(
                         stack=name, planned=len(actions), executed=executed, error=error
                     )
