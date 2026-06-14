@@ -11,21 +11,27 @@ production runs uvloop, which rejects extra kwargs on create_subprocess_exec.
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import json
 import os
-import pty
-import struct
 import sys
-import termios
 
-from fastapi import APIRouter, Depends, Query, WebSocket
+if sys.platform != "win32":
+    import fcntl
+    import pty
+    import struct
+    import termios
+
+from fastapi import APIRouter, Depends, Query, Request, WebSocket
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.core.errors import UnauthorizedError
-from app.core.security import decode_access_token
+from app.core.security import (
+    create_terminal_ticket,
+    decode_access_token,
+    decode_terminal_ticket,
+)
 from app.db.models import Stack, Tenant, User
 from app.domain.validate import validate_object_name
 
@@ -34,19 +40,61 @@ router = APIRouter()
 _SUPPORTED = sys.platform != "win32"
 
 
-async def _auth_user(websocket: WebSocket, db: AsyncSession, token: str) -> User | None:
-    """Validate a JWT access-token from the ?token= query param."""
+class TerminalTicketResponse:
+    def __init__(self, ticket: str) -> None:
+        self.ticket = ticket
+
+
+async def _auth_user_from_ticket(
+    websocket: WebSocket, db: AsyncSession, token: str, stack_id: int, service_name: str
+) -> User | None:
+    """Validate a terminal ticket OR fall back to a full access token."""
     settings = websocket.app.state.settings
     try:
-        payload = decode_access_token(token, secret=settings.secret_key)
+        payload = decode_terminal_ticket(
+            token, secret=settings.secret_key, stack_id=stack_id, service_name=service_name
+        )
     except (UnauthorizedError, Exception):
-        return None
+        # Fall back to full access token (backward compat / direct API use)
+        try:
+            payload = decode_access_token(token, secret=settings.secret_key)
+        except (UnauthorizedError, Exception):
+            return None
     user = await db.get(User, int(payload["sub"]))
     if user is None or user.suspended:
         return None
-    if payload.get("ver") != user.token_version:
+    if "ver" in payload and payload.get("ver") != user.token_version:
         return None
     return user
+
+
+@router.get("/stacks/{stack_id}/terminal/{service_name}/ticket")
+async def issue_terminal_ticket(
+    stack_id: int,
+    service_name: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Issue a 30-second single-purpose token for the WebSocket terminal upgrade.
+    Use this token as ?token= instead of the full access JWT so it is not logged."""
+    from app.core.errors import ConflictError, NotFoundError
+
+    stack = await db.get(Stack, stack_id)
+    if stack is None or (stack.owner_id != user.id and user.role != "admin"):
+        raise NotFoundError("Stack not found")
+    try:
+        validate_object_name(f"{stack.name}-{service_name}")
+    except Exception:
+        raise ConflictError("Invalid service name")
+    settings = request.app.state.settings
+    ticket = create_terminal_ticket(
+        subject=str(user.id),
+        stack_id=stack_id,
+        service_name=service_name,
+        secret=settings.secret_key,
+    )
+    return {"ticket": ticket}
 
 
 @router.websocket("/stacks/{stack_id}/terminal/{service_name}")
@@ -71,7 +119,7 @@ async def stack_container_terminal(
         await websocket.close(code=4500)
         return
 
-    user = await _auth_user(websocket, db, token)
+    user = await _auth_user_from_ticket(websocket, db, token, stack_id, service_name)
     if user is None:
         await websocket.close(code=4001)
         return

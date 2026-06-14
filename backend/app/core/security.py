@@ -95,6 +95,47 @@ def decode_access_token(token: str, *, secret: str) -> dict[str, Any]:
     return payload
 
 
+TERMINAL_TICKET_TTL_SECONDS = 30
+
+
+def create_terminal_ticket(
+    *, subject: str, stack_id: int, service_name: str, secret: str
+) -> str:
+    """Single-use short-lived token for the WebSocket terminal upgrade.
+    Issued via HTTP (where Authorization headers work) so the full access
+    token never appears in the WebSocket URL / server logs."""
+    now = int(time.time())
+    payload = {
+        "sub": subject,
+        "iat": now,
+        "exp": now + TERMINAL_TICKET_TTL_SECONDS,
+        "type": "terminal_ticket",
+        "stack_id": stack_id,
+        "svc": service_name,
+        "jti": uuid.uuid4().hex,
+    }
+    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
+def decode_terminal_ticket(
+    token: str, *, secret: str, stack_id: int, service_name: str
+) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["sub", "iat", "exp"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise UnauthorizedError("Invalid or expired terminal ticket") from exc
+    if payload.get("type") != "terminal_ticket":
+        raise UnauthorizedError("Invalid token type")
+    if payload.get("stack_id") != stack_id or payload.get("svc") != service_name:
+        raise UnauthorizedError("Terminal ticket scope mismatch")
+    return payload
+
+
 def generate_refresh_token() -> str:
     """Opaque 384-bit random token. Only its SHA-256 hash is ever stored."""
     return secrets.token_urlsafe(48)

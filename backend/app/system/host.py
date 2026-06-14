@@ -215,7 +215,13 @@ class RemoteSSHHost(HostContext):
             client_keys=[key],
             known_hosts=None,
         )
-        self._sftp = await self._conn.start_sftp_client()
+        try:
+            self._sftp = await self._conn.start_sftp_client()
+        except Exception:
+            self._conn.close()
+            await self._conn.wait_closed()
+            self._conn = None
+            raise
 
     async def close(self) -> None:
         if self._sftp is not None:

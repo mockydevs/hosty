@@ -134,6 +134,18 @@ class Settings(BaseSettings):
     def is_prod(self) -> bool:
         return self.env == "prod"
 
+    def validate_for_production(self) -> None:
+        """Raise on startup if running in production with insecure defaults."""
+        if not self.is_prod:
+            return
+        _insecure_default = "dev-only-insecure-secret-change-me"
+        if self.secret_key == _insecure_default:
+            raise RuntimeError(
+                "HOSTY_SECRET_KEY is set to the insecure default value. "
+                "Set a random 32+ character value via HOSTY_SECRET_KEY before "
+                "running in production."
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:

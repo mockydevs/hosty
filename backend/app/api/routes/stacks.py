@@ -742,35 +742,31 @@ async def update_stack_config(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    stack = await db.scalar(select(Stack).where(Stack.id == stack_id))
-    if not stack:
-        raise NotFoundError("Stack not found")
-    if not is_admin(user) and stack.owner_id != user.id:
-        raise NotFoundError("Stack not found")
+    stack = await fetch_owned_stack(db, user, stack_id)
+    settings = _settings(request)
+    inputs = stacks_service.decrypt_inputs(stack, settings)
 
-    import json
-    from app.core.secrets import encrypt_secret, decrypt_secret
-    
-    inputs = {}
-    if stack.inputs_encrypted:
-        inputs = json.loads(decrypt_secret(stack.inputs_encrypted))
-    
     if body.repo is not None:
-        inputs['repo'] = body.repo
+        inputs["repo"] = body.repo
     if body.branch is not None:
-        inputs['branch'] = body.branch
+        inputs["branch"] = body.branch
     if body.auto_deploy is not None:
-        inputs['auto_deploy'] = body.auto_deploy
+        inputs["auto_deploy"] = body.auto_deploy
     if body.force_rebuild is not None:
-        inputs['force_rebuild'] = body.force_rebuild
-        
-    stack.inputs_encrypted = encrypt_secret(json.dumps(inputs))
+        inputs["force_rebuild"] = body.force_rebuild
+
+    stack.inputs_encrypted = stacks_service.encrypt_inputs(inputs, settings)
     await db.commit()
     return {"status": "ok"}
 
 
 @router.get("/{stack_id}/tags")
-async def get_stack_tags(stack_id: int, db: AsyncSession = Depends(get_db)):
+async def get_stack_tags(
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
     result = await db.execute(
         select(Tag).join(StackTag).where(StackTag.stack_id == stack_id)
     )
@@ -780,15 +776,23 @@ async def get_stack_tags(stack_id: int, db: AsyncSession = Depends(get_db)):
 class TagCreateRequest(BaseModel):
     name: str
 
+
 @router.post("/{stack_id}/tags")
-async def add_stack_tag(stack_id: int, body: TagCreateRequest, db: AsyncSession = Depends(get_db)):
+async def add_stack_tag(
+    stack_id: int,
+    body: TagCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
     tag = await db.scalar(select(Tag).where(Tag.name == body.name))
     if not tag:
         tag = Tag(name=body.name)
         db.add(tag)
         await db.flush()
-    
-    existing = await db.scalar(select(StackTag).where(StackTag.stack_id == stack_id, StackTag.tag_id == tag.id))
+    existing = await db.scalar(
+        select(StackTag).where(StackTag.stack_id == stack_id, StackTag.tag_id == tag.id)
+    )
     if not existing:
         db.add(StackTag(stack_id=stack_id, tag_id=tag.id))
         await db.commit()
@@ -796,8 +800,16 @@ async def add_stack_tag(stack_id: int, body: TagCreateRequest, db: AsyncSession 
 
 
 @router.delete("/{stack_id}/tags/{tag_id}")
-async def remove_stack_tag(stack_id: int, tag_id: int, db: AsyncSession = Depends(get_db)):
-    st = await db.scalar(select(StackTag).where(StackTag.stack_id == stack_id, StackTag.tag_id == tag_id))
+async def remove_stack_tag(
+    stack_id: int,
+    tag_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
+    st = await db.scalar(
+        select(StackTag).where(StackTag.stack_id == stack_id, StackTag.tag_id == tag_id)
+    )
     if st:
         await db.delete(st)
         await db.commit()
@@ -805,7 +817,12 @@ async def remove_stack_tag(stack_id: int, tag_id: int, db: AsyncSession = Depend
 
 
 @router.get("/{stack_id}/scheduled-tasks")
-async def get_scheduled_tasks(stack_id: int, db: AsyncSession = Depends(get_db)):
+async def get_scheduled_tasks(
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
     result = await db.execute(select(ScheduledTask).where(ScheduledTask.stack_id == stack_id))
     return [
         {"id": t.id, "name": t.name, "command": t.command, "cron_schedule": t.cron_schedule}
@@ -818,17 +835,36 @@ class ScheduledTaskCreate(BaseModel):
     command: str
     cron_schedule: str
 
+
 @router.post("/{stack_id}/scheduled-tasks")
-async def add_scheduled_task(stack_id: int, body: ScheduledTaskCreate, db: AsyncSession = Depends(get_db)):
-    task = ScheduledTask(stack_id=stack_id, name=body.name, command=body.command, cron_schedule=body.cron_schedule)
+async def add_scheduled_task(
+    stack_id: int,
+    body: ScheduledTaskCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
+    task = ScheduledTask(
+        stack_id=stack_id, name=body.name, command=body.command, cron_schedule=body.cron_schedule
+    )
     db.add(task)
     await db.commit()
     return {"status": "ok"}
 
 
 @router.delete("/{stack_id}/scheduled-tasks/{task_id}")
-async def remove_scheduled_task(stack_id: int, task_id: int, db: AsyncSession = Depends(get_db)):
-    task = await db.scalar(select(ScheduledTask).where(ScheduledTask.id == task_id))
+async def remove_scheduled_task(
+    stack_id: int,
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    stack = await fetch_owned_stack(db, user, stack_id)
+    task = await db.scalar(
+        select(ScheduledTask).where(
+            ScheduledTask.id == task_id, ScheduledTask.stack_id == stack.id
+        )
+    )
     if task:
         await db.delete(task)
         await db.commit()
@@ -836,54 +872,87 @@ async def remove_scheduled_task(stack_id: int, task_id: int, db: AsyncSession = 
 
 
 @router.get("/{stack_id}/deployments")
-async def get_deployments(stack_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Deployment).where(Deployment.stack_id == stack_id).order_by(Deployment.created_at.desc()))
+async def get_deployments(
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
+    result = await db.execute(
+        select(Deployment)
+        .where(Deployment.stack_id == stack_id)
+        .order_by(Deployment.created_at.desc())
+    )
     return [
-        {"id": d.id, "commit_sha": d.commit_sha, "status": d.status, "message": d.message, "created_at": d.created_at.isoformat()}
+        {
+            "id": d.id,
+            "commit_sha": d.commit_sha,
+            "status": d.status,
+            "message": d.message,
+            "created_at": d.created_at.isoformat(),
+        }
         for d in result.scalars()
     ]
 
 
 @router.post("/{stack_id}/deployments/{deployment_id}/rollback")
-async def rollback_deployment(stack_id: int, deployment_id: int, request: Request, background: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    deployment = await db.scalar(select(Deployment).where(Deployment.id == deployment_id))
+async def rollback_deployment(
+    stack_id: int,
+    deployment_id: int,
+    request: Request,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    stack = await fetch_owned_stack(db, user, stack_id)
+    deployment = await db.scalar(
+        select(Deployment).where(
+            Deployment.id == deployment_id, Deployment.stack_id == stack.id
+        )
+    )
     if not deployment:
         raise NotFoundError("Deployment not found")
-    
-    stack = await db.scalar(select(Stack).where(Stack.id == stack_id))
+
     stack.generation += 1
     op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
     db.add(op)
-    
-    new_dep = Deployment(stack_id=stack_id, commit_sha=deployment.commit_sha, status="running", message=f"Rollback to {deployment.commit_sha}")
+    new_dep = Deployment(
+        stack_id=stack_id,
+        commit_sha=deployment.commit_sha,
+        status="running",
+        message=f"Rollback to {deployment.commit_sha}",
+    )
     db.add(new_dep)
-    
     await db.commit()
     background.add_task(request.app.state.reconciler.converge_stack, stack.name, operation_id=op.id)
     return {"status": "ok", "operation_id": op.id}
 
 
 @router.get("/{stack_id}/webhook_info")
-async def get_webhook_info(stack_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    import hashlib
+async def get_webhook_info(
+    stack_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
+    settings = _settings(request)
+    # Derive a stable, server-secret–dependent webhook token. Not guessable
+    # without HOSTY_SECRET_KEY even if the stack_id is known.
+    token = hmac.new(
+        settings.secret_key.encode(), f"webhook:{stack_id}".encode(), hashlib.sha256
+    ).hexdigest()
     return {
-        "url": f"{request.base_url}api/stacks/{stack_id}/webhook",
-        "secret": "whsec_" + hashlib.sha256(str(stack_id).encode()).hexdigest()[:16]
+        "url": f"{request.base_url}api/stacks/webhooks/{stack_id}",
+        "secret": f"whsec_{token[:32]}",
     }
 
 
 @router.get("/{stack_id}/metrics")
-async def get_stack_metrics(stack_id: int):
-    import random
-    from datetime import datetime, timedelta
-    
-    now = datetime.utcnow()
-    metrics = []
-    for i in range(24):
-        time = now - timedelta(hours=24-i)
-        metrics.append({
-            "time": time.strftime("%H:%M"),
-            "cpu": random.uniform(0.5, 5.0),
-            "memory": random.uniform(100, 500)
-        })
-    return metrics
+async def get_stack_metrics(
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await fetch_owned_stack(db, user, stack_id)
+    return []

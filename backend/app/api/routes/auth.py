@@ -351,6 +351,10 @@ async def totp_enable(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> None:
+    limiter = request.app.state.login_limiter
+    rate_key = f"totp:{user.id}"
+    if not limiter.allow(rate_key):
+        raise RateLimitedError("Too many 2FA attempts; try again later")
     if user.totp_enabled:
         raise ConflictError("2FA is already enabled")
     if not user.totp_secret_encrypted:
@@ -358,6 +362,7 @@ async def totp_enable(
     secret = decrypt_secret(user.totp_secret_encrypted, _settings(request).secret_key)
     if not totp_lib.verify(secret, body.code):
         raise UnauthorizedError("Invalid authentication code — check your authenticator app")
+    limiter.reset(rate_key)
     user.totp_enabled = True
     await db.commit()
 

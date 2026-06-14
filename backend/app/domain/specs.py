@@ -183,13 +183,13 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "image": service.image,
         "env": list(service.env),
         "internal_port": service.internal_port,
-        "host_port": service.host_port,
         "exposed": service.exposed,  # flips the PublishPort bind → unit changes
         "memory_mb": service.memory_mb,
         "cpu_percent": service.cpu_percent,
         "build_repo": service.build_repo,
         "build_branch": service.build_branch,
         "build_tool": service.build_tool,
+        "loopback_ip": stack.loopback_ip,  # changing IP rewrites PublishPort bind
         "network": stack.network,
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
     }

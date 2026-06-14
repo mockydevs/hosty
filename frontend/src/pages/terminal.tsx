@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { getAccessToken } from "@/lib/api/client";
+import api from "@/lib/api/client";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -28,12 +28,6 @@ export function TerminalPage() {
 
   const connect = useCallback(() => {
     if (!stackId || !serviceName) return;
-    const token = getAccessToken();
-    if (!token) {
-      setConnState("error");
-      setErrorMsg("Not authenticated — please refresh the page.");
-      return;
-    }
 
     setConnState("connecting");
     setErrorMsg(null);
@@ -41,42 +35,63 @@ export function TerminalPage() {
     const term = xtermRef.current;
     if (term) term.clear();
 
-    const url = buildWsUrl(stackId, serviceName, token);
-    const ws = new WebSocket(url);
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setConnState("connected");
-      sendResize();
-    };
-
-    ws.onmessage = (evt) => {
-      if (!xtermRef.current) return;
-      if (evt.data instanceof ArrayBuffer) {
-        xtermRef.current.write(new Uint8Array(evt.data));
-      } else if (typeof evt.data === "string") {
-        try {
-          const msg = JSON.parse(evt.data) as { type: string; message?: string };
-          if (msg.type === "error" && msg.message) {
-            setConnState("error");
-            setErrorMsg(msg.message);
-            xtermRef.current.writeln(`\r\n\x1b[31mError: ${msg.message}\x1b[0m`);
-          }
-        } catch {
-          xtermRef.current.write(evt.data);
+    // Fetch a short-lived terminal ticket so the full access JWT never appears
+    // in server logs or browser history via the WebSocket query string.
+    void (async () => {
+      let ticket: string;
+      try {
+        const { data, error } = await (api as any).GET(
+          `/api/stacks/${stackId}/terminal/${serviceName}/ticket`
+        );
+        if (error || !data?.ticket) {
+          setConnState("error");
+          setErrorMsg("Not authenticated — please refresh the page.");
+          return;
         }
+        ticket = data.ticket as string;
+      } catch {
+        setConnState("error");
+        setErrorMsg("Failed to obtain terminal ticket — please refresh the page.");
+        return;
       }
-    };
 
-    ws.onerror = () => {
-      setConnState("error");
-      setErrorMsg("Connection failed — check that the container is running.");
-    };
+      const url = buildWsUrl(stackId, serviceName, ticket);
+      const ws = new WebSocket(url);
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
 
-    ws.onclose = () => {
-      if (connState !== "error") setConnState("disconnected");
-    };
+      ws.onopen = () => {
+        setConnState("connected");
+        sendResize();
+      };
+
+      ws.onmessage = (evt) => {
+        if (!xtermRef.current) return;
+        if (evt.data instanceof ArrayBuffer) {
+          xtermRef.current.write(new Uint8Array(evt.data));
+        } else if (typeof evt.data === "string") {
+          try {
+            const msg = JSON.parse(evt.data) as { type: string; message?: string };
+            if (msg.type === "error" && msg.message) {
+              setConnState("error");
+              setErrorMsg(msg.message);
+              xtermRef.current.writeln(`\r\n\x1b[31mError: ${msg.message}\x1b[0m`);
+            }
+          } catch {
+            xtermRef.current.write(evt.data);
+          }
+        }
+      };
+
+      ws.onerror = () => {
+        setConnState("error");
+        setErrorMsg("Connection failed — check that the container is running.");
+      };
+
+      ws.onclose = () => {
+        if (connState !== "error") setConnState("disconnected");
+      };
+    })();
   }, [stackId, serviceName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendResize = useCallback(() => {

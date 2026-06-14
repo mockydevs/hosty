@@ -64,6 +64,7 @@ class SPAStaticFiles(StaticFiles):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    settings.validate_for_production()
     app_logging.configure(settings)
 
     @asynccontextmanager

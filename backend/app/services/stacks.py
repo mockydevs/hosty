@@ -163,6 +163,34 @@ def spec_for(
     )
 
 
+async def _bulk_children(
+    db: AsyncSession, stack_ids: list[int]
+) -> tuple[
+    dict[int, list[StackService]],
+    dict[int, list[StackVolume]],
+    dict[int, list[StackEndpoint]],
+]:
+    """Fetch services/volumes/endpoints for all given stack IDs in 3 queries."""
+    svc_map: dict[int, list[StackService]] = {sid: [] for sid in stack_ids}
+    vol_map: dict[int, list[StackVolume]] = {sid: [] for sid in stack_ids}
+    ep_map: dict[int, list[StackEndpoint]] = {sid: [] for sid in stack_ids}
+    if not stack_ids:
+        return svc_map, vol_map, ep_map
+    for row in (
+        await db.execute(select(StackService).where(StackService.stack_id.in_(stack_ids)))
+    ).scalars():
+        svc_map[row.stack_id].append(row)
+    for row in (
+        await db.execute(select(StackVolume).where(StackVolume.stack_id.in_(stack_ids)))
+    ).scalars():
+        vol_map[row.stack_id].append(row)
+    for row in (
+        await db.execute(select(StackEndpoint).where(StackEndpoint.stack_id.in_(stack_ids)))
+    ).scalars():
+        ep_map[row.stack_id].append(row)
+    return svc_map, vol_map, ep_map
+
+
 async def load_desired(db: AsyncSession, settings: Settings) -> list[StackSpec]:
     """The reconciler's desired world. Owner-less stacks (account deleted)
     leave desired state and are torn down; suspended owners scale to zero."""
@@ -173,12 +201,23 @@ async def load_desired(db: AsyncSession, settings: Settings) -> list[StackSpec]:
             .where(Stack.status.in_(ACTIVE_STATUSES))
         )
     ).all()
+    if not rows:
+        return []
+    stacks = [r[0] for r in rows]
+    suspended_map = {r[0].id: r[1] for r in rows}
+    svc_map, vol_map, ep_map = await _bulk_children(db, [s.id for s in stacks])
     specs: list[StackSpec] = []
-    for stack, owner_suspended in rows:
-        children = await stack_children(db, stack.id)
+    for stack in stacks:
         try:
             specs.append(
-                spec_for(stack, *children, settings, owner_suspended=bool(owner_suspended))
+                spec_for(
+                    stack,
+                    svc_map[stack.id],
+                    vol_map[stack.id],
+                    ep_map[stack.id],
+                    settings,
+                    owner_suspended=bool(suspended_map[stack.id]),
+                )
             )
         except SpecValidationError as exc:
             log.error("stack_rows_invalid", stack=stack.name, error=str(exc))
@@ -187,7 +226,6 @@ async def load_desired(db: AsyncSession, settings: Settings) -> list[StackSpec]:
 
 async def stack_routes(db: AsyncSession, settings: Settings) -> list[caddy.StackRoute]:
     """Caddy routes for every active stack endpoint (suspension -> 503)."""
-    routes: list[caddy.StackRoute] = []
     rows = (
         await db.execute(
             select(Stack, User.suspended)
@@ -195,13 +233,23 @@ async def stack_routes(db: AsyncSession, settings: Settings) -> list[caddy.Stack
             .where(Stack.status.in_(ACTIVE_STATUSES))
         )
     ).all()
-    for stack, owner_suspended in rows:
-        services, volumes, endpoints = await stack_children(db, stack.id)
-        if not endpoints:
+    if not rows:
+        return []
+    stacks = [r[0] for r in rows]
+    suspended_map = {r[0].id: r[1] for r in rows}
+    svc_map, vol_map, ep_map = await _bulk_children(db, [s.id for s in stacks])
+    routes: list[caddy.StackRoute] = []
+    for stack in stacks:
+        if not ep_map[stack.id]:
             continue
         try:
             spec = spec_for(
-                stack, services, volumes, endpoints, settings, owner_suspended=bool(owner_suspended)
+                stack,
+                svc_map[stack.id],
+                vol_map[stack.id],
+                ep_map[stack.id],
+                settings,
+                owner_suspended=bool(suspended_map[stack.id]),
             )
         except SpecValidationError:
             continue
