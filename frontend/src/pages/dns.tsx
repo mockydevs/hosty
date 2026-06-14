@@ -169,14 +169,18 @@ export function DnsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">DNS</h1>
         <div className="flex flex-wrap gap-2">
-          {meta.data?.cloudflare_enabled && (
-            <Link
-              to="/dns/cloudflare"
-              className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <Cloud className="h-4 w-4" aria-hidden /> Cloudflare zones
-            </Link>
-          )}
+          <Link
+            to="/dns/cloudflare"
+            className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <Cloud className="h-4 w-4" aria-hidden />
+            Cloudflare
+            {meta.data?.cloudflare_enabled ? null : (
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                not connected
+              </span>
+            )}
+          </Link>
           <Button onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" aria-hidden /> New zone
           </Button>

@@ -47,8 +47,18 @@ const PLACEHOLDERS: Record<CfRecordType, string> = {
 // --- zones list ----------------------------------------------------------------------
 
 export function CloudflareZonesPage() {
+  const config = useQuery({
+    queryKey: ["dns", "cloudflare", "config"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/dns/cloudflare/config");
+      if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load config"));
+      return data;
+    },
+  });
+
   const zones = useQuery({
     queryKey: ["dns", "cloudflare", "zones"],
+    enabled: config.data?.configured === true,
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dns/cloudflare/zones");
       if (error || !data) {
@@ -72,16 +82,33 @@ export function CloudflareZonesPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Cloudflare zones</h1>
       </div>
 
-      {zones.isPending ? (
+      {/* Not configured — show setup prompt */}
+      {!config.isPending && config.data?.configured === false && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+          <Cloud className="mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden />
+          <p className="text-base font-semibold">Cloudflare not connected</p>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Add your Cloudflare API token in Settings to manage zones and DNS records from here.
+          </p>
+          <Link
+            to="/settings"
+            className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-transparent px-4 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            Go to Settings
+          </Link>
+        </div>
+      )}
+
+      {config.data?.configured && zones.isPending ? (
         <LoadingState label="Loading Cloudflare zones…" />
-      ) : zones.isError ? (
+      ) : config.data?.configured && zones.isError ? (
         <ErrorState message={zones.error.message} onRetry={() => zones.refetch()} />
-      ) : zones.data.length === 0 ? (
+      ) : config.data?.configured && zones.data?.length === 0 ? (
         <EmptyState
           title="No zones in this Cloudflare account"
           description="Add your domain in the Cloudflare dashboard first, then manage its records here."
         />
-      ) : (
+      ) : config.data?.configured && zones.data ? (
         <Table>
           <TableHeader>
             <TableRow>
