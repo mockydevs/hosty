@@ -1,0 +1,26 @@
+x-hosty:
+  name: "Dozzle"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Dozzle is a simple and lightweight web UI for Docker logs."
+  web: dozzle
+
+services:
+  dozzle:
+    image: amir20/dozzle:latest
+    environment:
+
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test:
+      - CMD
+      - /dozzle
+      - healthcheck
+      interval: 3s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    ports:
+    - 8080:8080

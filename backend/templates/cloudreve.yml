@@ -1,0 +1,78 @@
+x-hosty:
+  name: "Cloudreve"
+  version: 1
+  category: "Storage"
+  icon: "hard-drive"
+  description: "A self-hosted file management and sharing system."
+  web: cloudreve
+  secrets:
+    - postgres_password
+    - redis_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  cloudreve:
+    image: cloudreve/cloudreve:4.10.1
+    environment:
+
+    - CR_CONF_Database.Type=postgres
+    - CR_CONF_Database.Host=postgres
+    - CR_CONF_Database.User=${postgres_user}
+    - CR_CONF_Database.Password=${postgres_password}
+    - CR_CONF_Database.Name=${POSTGRES_DB:-cloudreve-db}
+    - CR_CONF_Database.Port=5432
+    - CR_CONF_Redis.Server=redis:6379
+    - CR_CONF_Redis.Password=${redis_password}
+    volumes:
+    - cloudreve-data:/cloudreve/data
+    healthcheck:
+      test:
+      - CMD
+      - nc
+      - -z
+      - localhost
+      - '5212'
+      interval: 20s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+    - 5212:5212
+  postgres:
+    image: postgres:18-alpine
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-cloudreve-db}
+    volumes:
+    - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${redis_password}
+    volumes:
+    - redis-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - -a
+      - ${redis_password}
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5

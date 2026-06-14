@@ -1,0 +1,30 @@
+x-hosty:
+  name: "Emqx Enterprise"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Open-source MQTT broker for IoT, IIoT, and connected vehicles."
+  web: emqx
+  secrets:
+    - emqx_password
+
+services:
+  emqx:
+    image: emqx/emqx-enterprise:6.2.0
+    environment:
+
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=${emqx_password}
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 30s

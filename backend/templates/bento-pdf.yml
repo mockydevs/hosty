@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Bento Pdf"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Process PDFs entirely in your browser. No uploads. No servers. Complete privacy."
+  web: bento-pdf
+
+services:
+  bento-pdf:
+    image: ghcr.io/alam00000/bentopdf:v1.16.1
+    environment:
+
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8080
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8080:8080

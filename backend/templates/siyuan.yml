@@ -1,0 +1,34 @@
+x-hosty:
+  name: "Siyuan"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A privacy-first, self-hosted, fully open source personal knowledge management software, written in typescript and golang."
+  web: siyuan
+  secrets:
+    - siyuan_password
+
+services:
+  siyuan:
+    image: b3log/siyuan:v3.3.5
+    volumes:
+    - siyuan_workspace:/siyuan/workspace
+    environment:
+
+    - TZ=${TZ:-UTC}
+    - PUID=1000
+    - PGID=1000
+    - SIYUAN_ACCESS_AUTH_CODE=${siyuan_password}
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - --quiet
+      - http://127.0.0.1:6806/api/system/version
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    ports:
+    - 6806:6806

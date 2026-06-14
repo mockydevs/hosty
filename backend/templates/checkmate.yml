@@ -1,0 +1,57 @@
+x-hosty:
+  name: "Checkmate"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "An open source server and websites monitoring application"
+  web: checkmate
+  domain_input: domain
+  secrets:
+    - jwt_key
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  checkmate:
+    image: ghcr.io/bluewave-labs/checkmate-backend-mono-multiarch:v3.2.0
+    environment:
+
+    - UPTIME_APP_API_BASE_URL=${domain}/api/v1
+    - UPTIME_APP_CLIENT_HOST=${domain}
+    - DB_CONNECTION_STRING=mongodb://mongodb:27017/uptime_db
+    - CLIENT_HOST=${domain}
+    - JWT_SECRET=${jwt_key}
+    depends_on:
+    - mongodb
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - 'require(''http'').get(''http://127.0.0.1:52345/health'', r => process.exit(r.statusCode
+        === 200 ? 0 : 1)).on(''error'', () => process.exit(1))'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 52345:52345
+  mongodb:
+    image: ghcr.io/bluewave-labs/checkmate-mongo:v3.2.0
+    command:
+    - mongod
+    - --quiet
+    - --bind_ip_all
+    volumes:
+    - checkmate-mongo:/data/db
+    healthcheck:
+      test:
+      - CMD
+      - mongosh
+      - --eval
+      - db.adminCommand('ping')
+      - --quiet
+      interval: 5s
+      timeout: 30s
+      start_period: 10s

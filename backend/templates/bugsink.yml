@@ -1,0 +1,64 @@
+x-hosty:
+  name: "Bugsink"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "Self-hosted Error Tracking."
+  web: web
+  domain_input: domain
+  secrets:
+    - root_password
+    - bugsink_password
+    - bugsink_key
+  inputs:
+    bugsink_user:
+      type: "string"
+      default: "bugsink"
+      description: "Bugsink username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  mysql:
+    image: mysql:latest
+    restart: unless-stopped
+    environment:
+    - MYSQL_ROOT_PASSWORD=${root_password}
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-bugsink}
+    - MYSQL_USER=${bugsink_user}
+    - MYSQL_PASSWORD=${bugsink_password}
+    volumes:
+    - my-datavolume:/var/lib/mysql
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - 127.0.0.1
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  web:
+    image: bugsink/bugsink
+    restart: unless-stopped
+    environment:
+    - SECRET_KEY=${bugsink_key}
+    - CREATE_SUPERUSER=admin:${bugsink_password}
+
+    - BASE_URL=${domain}
+    - DATABASE_URL=mysql://${bugsink_user}:${bugsink_password}@mysql:3306/${MYSQL_DATABASE:-bugsink}
+    - BEHIND_HTTPS_PROXY=True
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c 'import requests; requests.get("http://localhost:8000/").raise_for_status()'
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8000:8000

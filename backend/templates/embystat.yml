@@ -1,0 +1,29 @@
+x-hosty:
+  name: "Embystat"
+  version: 1
+  category: "Analytics"
+  icon: "bar-chart-2"
+  description: "EmbyStat is a web analytics tool, designed to provide insight into website traffic and user behavior."
+  web: embystat
+
+services:
+  embystat:
+    image: lscr.io/linuxserver/embystat:latest
+    environment:
+
+    - PUID=1000
+    - PGID=1000
+    - TZ=Europe/Madrid
+    volumes:
+    - embystat-config:/config
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:6555
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 6555:6555

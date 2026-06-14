@@ -1,0 +1,58 @@
+x-hosty:
+  name: "Zipline"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "A ShareX/file upload server that is easy to use, packed with features, and with an easy setup!"
+  web: zipline
+  secrets:
+    - zipline_key
+    - postgres_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  zipline:
+    image: ghcr.io/diced/zipline:latest
+    environment:
+
+    - CORE_RETURN_HTTPS=${CORE_RETURN_HTTPS:-false}
+    - CORE_SECRET=${zipline_key}
+    - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@postgres/${POSTGRES_DB:-zipline-db}
+    - CORE_LOGGER=${CORE_LOGGER:-true}
+    volumes:
+    - zipline-uploads:/zipline/uploads
+    - zipline-public:/zipline/public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:3000/auth/login
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 3000:3000
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+    - zipline-postgres-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-zipline-db}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

@@ -2,16 +2,35 @@ x-hosty:
   name: "Grafana"
   version: 1
   category: "Monitoring"
-  icon: "bar-chart-3"
-  description: "Deploy Grafana dashboards and visualization."
-  web: web
-  ports:
-    - web
+  icon: "activity"
+  description: "Grafana is the open source analytics & monitoring solution for every database."
+  web: grafana
+  domain_input: domain
+  secrets:
+    - grafana_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
 
 services:
-  web:
-    image: docker.io/grafana/grafana:11.5.2
-    ports:
-      - 3000:3000
+  grafana:
+    image: grafana/grafana-oss
+    environment:
+
+    - GF_SERVER_ROOT_URL=${domain}
+    - GF_SERVER_DOMAIN=${domain}
+    - GF_SECURITY_ADMIN_PASSWORD=${grafana_password}
     volumes:
-      - grafana-data:/var/lib/grafana
+    - grafana-data:/var/lib/grafana
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:3000/api/health
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 3000:3000

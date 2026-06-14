@@ -1,0 +1,118 @@
+x-hosty:
+  name: "Documenso"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Document signing, finally open source"
+  web: documenso
+  domain_input: domain
+  secrets:
+    - postgres_password
+    - documenso_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  documenso:
+    image: documenso/documenso:v1.12.10
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+
+    - NEXTAUTH_URL=${domain}
+    - NEXTAUTH_SECRET=${SERVICE_BASE64_AUTHSECRET}
+    - NEXT_PRIVATE_ENCRYPTION_KEY=${SERVICE_BASE64_ENCRYPTIONKEY}
+    - NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY=${SERVICE_BASE64_SECONDARYENCRYPTIONKEY}
+    - NEXT_PUBLIC_WEBAPP_URL=${domain}
+    - NEXT_PRIVATE_RESEND_API_KEY=${NEXT_PRIVATE_RESEND_API_KEY}
+    - NEXT_PRIVATE_SMTP_TRANSPORT=${NEXT_PRIVATE_SMTP_TRANSPORT}
+    - NEXT_PRIVATE_SMTP_HOST=${NEXT_PRIVATE_SMTP_HOST}
+    - NEXT_PRIVATE_SMTP_PORT=${NEXT_PRIVATE_SMTP_PORT}
+    - NEXT_PRIVATE_SMTP_USERNAME=${NEXT_PRIVATE_SMTP_USERNAME}
+    - NEXT_PRIVATE_SMTP_PASSWORD=${NEXT_PRIVATE_SMTP_PASSWORD}
+    - NEXT_PRIVATE_SMTP_FROM_NAME=${NEXT_PRIVATE_SMTP_FROM_NAME}
+    - NEXT_PRIVATE_SMTP_FROM_ADDRESS=${NEXT_PRIVATE_SMTP_FROM_ADDRESS}
+    - NEXT_PRIVATE_DATABASE_URL=postgresql://${postgres_user}:${postgres_password}@database/${POSTGRES_DB:-documenso-db}?schema=public
+    - NEXT_PRIVATE_DIRECT_DATABASE_URL=postgresql://${postgres_user}:${postgres_password}@database/${POSTGRES_DB:-documenso-db}?schema=public
+    - NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH=/app/apps/remix/certs/certificate.p12
+    - NEXT_PRIVATE_SIGNING_PASSPHRASE=${documenso_password}
+    - NEXT_PRIVATE_SIGNING_TRANSPORT=local
+    - NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH=/app/certs/cert.p12
+    - NEXT_PRIVATE_SIGNING_LOCAL_FILE_PASSPHRASE=${documenso_password}
+    - CERT_VALID_DAYS=${CERT_VALID_DAYS:-365}
+    - CERT_INFO_COUNTRY_NAME=${CERT_INFO_COUNTRY_NAME:-DO}
+    - CERT_INFO_STATE_OR_PROVIDENCE=${CERT_INFO_STATE_OR_PROVIDENCE:-Santiago}
+    - CERT_INFO_LOCALITY_NAME=${CERT_INFO_LOCALITY_NAME:-Santiago}
+    - CERT_INFO_ORGANIZATION_NAME=${CERT_INFO_ORGANIZATION_NAME:-Example INC}
+    - CERT_INFO_ORGANIZATIONAL_UNIT=${CERT_INFO_ORGANIZATIONAL_UNIT:-IT Department}
+    - CERT_INFO_EMAIL=${CERT_INFO_EMAIL:-example@gmail.com}
+    - NEXT_PUBLIC_DISABLE_SIGNUP=${DISABLE_LOGIN:-false}
+    - SERVICE_PASSWORD_DOCUMENSO=${documenso_password}:-}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -q -O - http://documenso:3000/ | grep -q 'Sign in to your account'
+      interval: 2s
+      timeout: 10s
+      retries: 20
+    entrypoint:
+    - /bin/sh
+    - -c
+    - "CERT_PASSPHRASE=\"$${NEXT_PRIVATE_SIGNING_LOCAL_FILE_PASSPHRASE}\"\nPASSPHRASE_FILE=\"\
+      /tmp/cert_passphrase\"\n\n# Save original working directory\nORIGINAL_DIR=\"\
+      $$(pwd)\"\n\n# Find openssl binary (should be available in v1.12.10+)\nOPENSSL_CMD=\"\
+      $$(which openssl 2>/dev/null || command -v openssl 2>/dev/null || echo '/usr/bin/openssl')\"\
+      \n\n# Verify openssl is available\nif ! $$OPENSSL_CMD version >/dev/null 2>&1;\
+      \ then\n  echo \"Error: OpenSSL not found. Please use Documenso image v1.12.10\
+      \ or later.\"\n  exit 1\nfi\n\n# Create certificate directory - use /app/certs\
+      \ (writable by user 1001)\nCERT_DIR=\"/app/certs\"\nmkdir -p \"$$CERT_DIR\"\
+      \ || {\n  # Fallback to tmp if app directory not writable\n  CERT_DIR=\"/tmp/certs\"\
+      \n  mkdir -p \"$$CERT_DIR\"\n  echo \"Warning: Using fallback directory: $$CERT_DIR\"\
+      \n}\n\n# Create passphrase file for secure handling (prevents exposure in process\
+      \ list)\n# This avoids shell word-splitting issues and prevents passphrase from\
+      \ appearing in ps/process list\necho -n \"$$CERT_PASSPHRASE\" > \"$$PASSPHRASE_FILE\"\
+      \nchmod 600 \"$$PASSPHRASE_FILE\"\n\ntouch /tmp/cert_info_path\ncat <<EOF >\
+      \ /tmp/cert_info_path\n[ req ]\ndistinguished_name = req_distinguished_name\n\
+      prompt = no\n[ req_distinguished_name ]\nC            = ${CERT_INFO_COUNTRY_NAME}\n\
+      ST           = ${CERT_INFO_STATE_OR_PROVIDENCE}\nL            = ${CERT_INFO_LOCALITY_NAME}\n\
+      O            = ${CERT_INFO_ORGANIZATION_NAME}\nOU           = ${CERT_INFO_ORGANIZATIONAL_UNIT}\n\
+      CN           = ${domain}\nemailAddress = ${CERT_INFO_EMAIL}\n\
+      EOF\n\ncd \"$$CERT_DIR\"\n\n$$OPENSSL_CMD genrsa -out private.key 2048\n\n$$OPENSSL_CMD\
+      \ req \\\n  -new \\\n  -x509 \\\n  -key private.key \\\n  -out certificate.crt\
+      \ \\\n  -days $${CERT_VALID_DAYS} \\\n  -config /tmp/cert_info_path\n\n# Create\
+      \ P12 certificate using file-based passphrase (prevents exposure in process\
+      \ list)\n# Private key is not encrypted, so we only need -passout (not -passin)\n\
+      $$OPENSSL_CMD pkcs12 \\\n  -export \\\n  -out cert.p12 \\\n  -inkey private.key\
+      \ \\\n  -in certificate.crt \\\n  -legacy \\\n  -passout file:\"$$PASSPHRASE_FILE\"\
+      \n\n# Clean up passphrase file immediately after use\nrm -f \"$$PASSPHRASE_FILE\"\
+      \n\n# Set permissions (may fail if not root, but will work in Coolify)\nchown\
+      \ 1001:1001 cert.p12 private.key certificate.crt 2>/dev/null || true\nchmod\
+      \ 400 cert.p12 private.key certificate.crt\n\n# Update environment variable\
+      \ if directory changed\nif [ \"$$CERT_DIR\" != \"/app/certs\" ]; then\n  export\
+      \ NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH=\"$$CERT_DIR/cert.p12\"\nfi\n\n# Return\
+      \ to original directory before starting application\ncd \"$$ORIGINAL_DIR\"\n\
+      \n./start.sh\n"
+    ports:
+    - 3000:3000
+  database:
+    image: postgres:17
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-documenso-db}
+    volumes:
+    - documenso_postgresql_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

@@ -1,0 +1,22 @@
+x-hosty:
+  name: "Heimdall"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Heimdall is a dashboard for managing and organizing your server applications."
+
+services:
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:latest
+    environment:
+
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+    volumes:
+      - heimdall-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 2s
+      timeout: 10s
+      retries: 15

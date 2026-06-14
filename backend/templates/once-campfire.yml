@@ -1,0 +1,34 @@
+x-hosty:
+  name: "Once Campfire"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Super simple group chat, without a subscription."
+  web: campfire
+
+services:
+  campfire:
+    image: ghcr.io/basecamp/once-campfire:${TAG:-main}
+    restart: unless-stopped
+    volumes:
+    - campfire-storage:/rails/storage
+    environment:
+
+    - SECRET_KEY_BASE=${SERVICE_BASE64_64_CAMPFIRE}
+    - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+    - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+    - DISABLE_SSL=${DISABLE_SSL:-true}
+    - SSL_DOMAIN=${SSL_DOMAIN:-false}
+    - SKIP_TELEMETRY=${SKIP_TELEMETRY:-true}
+    - SENTRY_DSN=${SENTRY_DSN}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost/up
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+    - 80:80

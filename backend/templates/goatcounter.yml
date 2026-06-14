@@ -1,0 +1,24 @@
+x-hosty:
+  name: "Goatcounter"
+  version: 1
+  category: "Analytics"
+  icon: "bar-chart-2"
+  description: "Lightweight web analytics platform."
+  web: goatcounter
+
+services:
+  goatcounter:
+    image: arp242/goatcounter:2.7
+    environment:
+
+    volumes:
+    - goatcounter-data:/home/goatcounter/goatcounter-data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:8080/status >/dev/null 2>&1 || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+    - 8080:8080

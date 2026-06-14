@@ -1,0 +1,74 @@
+x-hosty:
+  name: "Autobase"
+  version: 1
+  category: "Databases"
+  icon: "database"
+  description: "Autobase for PostgreSQL® is an open-source alternative to cloud-managed databases (self-hosted DBaaS)."
+  web: autobase
+  secrets:
+    - ui_password
+    - postgres_password
+
+services:
+  autobase:
+    image: autobase/console_ui:2.5.2
+    platform: linux/amd64
+    environment:
+
+    - PG_CONSOLE_AUTHORIZATION_TOKEN=${ui_password}
+    - PG_CONSOLE_API_HOST=autobase-api
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - http://localhost:80/
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      autobase-api:
+        condition: service_healthy
+    ports:
+    - 80:80
+  autobase-db:
+    image: autobase/console_db:2.5.2
+    platform: linux/amd64
+    environment:
+    - POSTGRES_PASSWORD=${postgres_password}
+    volumes:
+    - autobase-db-data:/var/lib/postgresql
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  autobase-api:
+    image: autobase/console_api:2.5.2
+    platform: linux/amd64
+    environment:
+    - PG_CONSOLE_DB_HOST=autobase-db
+    - PG_CONSOLE_DB_PASSWORD=${postgres_password}
+    - PG_CONSOLE_AUTHORIZATION_TOKEN=${ui_password}
+    - PG_CONSOLE_ENCRYPTIONKEY=${SERVICE_BASE64_ENCRYPTIONKEY}
+    - PG_CONSOLE_LOGGER_LEVEL=${PG_CONSOLE_LOGGER_LEVEL:-info}
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /tmp/ansible:/tmp/ansible
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fsS
+      - -H
+      - 'accept: application/json'
+      - -H
+      - 'Authorization: Bearer ${ui_password}'
+      - http://localhost:8080/api/v1/version
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      autobase-db:
+        condition: service_healthy

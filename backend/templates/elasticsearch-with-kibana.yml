@@ -1,0 +1,92 @@
+x-hosty:
+  name: "Elasticsearch With Kibana"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "Elastic + Kibana is a Free and Open Source Search, Monitoring, and Visualization Stack"
+  web: kibana
+  domain_input: domain
+  secrets:
+    - elasticsearch_password
+    - kibana_password
+    - xpacksecurity_password
+    - xpackreporting_password
+    - xpackencryptedsavedobjects_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  elasticsearch:
+    image: elastic/elasticsearch:9.1.2
+    environment:
+    - ELASTIC_USER=elastic
+    - ELASTIC_PASSWORD=${elasticsearch_password}
+    - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    - discovery.type=single-node
+    - bootstrap.memory_lock=true
+    - xpack.security.http.ssl.enabled=false
+    volumes:
+    - /etc/localtime:/etc/localtime:ro
+    - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl --user elastic:${elasticsearch_password} --silent --fail http://localhost:9200/_cluster/health
+      interval: 10s
+      timeout: 10s
+      retries: 24
+  kibana:
+    image: kibana:9.1.2
+    environment:
+
+    - KIBANA_PASSWORD=${kibana_password}
+    - ELASTICSEARCH_SERVICEACCOUNTTOKEN=${ELASTICSEARCH_SERVICEACCOUNTTOKEN}
+    - SERVER_NAME=${domain}
+    - SERVER_PUBLICBASEURL=${domain}
+    - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    - XPACK.SECURITY.ENABLED=true
+    - XPACK_SECURITY_ENCRYPTIONKEY=${xpacksecurity_password}
+    - XPACK_REPORTING_ENCRYPTIONKEY=${xpackreporting_password}
+    - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${xpackencryptedsavedobjects_password}
+    - TELEMETRY_OPTIN=${TELEMETRY_OPTIN:-false}
+    volumes:
+    - /etc/localtime:/etc/localtime:ro
+    - kibana-data:/usr/share/kibana/data
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    ports:
+    - 5601:5601
+  kibana-token-generator:
+    image: alpine:latest
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    exclude_from_hc: true
+    environment:
+    - ELASTIC_PASSWORD=${elasticsearch_password}
+    entrypoint:
+    - sh
+    - -c
+    - "apk add --no-cache curl jq >/dev/null 2>&1\necho \"Generating Kibana service\
+      \ token...\"\nRESPONSE=$(curl -s -w \"\\n%{http_code}\" -u elastic:\"$${ELASTIC_PASSWORD}\"\
+      \ -X POST \"http://elasticsearch:9200/_security/service/elastic/kibana/credential/token/kibana-service-token\"\
+      )\nHTTP_CODE=$$(echo \"$${RESPONSE}\" | tail -n1)\nBODY=$$(echo \"$${RESPONSE}\"\
+      \ | head -n -1)\nif [ \"$${HTTP_CODE}\" = \"200\" ]; then\n  CREATED=$$(echo\
+      \ \"$${BODY}\" | jq -r '.created')\n  if [ \"$${CREATED}\" = \"true\" ]; then\n\
+      \    TOKEN_VALUE=$$(echo \"$${BODY}\" | jq -r '.token.value')\n    echo \"Token\
+      \ created successfully:\"\n    echo \"$${TOKEN_VALUE}\"\n  else\n    echo \"\
+      Unexpected response, token not created:\"\n    echo \"$${BODY}\"\n  fi\nelif\
+      \ [ \"$${HTTP_CODE}\" = \"409\" ]; then\n  echo \"Token already exists. Skipping\
+      \ token creation.\"\nelse\n  echo \"Failed to create token. HTTP code: $${HTTP_CODE}\"\
+      \n  echo \"$${BODY}\"\n  exit 1\nfi\n"
+    restart: 'no'

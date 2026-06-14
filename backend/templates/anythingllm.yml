@@ -1,0 +1,42 @@
+x-hosty:
+  name: "Anythingllm"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "AnythingLLM is the easiest to use, all-in-one AI application that can do RAG, AI Agents, and much more with no code or infrastructure headaches."
+  web: anything-llm
+  secrets:
+    - sigkey_password
+    - sigsalt_password
+    - jwtsecret_password
+    - authtoken_password
+
+services:
+  anything-llm:
+    image: mintplexlabs/anythingllm
+    environment:
+
+    - STORAGE_DIR=/app/server/storage
+    - DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-true}
+    - PASSWORDLOWERCASE=${PASSWORDLOWERCASE:-1}
+    - PASSWORDMAXCHAR=${PASSWORDMAXCHAR:-250}
+    - PASSWORDMINCHAR=${PASSWORDMINCHAR:-6}
+    - PASSWORDNUMERIC=${PASSWORDNUMERIC:-1}
+    - PASSWORDREQUIREMENTS=${PASSWORDREQUIREMENTS:-1}
+    - PASSWORDSYMBOL=${PASSWORDSYMBOL:-1}
+    - PASSWORDUPPERCASE=${PASSWORDUPPERCASE:-1}
+    - SIG_KEY=${sigkey_password}
+    - SIG_SALT=${sigsalt_password}
+    - JWT_SECRET=${jwtsecret_password}
+    - AUTH_TOKEN=${authtoken_password}
+    - SERVER_PORT=${SERVER_PORT:-3001}
+    - VECTOR_DB=lancedb
+    cap_add:
+    - SYS_ADMIN
+    volumes:
+    - anythingllm-storage:/app/server/storage
+    - anythingllm-hot:/app/collector/hotdir
+    - anythingllm-outputs:/app/collector/outputs
+    user: ${UID:-1000}:${GID:-1000}
+    ports:
+    - 3001:3001

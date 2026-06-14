@@ -1,0 +1,43 @@
+x-hosty:
+  name: "Plausible Analytics"
+  version: 1
+  category: "Analytics"
+  icon: "trending-up"
+  description: "Plausible is a lightweight, open-source, privacy-friendly web analytics alternative to Google Analytics."
+  ports:
+    - web
+  web: web
+  domain_input: base_url
+  secrets:
+    - db_password
+    - secret_key_base
+  inputs:
+    base_url:
+      type: "string"
+      description: "Public URL (e.g. https://analytics.example.com)"
+
+services:
+  db:
+    image: docker.io/library/postgres:15
+    environment:
+      POSTGRES_DB: plausible
+      POSTGRES_USER: plausible
+      POSTGRES_PASSWORD: ${db_password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  events-db:
+    image: docker.io/clickhouse/clickhouse-server:23.3-alpine
+    volumes:
+      - events-data:/var/lib/clickhouse
+
+  web:
+    image: ghcr.io/plausible/community-edition:v2
+    ports:
+      - 8000:8000
+    environment:
+      BASE_URL: ${base_url}
+      SECRET_KEY_BASE: ${secret_key_base}
+      DATABASE_URL: postgres://plausible:${db_password}@db:5432/plausible
+      CLICKHOUSE_DATABASE_URL: http://events-db:8123/plausible_events_db
+    command: sh -c "sleep 10 && /entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"

@@ -1,0 +1,35 @@
+x-hosty:
+  name: "Prowlarr"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Prowlarr⁠ is a indexer manager/proxy built on the popular arr .net/reactjs base stack to integrate with your various PVR apps."
+  web: prowlarr
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    environment:
+
+    - _APP_URL=${domain}
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-America/Toronto}
+    volumes:
+    - prowlarr-config:/config
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:9696/ping
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 9696:9696

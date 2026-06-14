@@ -1,0 +1,34 @@
+x-hosty:
+  name: "Sessy"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "Email observability platform for monitoring and analyzing email systems."
+  web: sessy
+  secrets:
+    - sessy_password
+  inputs:
+    sessy_user:
+      type: "string"
+      default: "sessy"
+      description: "Sessy username"
+
+services:
+  sessy:
+    image: ghcr.io/marckohlbrugge/sessy:main
+    environment:
+
+    - SECRET_KEY_BASE=$SERVICE_HEX_64_SESSYSECRET
+    - HTTP_AUTH_USERNAME=${sessy_user}
+    - HTTP_AUTH_PASSWORD=${sessy_password}
+    volumes:
+    - sessy-data:/rails/storage
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -sf http://127.0.0.1:80 || [ $? -eq 22 ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    ports:
+    - 80:80

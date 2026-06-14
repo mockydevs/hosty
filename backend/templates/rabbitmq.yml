@@ -1,27 +1,33 @@
 x-hosty:
-  name: "RabbitMQ"
+  name: "Rabbitmq"
   version: 1
-  category: "Queues"
-  icon: "message-square"
-  description: "Deploy RabbitMQ with the management UI."
-  web: web
-  ports:
-    - web
+  category: "Applications"
+  icon: "box"
+  description: "With tens of thousands of users, RabbitMQ is one of the most popular open source message brokers."
+  web: rabbitmq
   secrets:
     - rabbitmq_password
   inputs:
-    username:
+    rabbitmq_user:
       type: "string"
-      default: "hosty"
-      description: "Management user name"
+      default: "rabbitmq"
+      description: "Rabbitmq username"
 
 services:
-  web:
-    image: docker.io/library/rabbitmq:3-management
-    ports:
-      - 15672:15672
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: "rabbitmq"
     environment:
-      RABBITMQ_DEFAULT_USER: ${username}
-      RABBITMQ_DEFAULT_PASS: ${rabbitmq_password}
+
+      - RABBITMQ_DEFAULT_USER=${rabbitmq_user}
+      - RABBITMQ_DEFAULT_PASS=${rabbitmq_password}
+      - PORT=${PORT:-5672}
+    ports:
+      - ${PORT}:5672
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 30s
+      retries: 10
     volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-data:/var/lib/rabbitmq/

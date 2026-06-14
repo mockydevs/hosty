@@ -1,0 +1,18 @@
+x-hosty:
+  name: "Pocketbase"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Open Source backend for your next SaaS and Mobile app in 1 file"
+  web: pocketbase
+
+services:
+  pocketbase:
+    image: ghcr.io/coollabsio/pocketbase:latest
+    environment:
+
+    volumes:
+    - pocketbase-data:/app/pb_data
+    - pocketbase-hooks:/app/pb_hooks
+    ports:
+    - 8080:8080

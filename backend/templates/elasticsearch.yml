@@ -1,0 +1,31 @@
+x-hosty:
+  name: "Elasticsearch"
+  version: 1
+  category: "Search"
+  icon: "search"
+  description: "Elasticsearch is free and Open Source, Distributed, RESTful Search Engine."
+  web: elasticsearch
+  secrets:
+    - elasticsearch_password
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:8.19.0
+    environment:
+
+    - ELASTIC_PASSWORD=${elasticsearch_password}
+    - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    - discovery.type=single-node
+    - bootstrap.memory_lock=true
+    - xpack.security.http.ssl.enabled=false
+    volumes:
+    - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl --user elastic:${elasticsearch_password} --silent --fail http://localhost:9200/_cluster/health
+      interval: 10s
+      timeout: 10s
+      retries: 24
+    ports:
+    - 9200:9200

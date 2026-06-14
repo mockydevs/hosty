@@ -1,0 +1,29 @@
+x-hosty:
+  name: "Browserless"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "A headless Chrome browser as a service."
+  web: browserless
+  secrets:
+    - browserless_password
+
+services:
+  browserless:
+    image: ghcr.io/browserless/chromium
+    environment:
+
+    - TOKEN=${browserless_password}
+    expose:
+    - 3000
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:3000/docs
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 3000:3000

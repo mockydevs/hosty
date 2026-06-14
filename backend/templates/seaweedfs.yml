@@ -1,0 +1,86 @@
+x-hosty:
+  name: "Seaweedfs"
+  version: 1
+  category: "Storage"
+  icon: "hard-drive"
+  description: "SeaweedFS is a simple and highly scalable distributed file system. Compatible with S3, with an admin web interface."
+  web: seaweedfs-master
+  secrets:
+    - s3_password
+    - admin_password
+  inputs:
+    s3_user:
+      type: "string"
+      default: "s3"
+      description: "S3 username"
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+
+services:
+  seaweedfs-master:
+    image: chrislusf/seaweedfs:4.13
+    environment:
+
+    - AWS_ACCESS_KEY_ID=${s3_user}
+    - AWS_SECRET_ACCESS_KEY=${s3_password}
+    volumes:
+    - seaweedfs-s3-data:/data
+    - type: bind
+      source: ./base-config.json
+      target: /base-config.json
+      content: "{\n  \"identities\": [\n    {\n      \"name\": \"anonymous\",\n  \
+        \    \"actions\": [\n        \"Read\"\n      ]\n    },\n    {\n      \"name\"\
+        : \"admin\",\n      \"credentials\": [\n        {\n          \"accessKey\"\
+        : \"env:AWS_ACCESS_KEY_ID\",\n          \"secretKey\": \"env:AWS_SECRET_ACCESS_KEY\"\
+        \n        }\n      ],\n      \"actions\": [\n        \"Admin\",\n        \"\
+        Read\",\n        \"ReadAcp\",\n        \"List\",\n        \"Tagging\",\n \
+        \       \"Write\",\n        \"WriteAcp\"\n      ]\n    }\n  ]\n}\n"
+    entrypoint: 'sh -c ''\
+
+      sed "s/env:AWS_ACCESS_KEY_ID/$AWS_ACCESS_KEY_ID/g" /base-config.json > /base1-config.json;
+      \
+
+      sed "s/env:AWS_SECRET_ACCESS_KEY/$AWS_SECRET_ACCESS_KEY/g" /base1-config.json
+      > /config.json; \
+
+      weed server -dir=/data -master.port=9333 -s3 -s3.port=8333 -s3.config=/config.json\
+
+      ''
+
+      '
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --spider -q http://0.0.0.0:8333; [ $$? -le 8 ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+    - 8333:8333
+  seaweedfs-admin:
+    image: chrislusf/seaweedfs:4.13
+    environment:
+
+    - SEAWEED_USER_ADMIN=${admin_user}
+    - SEAWEED_PASSWORD_ADMIN=${admin_password}
+    command:
+    - admin
+    - -master=seaweedfs-master:9333
+    - -adminUser=${SEAWEED_USER_ADMIN}
+    - -adminPassword=${SEAWEED_PASSWORD_ADMIN}
+    - -port=23646
+    - -dataDir=/data
+    volumes:
+    - seaweedfs-admin-data:/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --spider -q http://0.0.0.0:23646; [ $$? -le 8 ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      seaweedfs-master:
+        condition: service_healthy

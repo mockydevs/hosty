@@ -1,0 +1,63 @@
+x-hosty:
+  name: "Traccar"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "Traccar is a free and open source modern GPS tracking system."
+  web: traccar
+  secrets:
+    - postgres_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  traccar:
+    image: traccar/traccar:latest
+    environment:
+
+    - CONFIG_USE_ENVIRONMENT_VARIABLES=${CONFIG_USE_ENVIRONMENT_VARIABLES:-true}
+    - DATABASE_USER=${postgres_user}
+    - DATABASE_PASSWORD=${postgres_password}
+    volumes:
+    - type: bind
+      source: ./srv/traccar/conf/traccar.xml
+      target: /opt/traccar/conf/traccar.xml
+      content: "<?xml version='1.0' encoding='UTF-8'?>\n<!DOCTYPE properties SYSTEM\
+        \ 'http://java.sun.com/dtd/properties.dtd'>\n<properties>\n    <entry key='config.default'>./conf/default.xml</entry>\n\
+        \    <entry key='database.driver'>org.postgresql.Driver</entry>\n    <entry\
+        \ key='database.url'>jdbc:postgresql://postgres:5432/traccar</entry>\n</properties>\n"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://127.0.0.1:8082
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    ports:
+    - 8082:8082
+  postgres:
+    image: postgres:16-alpine
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-traccar}
+    volumes:
+    - traccar-postgresql-data:/var/lib/postgresql/data/
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

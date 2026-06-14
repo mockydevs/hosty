@@ -1,0 +1,40 @@
+x-hosty:
+  name: "Fizzy"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Kanban tracking tool for issues and ideas by 37signals"
+  web: fizzy
+  secrets:
+    - fizzy_password
+    - masterkey_key
+
+services:
+  fizzy:
+    image: ghcr.io/basecamp/fizzy:main
+    environment:
+
+    - SECRET_KEY_BASE=${fizzy_password}
+    - RAILS_MASTER_KEY=${masterkey_key}
+    - RAILS_ENV=production
+    - RAILS_LOG_TO_STDOUT=true
+    - RAILS_SERVE_STATIC_FILES=true
+    - DATABASE_ADAPTER=sqlite
+    - SOLID_QUEUE_CONNECTS_TO=false
+    - VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY
+    - VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY
+    volumes:
+    - fizzy-data:/rails/db
+    - fizzy-storage:/rails/storage
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:80/up
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+    - 80:80

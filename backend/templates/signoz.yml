@@ -1,0 +1,433 @@
+x-hosty:
+  name: "Signoz"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "An observability platform native to OpenTelemetry with logs, traces and metrics."
+  web: signoz
+
+services:
+  init-clickhouse:
+    image: clickhouse/clickhouse-server:25.5.6-alpine
+    command:
+    - bash
+    - -c
+    - 'version="v0.0.1"
+
+      node_os=$$(uname -s | tr ''[:upper:]'' ''[:lower:]'')
+
+      node_arch=$$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
+
+      echo "Fetching histogram-binary for $${node_os}/$${node_arch}"
+
+      cd /tmp
+
+      wget -O histogram-quantile.tar.gz "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F$${version}/histogram-quantile_$${node_os}_$${node_arch}.tar.gz"
+
+      tar -xvzf histogram-quantile.tar.gz
+
+      mkdir -p /var/lib/clickhouse/user_scripts/histogramQuantile
+
+      mv histogram-quantile /var/lib/clickhouse/user_scripts/histogramQuantile
+
+      '
+    restart: on-failure
+    exclude_from_hc: true
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+  zookeeper:
+    image: signoz/zookeeper:3.9.3
+    user: root
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+    volumes:
+    - zookeeper:/bitnami/zookeeper
+    environment:
+    - ALLOW_ANONYMOUS_LOGIN=${ZOO_ALLOW_ANONYMOUS_LOGIN:-yes}
+    - ZOO_AUTOPURGE_INTERVAL=${ZOO_AUTOPURGE_INTERVAL:-1}
+    - ZOO_ENABLE_PROMETHEUS_METRICS=${ZOO_ENABLE_PROMETHEUS_METRICS:-yes}
+    - ZOO_PROMETHEUS_METRICS_PORT_NUMBER=${ZOO_PROMETHEUS_METRICS_PORT_NUMBER:-9141}
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.5.6-alpine
+    tty: true
+    depends_on:
+      init-clickhouse:
+        condition: service_completed_successfully
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - 0.0.0.0:8123/ping
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+    environment:
+    - CLICKHOUSE_SKIP_USER_SETUP=1
+    volumes:
+    - type: volume
+      source: clickhouse
+      target: /var/lib/clickhouse/
+    - type: bind
+      source: ./clickhouse/custom-function.xml
+      target: /etc/clickhouse-server/custom-function.xml
+      content: "<functions>\n    <function>\n        <type>executable</type>\n   \
+        \     <name>histogramQuantile</name>\n        <return_type>Float64</return_type>\n\
+        \        <argument>\n            <type>Array(Float64)</type>\n           \
+        \ <name>buckets</name>\n        </argument>\n        <argument>\n        \
+        \    <type>Array(Float64)</type>\n            <name>counts</name>\n      \
+        \  </argument>\n        <argument>\n            <type>Float64</type>\n   \
+        \         <name>quantile</name>\n        </argument>\n        <format>CSV</format>\n\
+        \        <command>./histogramQuantile</command>\n    </function>\n</functions>\n"
+    - type: bind
+      source: ./clickhouse/cluster.xml
+      target: /etc/clickhouse-server/config.d/cluster.xml
+      content: "<?xml version=\"1.0\"?>\n<clickhouse>\n    <!-- ZooKeeper is used\
+        \ to store metadata about replicas, when using Replicated tables.\n      \
+        \  Optional. If you don't use replicated tables, you could omit that.\n\n\
+        \        See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication/\n\
+        \      -->\n    <zookeeper>\n        <node index=\"1\">\n            <host>zookeeper</host>\n\
+        \            <port>2181</port>\n        </node>\n    </zookeeper>\n\n    <!--\
+        \ Configuration of clusters that could be used in Distributed tables.\n  \
+        \      https://clickhouse.com/docs/en/operations/table_engines/distributed/\n\
+        \      -->\n    <remote_servers>\n        <cluster>\n            <!-- Inter-server\
+        \ per-cluster secret for Distributed queries\n                default: no\
+        \ secret (no authentication will be performed)\n\n                If set,\
+        \ then Distributed queries will be validated on shards, so at least:\n   \
+        \             - such cluster should exist on the shard,\n                -\
+        \ such cluster should have the same secret.\n\n                And also (and\
+        \ which is more important), the initial_user will\n                be used\
+        \ as current user for the query.\n\n                Right now the protocol\
+        \ is pretty simple and it only takes into account:\n                - cluster\
+        \ name\n                - query\n\n                Also it will be nice if\
+        \ the following will be implemented:\n                - source hostname (see\
+        \ interserver_http_host), but then it will depends from DNS,\n           \
+        \       it can use IP address instead, but then the you need to get correct\
+        \ on the initiator node.\n                - target hostname / ip address (same\
+        \ notes as for source hostname)\n                - time-based security tokens\n\
+        \            -->\n            <!-- <secret></secret> -->\n            <shard>\n\
+        \                <!-- Optional. Whether to write data to just one of the replicas.\
+        \ Default: false (write data to all replicas). -->\n                <!-- <internal_replication>false</internal_replication>\
+        \ -->\n                <!-- Optional. Shard weight when writing data. Default:\
+        \ 1. -->\n                <!-- <weight>1</weight> -->\n                <replica>\n\
+        \                    <host>clickhouse</host>\n                    <port>9000</port>\n\
+        \                    <!-- Optional. Priority of the replica for load_balancing.\
+        \ Default: 1 (less value has more priority). -->\n                    <!--\
+        \ <priority>1</priority> -->\n                </replica>\n            </shard>\n\
+        \            <!-- <shard>\n                <replica>\n                   \
+        \ <host>clickhouse-2</host>\n                    <port>9000</port>\n     \
+        \           </replica>\n            </shard>\n            <shard>\n      \
+        \          <replica>\n                    <host>clickhouse-3</host>\n    \
+        \                <port>9000</port>\n                </replica>\n         \
+        \   </shard> -->\n        </cluster>\n    </remote_servers>\n</clickhouse>\n"
+    - type: bind
+      source: ./clickhouse/users.xml
+      target: /etc/clickhouse-server/users.xml
+      content: "<?xml version=\"1.0\"?>\n<clickhouse>\n    <!-- See also the files\
+        \ in users.d directory where the settings can be overridden. -->\n\n    <!--\
+        \ Profiles of settings. -->\n    <profiles>\n        <!-- Default settings.\
+        \ -->\n        <default>\n            <!-- Maximum memory usage for processing\
+        \ single query, in bytes. -->\n            <max_memory_usage>10000000000</max_memory_usage>\n\
+        \n            <!-- How to choose between replicas during distributed query\
+        \ processing.\n                random - choose random replica from set of\
+        \ replicas with minimum number of errors\n                nearest_hostname\
+        \ - from set of replicas with minimum number of errors, choose replica\n \
+        \                 with minimum number of different symbols between replica's\
+        \ hostname and local hostname\n                  (Hamming distance).\n   \
+        \             in_order - first live replica is chosen in specified order.\n\
+        \                first_or_random - if first replica one has higher number\
+        \ of errors, pick a random one from replicas with minimum number of errors.\n\
+        \            -->\n            <load_balancing>random</load_balancing>\n  \
+        \      </default>\n\n        <!-- Profile that allows only read queries. -->\n\
+        \        <readonly>\n            <readonly>1</readonly>\n        </readonly>\n\
+        \    </profiles>\n\n    <!-- Users and ACL. -->\n    <users>\n        <!--\
+        \ If user name was not specified, 'default' user is used. -->\n        <default>\n\
+        \            <!-- See also the files in users.d directory where the password\
+        \ can be overridden.\n\n                Password could be specified in plaintext\
+        \ or in SHA256 (in hex format).\n\n                If you want to specify\
+        \ password in plaintext (not recommended), place it in 'password' element.\n\
+        \                Example: <password>qwerty</password>.\n                Password\
+        \ could be empty.\n\n                If you want to specify SHA256, place\
+        \ it in 'password_sha256_hex' element.\n                Example: <password_sha256_hex>65e84be33532fb784c48129675f9eff3a682b27168c0ea744b2cf58ee02337c5</password_sha256_hex>\n\
+        \                Restrictions of SHA256: impossibility to connect to ClickHouse\
+        \ using MySQL JS client (as of July 2019).\n\n                If you want\
+        \ to specify double SHA1, place it in 'password_double_sha1_hex' element.\n\
+        \                Example: <password_double_sha1_hex>e395796d6546b1b65db9d665cd43f0e858dd4303</password_double_sha1_hex>\n\
+        \n                If you want to specify a previously defined LDAP server\
+        \ (see 'ldap_servers' in the main config) for authentication,\n          \
+        \        place its name in 'server' element inside 'ldap' element.\n     \
+        \           Example: <ldap><server>my_ldap_server</server></ldap>\n\n    \
+        \            If you want to authenticate the user via Kerberos (assuming Kerberos\
+        \ is enabled, see 'kerberos' in the main config),\n                  place\
+        \ 'kerberos' element instead of 'password' (and similar) elements.\n     \
+        \           The name part of the canonical principal name of the initiator\
+        \ must match the user name for authentication to succeed.\n              \
+        \  You can also place 'realm' element inside 'kerberos' element to further\
+        \ restrict authentication to only those requests\n                  whose\
+        \ initiator's realm matches it.\n                Example: <kerberos />\n \
+        \               Example: <kerberos><realm>EXAMPLE.COM</realm></kerberos>\n\
+        \n                How to generate decent password:\n                Execute:\
+        \ PASSWORD=$(base64 < /dev/urandom | head -c8); echo \"$PASSWORD\"; echo -n\
+        \ \"$PASSWORD\" | sha256sum | tr -d '-'\n                In first line will\
+        \ be password and in second - corresponding SHA256.\n\n                How\
+        \ to generate double SHA1:\n                Execute: PASSWORD=$(base64 < /dev/urandom\
+        \ | head -c8); echo \"$PASSWORD\"; echo -n \"$PASSWORD\" | sha1sum | tr -d\
+        \ '-' | xxd -r -p | sha1sum | tr -d '-'\n                In first line will\
+        \ be password and in second - corresponding double SHA1.\n            -->\n\
+        \            <password></password>\n\n            <!-- List of networks with\
+        \ open access.\n\n                To open access from everywhere, specify:\n\
+        \                    <ip>::/0</ip>\n\n                To open access only\
+        \ from localhost, specify:\n                    <ip>::1</ip>\n           \
+        \         <ip>127.0.0.1</ip>\n\n                Each element of list has one\
+        \ of the following forms:\n                <ip> IP-address or network mask.\
+        \ Examples: 213.180.204.3 or 10.0.0.1/8 or 10.0.0.1/255.255.255.0\n      \
+        \              2a02:6b8::3 or 2a02:6b8::3/64 or 2a02:6b8::3/ffff:ffff:ffff:ffff::.\n\
+        \                <host> Hostname. Example: server01.clickhouse.com.\n    \
+        \                To check access, DNS query is performed, and all received\
+        \ addresses compared to peer address.\n                <host_regexp> Regular\
+        \ expression for host names. Example, ^server\\d\\d-\\d\\d-\\d\\.clickhouse\\\
+        .com$\n                    To check access, DNS PTR query is performed for\
+        \ peer address and then regexp is applied.\n                    Then, for\
+        \ result of PTR query, another DNS query is performed and all received addresses\
+        \ compared to peer address.\n                    Strongly recommended that\
+        \ regexp is ends with $\n                All results of DNS requests are cached\
+        \ till server restart.\n            -->\n            <networks>\n        \
+        \        <ip>::/0</ip>\n            </networks>\n\n            <!-- Settings\
+        \ profile for user. -->\n            <profile>default</profile>\n\n      \
+        \      <!-- Quota for user. -->\n            <quota>default</quota>\n\n  \
+        \          <!-- User can create other users and grant rights to them. -->\n\
+        \            <!-- <access_management>1</access_management> -->\n        </default>\n\
+        \    </users>\n\n    <!-- Quotas. -->\n    <quotas>\n        <!-- Name of\
+        \ quota. -->\n        <default>\n            <!-- Limits for time interval.\
+        \ You could specify many intervals with different limits. -->\n          \
+        \  <interval>\n                <!-- Length of interval. -->\n            \
+        \    <duration>3600</duration>\n\n                <!-- No limits. Just calculate\
+        \ resource usage for time interval. -->\n                <queries>0</queries>\n\
+        \                <errors>0</errors>\n                <result_rows>0</result_rows>\n\
+        \                <read_rows>0</read_rows>\n                <execution_time>0</execution_time>\n\
+        \            </interval>\n        </default>\n    </quotas>\n</clickhouse>\n"
+    - type: bind
+      source: ./clickhouse/config.xml
+      target: /etc/clickhouse-server/config.xml
+      content: "<?xml version=\"1.0\"?>\n<clickhouse>\n  <max_connections>4096</max_connections>\n\
+        \  <keep_alive_timeout>3</keep_alive_timeout>\n  <max_concurrent_queries>100</max_concurrent_queries>\n\
+        \  <mark_cache_size>5368709120</mark_cache_size>\n  <mmap_cache_size>1000</mmap_cache_size>\n\
+        \  <compiled_expression_cache_size>134217728</compiled_expression_cache_size>\n\
+        \  <compiled_expression_cache_elements_size>10000</compiled_expression_cache_elements_size>\n\
+        \  <custom_settings_prefixes></custom_settings_prefixes>\n  <dictionaries_config>*_dictionary.xml</dictionaries_config>\n\
+        \  <user_defined_executable_functions_config>*function.xml</user_defined_executable_functions_config>\n\
+        \  <user_scripts_path>/var/lib/clickhouse/user_scripts/</user_scripts_path>\n\
+        \  <http_port>8123</http_port>\n  <tcp_port>9000</tcp_port>\n  <mysql_port>9004</mysql_port>\n\
+        \  <postgresql_port>9005</postgresql_port>\n  <interserver_http_port>9009</interserver_http_port>\n\
+        \  <logger>\n    <level>information</level>\n    <formatting>\n      <type>json</type>\n\
+        \    </formatting>\n  </logger>\n  <macros>\n    <shard>01</shard>\n    <replica>example01-01-1</replica>\n\
+        \  </macros>\n  <prometheus>\n    <endpoint>/metrics</endpoint>\n    <port>9363</port>\n\
+        \    <metrics>true</metrics>\n    <events>true</events>\n    <asynchronous_metrics>true</asynchronous_metrics>\n\
+        \    <status_info>true</status_info>\n  </prometheus>\n  <opentelemetry_span_log>\n\
+        \    <engine>engine MergeTree\n            partition by toYYYYMM(finish_date)\n\
+        \            order by (finish_date, finish_time_us, trace_id)</engine>\n \
+        \ </opentelemetry_span_log>\n  <query_masking_rules>\n    <rule>\n      <name>hide\
+        \ encrypt/decrypt arguments</name>\n      <regexp>((?:aes_)?(?:encrypt|decrypt)(?:_mysql)?)\\\
+        s*\\(\\s*(?:'(?:\\\\'|.)+'|.*?)\\s*\\)</regexp>\n      <replace>\\1(???)</replace>\n\
+        \    </rule>\n  </query_masking_rules>\n  <send_crash_reports>\n    <enabled>false</enabled>\n\
+        \    <anonymize>false</anonymize>\n    <endpoint>https://6f33034cfe684dd7a3ab9875e57b1c8d@o388870.ingest.sentry.io/5226277</endpoint>\n\
+        \  </send_crash_reports>\n  <merge_tree_metadata_cache>\n    <lru_cache_size>268435456</lru_cache_size>\n\
+        \    <continue_if_corrupted>true</continue_if_corrupted>\n  </merge_tree_metadata_cache>\n\
+        \  <user_directories>\n    <users_xml>\n        <!-- Path to configuration\
+        \ file with predefined users. -->\n        <path>users.xml</path>\n    </users_xml>\n\
+        \    <local_directory>\n        <!-- Path to folder where users created by\
+        \ SQL commands are stored. -->\n        <path>/var/lib/clickhouse/access/</path>\n\
+        \    </local_directory>\n  </user_directories>\n  <default_profile>default</default_profile>\n\
+        \    <distributed_ddl>\n        <!-- Path in ZooKeeper to queue with DDL queries\
+        \ -->\n        <path>/clickhouse/task_queue/ddl</path>\n    </distributed_ddl>\n\
+        </clickhouse>\n"
+  signoz:
+    image: signoz/signoz:v0.97.1
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      schema-migrator-sync:
+        condition: service_completed_successfully
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+    command:
+    - --config=/root/config/prometheus.yml
+    volumes:
+    - type: bind
+      source: ./prometheus.yml
+      target: /root/config/prometheus.yml
+      content: "# my global config\nglobal:\n  scrape_interval:     5s # Set the scrape\
+        \ interval to every 15 seconds. Default is every 1 minute.\n  evaluation_interval:\
+        \ 15s # Evaluate rules every 15 seconds. The default is every 1 minute.\n\
+        \  # scrape_timeout is set to the global default (10s).\n\n# Alertmanager\
+        \ configuration\nalerting:\n  alertmanagers:\n  - static_configs:\n    - targets:\n\
+        \      - alertmanager:9093\n\n# Load rules once and periodically evaluate\
+        \ them according to the global 'evaluation_interval'.\nrule_files: []\n  #\
+        \ - \"first_rules.yml\"\n  # - \"second_rules.yml\"\n  # - 'alerts.yml'\n\n\
+        # A scrape configuration containing exactly one endpoint to scrape:\n# Here\
+        \ it's Prometheus itself.\nscrape_configs: []\n\nremote_read:\n  - url: tcp://clickhouse:9000/signoz_metrics\n"
+    - type: volume
+      source: sqlite
+      target: /var/lib/signoz/
+    environment:
+
+    - SIGNOZ_JWT_SECRET=${SERVICE_REALBASE64_JWTSECRET}
+    - SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://clickhouse:9000
+    - SIGNOZ_SQLSTORE_SQLITE_PATH=/var/lib/signoz/signoz.db
+    - DASHBOARDS_PATH=/root/config/dashboards
+    - STORAGE=clickhouse
+    - GODEBUG=netdns=go
+    - DEPLOYMENT_TYPE=docker-standalone-amd
+    - SIGNOZ_STATSREPORTER_ENABLED=${SIGNOZ_STATSREPORTER_ENABLED:-true}
+    - SIGNOZ_EMAILING_ENABLED=${SIGNOZ_EMAILING_ENABLED:-false}
+    - SIGNOZ_EMAILING_SMTP_ADDRESS=${SIGNOZ_EMAILING_SMTP_ADDRESS}
+    - SIGNOZ_EMAILING_SMTP_FROM=${SIGNOZ_EMAILING_SMTP_FROM}
+    - SIGNOZ_EMAILING_SMTP_AUTH_USERNAME=${SIGNOZ_EMAILING_SMTP_AUTH_USERNAME}
+    - SIGNOZ_EMAILING_SMTP_AUTH_PASSWORD=${SIGNOZ_EMAILING_SMTP_AUTH_PASSWORD}
+    - SIGNOZ_ALERTMANAGER_PROVIDER=signoz
+    - SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__AUTH__PASSWORD=${SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__AUTH__PASSWORD}
+    - SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__AUTH__USERNAME=${SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__AUTH__USERNAME}
+    - SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__FROM=${SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__FROM}
+    - SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__SMARTHOST=${SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__SMARTHOST}
+    - DOT_METRICS_ENABLED=true
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - localhost:8080/api/v1/health
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 8080:8080
+  otel-collector:
+    image: signoz/signoz-otel-collector:v0.129.7
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      schema-migrator-sync:
+        condition: service_completed_successfully
+      signoz:
+        condition: service_healthy
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+    command:
+    - --config=/etc/otel-collector-config.yaml
+    - --manager-config=/etc/manager-config.yaml
+    - --copy-path=/var/tmp/collector-config.yaml
+    - --feature-gates=-pkg.translator.prometheus.NormalizeName
+    volumes:
+    - type: bind
+      source: ./otel-collector-config.yaml
+      target: /etc/otel-collector-config.yaml
+      content: "receivers:\n  otlp:\n    protocols:\n      grpc:\n        endpoint:\
+        \ 0.0.0.0:4317\n      http:\n        endpoint: 0.0.0.0:4318\n  prometheus:\n\
+        \    config:\n      global:\n        scrape_interval: 60s\n      scrape_configs:\n\
+        \        - job_name: otel-collector\n          static_configs:\n         \
+        \ - targets:\n              - localhost:8888\n            labels:\n      \
+        \        job_name: otel-collector\nprocessors:\n  batch:\n    send_batch_size:\
+        \ 10000\n    send_batch_max_size: 11000\n    timeout: 10s\n  resourcedetection:\n\
+        \    # Using OTEL_RESOURCE_ATTRIBUTES envvar, env detector adds custom labels.\n\
+        \    detectors: [env, system]\n    timeout: 2s\n  signozspanmetrics/delta:\n\
+        \    metrics_exporter: signozclickhousemetrics\n    metrics_flush_interval:\
+        \ 60s\n    latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 50ms, 100ms,\
+        \ 250ms, 500ms, 1000ms, 1400ms, 2000ms, 5s, 10s, 20s, 40s, 60s ]\n    dimensions_cache_size:\
+        \ 100000\n    aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA\n   \
+        \ enable_exp_histogram: true\n    dimensions:\n      - name: service.namespace\n\
+        \        default: default\n      - name: deployment.environment\n        default:\
+        \ default\n      # This is added to ensure the uniqueness of the timeseries\n\
+        \      # Otherwise, identical timeseries produced by multiple replicas of\n\
+        \      # collectors result in incorrect APM metrics\n      - name: signoz.collector.id\n\
+        \      - name: service.version\n      - name: browser.platform\n      - name:\
+        \ browser.mobile\n      - name: k8s.cluster.name\n      - name: k8s.node.name\n\
+        \      - name: k8s.namespace.name\n      - name: host.name\n      - name:\
+        \ host.type\n      - name: container.name\nextensions:\n  health_check:\n\
+        \    endpoint: 0.0.0.0:13133\n  pprof:\n    endpoint: 0.0.0.0:1777\nexporters:\n\
+        \  clickhousetraces:\n    datasource: tcp://clickhouse:9000/signoz_traces\n\
+        \    low_cardinal_exception_grouping: ${env:LOW_CARDINAL_EXCEPTION_GROUPING}\n\
+        \    use_new_schema: true\n  signozclickhousemetrics:\n    dsn: tcp://clickhouse:9000/signoz_metrics\n\
+        \  clickhouselogsexporter:\n    dsn: tcp://clickhouse:9000/signoz_logs\n \
+        \   timeout: 10s\n    use_new_schema: true\nservice:\n  telemetry:\n    logs:\n\
+        \      encoding: json\n  extensions:\n    - health_check\n    - pprof\n  pipelines:\n\
+        \    traces:\n      receivers: [otlp]\n      processors: [signozspanmetrics/delta,\
+        \ batch]\n      exporters: [clickhousetraces]\n    metrics:\n      receivers:\
+        \ [otlp]\n      processors: [batch]\n      exporters: [signozclickhousemetrics]\n\
+        \    metrics/prometheus:\n      receivers: [prometheus]\n      processors:\
+        \ [batch]\n      exporters: [signozclickhousemetrics]\n    logs:\n      receivers:\
+        \ [otlp]\n      processors: [batch]\n      exporters: [clickhouselogsexporter]\n"
+    - type: bind
+      source: ./otel-collector-opamp-config.yaml
+      target: /etc/manager-config.yaml
+      content: 'server_endpoint: ws://signoz:4320/v1/opamp
+
+        '
+    environment:
+
+    - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux
+    - LOW_CARDINAL_EXCEPTION_GROUPING=false
+    healthcheck:
+      test: bash -c "exec 6<> /dev/tcp/localhost/13133"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  schema-migrator-sync:
+    image: signoz/signoz-schema-migrator:v0.129.7
+    command:
+    - sync
+    - --dsn=tcp://clickhouse:9000
+    - --up=
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: on-failure
+    exclude_from_hc: true
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+  schema-migrator-async:
+    image: signoz/signoz-schema-migrator:v0.129.7
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      schema-migrator-sync:
+        condition: service_completed_successfully
+    restart: on-failure
+    exclude_from_hc: true
+    logging:
+      options:
+        max-size: 50m
+        max-file: '3'
+    command:
+    - async
+    - --dsn=tcp://clickhouse:9000
+    - --up=

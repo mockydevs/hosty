@@ -1,0 +1,66 @@
+x-hosty:
+  name: "Onedev"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Git server with CI/CD, kanban, and packages. Seamless integration. Unparalleled experience."
+  web: onedev
+  domain_input: domain
+  secrets:
+    - database_key
+    - onedev_password
+  inputs:
+    database_user:
+      type: "string"
+      default: "database"
+      description: "Database username"
+    onedev_user:
+      type: "string"
+      default: "onedev"
+      description: "Onedev username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  onedev:
+    image: 1dev/server:latest
+    volumes:
+    - onedev-docker-sock:/var/run/docker.sock
+    - onedev-data:/opt/onedev
+    environment:
+
+    - hibernate_dialect=io.onedev.server.persistence.PostgreSQLDialect
+    - hibernate_connection_driver_class=org.postgresql.Driver
+    - hibernate_connection_url=jdbc:postgresql://postgres:5432/${POSTGRESQL_DATABASE:-onedev}
+    - hibernate_connection_username=${database_user}
+    - hibernate_connection_password=${database_key}
+    - initial_user=${onedev_user}
+    - initial_password=${onedev_password}
+    - initial_email=${ONEDEV_EMAIL:-mail@example.com}
+    - initial_server_url=${domain}
+    - initial_ssh_root_url=${SSH_ROOT_URL:-ssh://changeme:22}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - 'true'
+    ports:
+    - 6610:6610
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+    - onedev-postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${database_user}
+    - POSTGRES_PASSWORD=${database_key}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-onedev}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready
+      interval: 5s
+      timeout: 20s
+      retries: 10

@@ -1,0 +1,53 @@
+x-hosty:
+  name: "Supertokens With Mysql"
+  version: 1
+  category: "Security"
+  icon: "shield"
+  description: "An open-source authentication solution that simplifies the implementation of secure user authentication and session management for web and mobile applications."
+  web: supertokens
+  secrets:
+    - mysql_password
+  inputs:
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+
+services:
+  supertokens:
+    image: registry.supertokens.io/supertokens/supertokens-mysql:latest
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+
+    - API_KEYS=${API_KEYS:-}
+    - MYSQL_CONNECTION_URI=mysql://${mysql_user}:${mysql_password}@mysql:3306/${MYSQL_DATABASE:-supertokens}
+    healthcheck:
+      test: 'bash -c ''exec 3<>/dev/tcp/127.0.0.1/3567 && echo -e "GET /hello HTTP/1.1\r\nhost:
+        127.0.0.1:3567\r\nConnection: close\r\n\r\n" >&3 && cat <&3 | grep "Hello"''
+
+        '
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+    - 3567:3567
+  mysql:
+    image: mysql:latest
+    environment:
+    - MYSQL_ROOT_PASSWORD=${mysql_password}
+    - MYSQL_USER=${mysql_user}
+    - MYSQL_PASSWORD=${mysql_password}
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-supertokens}
+    volumes:
+    - supertokens-mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - localhost
+      timeout: 20s
+      retries: 10

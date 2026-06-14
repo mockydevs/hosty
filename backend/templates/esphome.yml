@@ -1,0 +1,29 @@
+x-hosty:
+  name: "Esphome"
+  version: 1
+  category: "Automation"
+  icon: "zap"
+  description: "Smart Home Made Simple."
+  web: esphome
+  secrets:
+    - admin_password
+  inputs:
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+
+services:
+  esphome:
+    image: ghcr.io/esphome/esphome:2025.12.4
+    volumes:
+    - esp_config:/config
+    - /etc/localtime:/etc/localtime:ro
+    privileged: true
+    network_mode: host
+    environment:
+
+    - USERNAME=${admin_user}
+    - PASSWORD=${admin_password}
+    ports:
+    - 6052:6052

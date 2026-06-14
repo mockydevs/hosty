@@ -1,0 +1,68 @@
+x-hosty:
+  name: "Paperless"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Paperless-ngx is a community-supported open-source document management system that transforms your physical documents into a searchable online archive so you can keep, well, less paper."
+  web: paperless
+  domain_input: domain
+  secrets:
+    - paperless_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    paperless_user:
+      type: "string"
+      default: "paperless"
+      description: "Paperless username"
+
+services:
+  redis:
+    image: redis:7.4
+    volumes:
+    - paperless-redis:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      timeout: 10s
+      retries: 3
+  paperless:
+    image: paperlessngx/paperless-ngx:latest
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fs
+      - -S
+      - --max-time
+      - '2'
+      - http://localhost:8000
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+    - paperless-data:/usr/src/paperless/data
+    - paperless-media:/usr/src/paperless/media
+    - type: bind
+      source: ./export
+      target: /usr/src/paperless/export
+      is_directory: true
+    - type: bind
+      source: ./consume
+      target: /usr/src/paperless/consume
+      is_directory: true
+    environment:
+
+    - PAPERLESS_URL=${domain}
+    - PAPERLESS_ADMIN_PASSWORD=${paperless_password}
+    - PAPERLESS_ADMIN_USER=${paperless_user}
+    - PAPERLESS_REDIS=redis://redis:6379
+    - PAPERLESS_SECRET_KEY=${SERVICE_REALBASE64_64_PAPERLESS}
+    ports:
+    - 8000:8000

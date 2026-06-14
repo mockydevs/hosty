@@ -1,0 +1,57 @@
+x-hosty:
+  name: "Mattermost"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Mattermost is an open source, self-hosted Slack-alternative."
+  web: mattermost
+  domain_input: domain
+  secrets:
+    - postgres_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  mattermost:
+    image: mattermost/mattermost-team-edition:release-10
+    platform: linux/amd64
+    volumes:
+    - mattermost-data-config:/mattermost/config:rw
+    - mattermost-data-data:/mattermost/data:rw
+    - mattermost-data-logs:/mattermost/logs:rw
+    - mattermost-data-plugins:/mattermost/plugins:rw
+    - mattermost-data-client-plugins:/mattermost/client/plugins:rw
+    - mattermost-data-bleve-indexes:/mattermost/bleve-indexes:rw
+    environment:
+
+    - MM_SERVICESETTINGS_SITEURL=${domain}
+    - TZ=${TZ:-UTC}
+    - MM_SQLSETTINGS_DRIVERNAME=postgres
+    - MM_SQLSETTINGS_DATASOURCE=postgres://${postgres_user}:${postgres_password}@postgres:5432/$POSTGRES_DB?sslmode=disable&connect_timeout=10
+    - MM_BLEVESETTINGS_INDEXDIR=/mattermost/bleve-indexes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+    - 8065:8065
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+    - postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-mattermost}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

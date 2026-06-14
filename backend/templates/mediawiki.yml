@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Mediawiki"
+  version: 1
+  category: "CMS"
+  icon: "file-text"
+  description: "MediaWiki is a collaboration and documentation platform brought to you by a vibrant community."
+  web: mediawiki
+
+services:
+  mediawiki:
+    image: mediawiki:latest
+    environment:
+
+    volumes:
+    - mediawiki-images:/var/www/html/images
+    - mediawiki-sqlite:/var/www/html/data
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:80
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 80:80

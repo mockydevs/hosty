@@ -1,0 +1,47 @@
+x-hosty:
+  name: "Soju"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A user-friendly IRC bouncer with a modern web interface"
+  web: gamja
+
+services:
+  soju:
+    image: codeberg.org/emersion/soju:latest
+    volumes:
+    - soju-db:/db
+    - soju-uploads:/uploads
+    - soju-run:/run/soju
+    - type: bind
+      source: ./soju/config
+      target: /soju-config
+      content: 'db sqlite3 /db/main.db
+
+        message-store db
+
+        file-upload fs /uploads/
+
+        listen irc+insecure://0.0.0.0:6667
+
+        listen ws+insecure://0.0.0.0:80
+
+        listen unix+admin:///run/soju/admin
+
+        '
+    networks:
+      default:
+        aliases:
+        - gamja-backend
+  gamja:
+    image: codeberg.org/emersion/gamja:latest
+    environment:
+
+    depends_on:
+    - soju
+    ports:
+    - 80:80
+volumes:
+  soju-db: null
+  soju-uploads: null
+  soju-run: null

@@ -1,0 +1,74 @@
+x-hosty:
+  name: "Dolibarr"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Dolibarr is a modern software package to manage your organization's activity (contacts, quotes, invoices, orders, stocks, agenda, hr, expense reports, accountancy, ecm, manufacturing, ...)."
+  web: dolibarr
+  domain_input: domain
+  secrets:
+    - mysql_password
+    - dolibarr_password
+    - root_password
+  inputs:
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    dolibarr_user:
+      type: "string"
+      default: "dolibarr"
+      description: "Dolibarr username"
+
+services:
+  dolibarr:
+    image: dolibarr/dolibarr:latest
+    environment:
+
+    - WWW_USER_ID=${WWW_USER_ID:-1000}
+    - WWW_GROUP_ID=${WWW_GROUP_ID:-1000}
+    - DOLI_DB_HOST=mariadb
+    - DOLI_DB_NAME=${MYSQL_DATABASE:-dolibarr-db}
+    - DOLI_DB_USER=${mysql_user}
+    - DOLI_DB_PASSWORD=${mysql_password}
+    - DOLI_URL_ROOT=${domain}
+    - DOLI_ADMIN_LOGIN=${dolibarr_user}
+    - DOLI_ADMIN_PASSWORD=${dolibarr_password}
+    - DOLI_CRON=${DOLI_CRON:-0}
+    - DOLI_INIT_DEMO=${DOLI_INIT_DEMO:-0}
+    - DOLI_COMPANY_NAME=${DOLI_COMPANY_NAME:-MyBigCompany}
+    volumes:
+    - dolibarr_docs:/var/www/documents
+    - dolibarr_custom:/var/www/html/custom
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:80
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 80:80
+  mariadb:
+    image: mariadb:latest
+    environment:
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-dolibarr-db}
+    - MYSQL_USER=${mysql_user}
+    - MYSQL_PASSWORD=${mysql_password}
+    - MYSQL_ROOT_PASSWORD=${root_password}
+    volumes:
+    - dolibarr_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test:
+      - CMD
+      - healthcheck.sh
+      - --connect
+      - --innodb_initialized
+      interval: 5s
+      timeout: 20s
+      retries: 10

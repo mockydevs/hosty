@@ -1,0 +1,37 @@
+x-hosty:
+  name: "Gotenberg"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Gotenberg is a Docker-powered stateless API for PDF files."
+  web: gotenberg
+  secrets:
+    - gotenberg_password
+  inputs:
+    gotenberg_user:
+      type: "string"
+      default: "gotenberg"
+      description: "Gotenberg username"
+
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:latest
+    environment:
+
+    - GOTENBERG_API_BASIC_AUTH_USERNAME=${gotenberg_user}
+    - GOTENBERG_API_BASIC_AUTH_PASSWORD=${gotenberg_password}
+    command:
+    - gotenberg
+    - --api-enable-basic-auth
+    - --api-disable-health-check-logging
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:3000/health
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 3000:3000

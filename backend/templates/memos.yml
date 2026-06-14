@@ -1,0 +1,17 @@
+x-hosty:
+  name: "Memos"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "An open-source, lightweight note-taking solution. The pain-less way to create your meaningful notes. Your Notes, Your Way."
+  web: memos
+
+services:
+  memos:
+    image: neosmemo/memos:stable
+    volumes:
+    - memos/:/var/opt/memos
+    environment:
+
+    ports:
+    - 5230:5230

@@ -1,0 +1,16 @@
+x-hosty:
+  name: "Ollama"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "Ollama lets you run large language models locally. Pull and serve Llama, Mistral, Gemma, and more."
+  ports:
+    - api
+
+services:
+  api:
+    image: docker.io/ollama/ollama:0.6
+    ports:
+      - 11434:11434
+    volumes:
+      - ollama-models:/root/.ollama

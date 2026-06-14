@@ -1,0 +1,72 @@
+x-hosty:
+  name: "Freescout"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "FreeScout is the super lightweight and powerful free open source help desk and shared inbox written in PHP (Laravel framework)."
+  web: freescout
+  domain_input: domain
+  secrets:
+    - mariadb_password
+    - admin_password
+    - root_password
+  inputs:
+    mariadb_user:
+      type: "string"
+      default: "mariadb"
+      description: "Mariadb username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  freescout:
+    image: tiredofit/freescout:latest
+    volumes:
+    - freescout-data:/data
+    - freescout-logs:/www/logs
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+
+    - DB_HOST=mariadb
+    - DB_NAME=${MARIADB_DATABASE:-freescout}
+    - DB_USER=${mariadb_user}:-freescout}
+    - DB_PASS=${mariadb_password}
+    - SITE_URL=${domain}
+    - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+    - ADMIN_PASS=${admin_password}
+    - DISPLAY_ERRORS=${DISPLAY_ERRORS:-FALSE}
+    - TIMEZONE=${TIMEZONE:-UTC}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1
+      start_period: 10s
+      interval: 5s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 80:80
+  mariadb:
+    image: mariadb
+    volumes:
+    - mariadb-data:/var/lib/mysql
+    environment:
+    - MARIADB_ROOT_PASSWORD=${root_password}
+    - MARIADB_DATABASE=${MARIADB_DATABASE}
+    - MARIADB_USER=${mariadb_user}
+    - MARIADB_PASSWORD=${mariadb_password}
+    healthcheck:
+      test:
+      - CMD
+      - healthcheck.sh
+      - --connect
+      - --innodb_initialized
+      start_period: 10s
+      interval: 5s
+      timeout: 10s
+      retries: 15

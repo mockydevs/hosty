@@ -1,0 +1,28 @@
+x-hosty:
+  name: "Jenkins"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Jenkins is an open source automation server, Jenkins provides hundreds of plugins to support building, deploying and automating any project."
+  web: jenkins
+
+services:
+  jenkins:
+    image: jenkins/jenkins:latest
+    environment:
+
+    volumes:
+    - jenkins-home:/var/jenkins_home
+    - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8080/login
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    ports:
+    - 8080:8080

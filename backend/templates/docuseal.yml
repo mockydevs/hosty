@@ -1,0 +1,33 @@
+x-hosty:
+  name: "Docuseal"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Document Signing for Everyone free forever for individuals, extensible for businesses and developers. Open Source Alternative to DocuSign, PandaDoc and more."
+  web: docuseal
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  docuseal:
+    image: docuseal/docuseal:latest
+    environment:
+
+    - HOST=${domain}
+    volumes:
+    - docuseal-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:3000
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 3000:3000

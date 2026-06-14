@@ -1,0 +1,44 @@
+x-hosty:
+  name: "Directus"
+  version: 1
+  category: "CMS"
+  icon: "file-text"
+  description: "Directus wraps databases with a dynamic API, and provides an intuitive app for managing its content."
+  web: directus
+  secrets:
+    - admin_password
+
+services:
+  directus:
+    image: directus/directus:11
+    volumes:
+    - directus-database:/directus/database
+    - directus-uploads:/directus/uploads
+    - directus-extensions:/directus/extensions
+    - directus-templates:/directus/templates
+    environment:
+
+    - KEY=$SERVICE_BASE64_64_KEY
+    - SECRET=$SERVICE_BASE64_64_SECRET
+    - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+    - ADMIN_PASSWORD=${admin_password}
+    - DB_CLIENT=sqlite3
+    - DB_FILENAME=/directus/database/data.db
+    - WEBSOCKETS_ENABLED=true
+    - CORS_ENABLED=${CORS_ENABLED:-true}
+    - CORS_ORIGIN=${CORS_ORIGIN}
+    - CORS_METHODS=${CORS_METHODS:-GET,POST,PATCH,DELETE,OPTIONS}
+    - CORS_ALLOWED_HEADERS=${CORS_ALLOWED_HEADERS:-Content-Type,Authorization}
+    - CORS_CREDENTIALS=${CORS_CREDENTIALS:-true}
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8055/admin/login
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8055:8055

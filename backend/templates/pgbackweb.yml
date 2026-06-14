@@ -1,0 +1,47 @@
+x-hosty:
+  name: "Pgbackweb"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Effortless PostgreSQL backups with a user-friendly web interface!"
+  web: pgbackweb
+  secrets:
+    - pgbackweb_key
+    - postgres_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  pgbackweb:
+    image: eduardolat/pgbackweb:latest
+    volumes:
+    - pgbackweb_backups:/backups
+    environment:
+
+    - PBW_ENCRYPTION_KEY=${pgbackweb_key}
+    - PBW_POSTGRES_CONN_STRING=postgresql://${postgres_user}:${postgres_password}@postgres:5432/${POSTGRES_DB:-pgbackweb-db}?sslmode=disable
+    - TZ=${TIME_ZONE:-UTC}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    exclude_from_hc: true
+    ports:
+    - 8085:8085
+  postgres:
+    image: postgres:17
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-pgbackweb-db}
+    volumes:
+    - pgbackweb_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${postgres_user} -d pgbackweb
+      interval: 5s
+      timeout: 5s
+      retries: 5

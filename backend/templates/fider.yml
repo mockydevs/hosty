@@ -1,0 +1,65 @@
+x-hosty:
+  name: "Fider"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Fider is a feedback platform for collecting and managing user feedback."
+  web: fider
+  domain_input: domain
+  secrets:
+    - postgres_password
+    - fider_key
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  fider:
+    image: getfider/fider:stable
+    environment:
+
+    - BASE_URL=${domain}_3000
+    - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@database:5432/fider?sslmode=disable
+    - JWT_SECRET=${fider_key}
+    - EMAIL_NOREPLY=${EMAIL_NOREPLY:-noreply@example.com}
+    - EMAIL_MAILGUN_API=$EMAIL_MAILGUN_API
+    - EMAIL_MAILGUN_DOMAIN=$EMAIL_MAILGUN_DOMAIN
+    - EMAIL_MAILGUN_REGION=$EMAIL_MAILGUN_REGION
+    - EMAIL_SMTP_HOST=${EMAIL_SMTP_HOST:-smtp.mailgun.com}
+    - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-587}
+    - EMAIL_SMTP_USERNAME=${EMAIL_SMTP_USERNAME:-postmaster@mailgun.com}
+    - EMAIL_SMTP_PASSWORD=$EMAIL_SMTP_PASSWORD
+    - EMAIL_SMTP_ENABLE_STARTTLS=$EMAIL_SMTP_ENABLE_STARTTLS
+    - EMAIL_AWSSES_REGION=$EMAIL_AWSSES_REGION
+    - EMAIL_AWSSES_ACCESS_KEY_ID=$EMAIL_AWSSES_ACCESS_KEY_ID
+    - EMAIL_AWSSES_SECRET_ACCESS_KEY=$EMAIL_AWSSES_SECRET_ACCESS_KEY
+    healthcheck:
+      test:
+      - CMD
+      - /app/fider
+      - ping
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    ports:
+    - 3000:3000
+  database:
+    image: postgres:12
+    volumes:
+    - pg_data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-fider}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      interval: 5s
+      timeout: 20s
+      retries: 10

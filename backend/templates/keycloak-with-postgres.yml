@@ -1,0 +1,74 @@
+x-hosty:
+  name: "Keycloak With Postgres"
+  version: 1
+  category: "Security"
+  icon: "shield"
+  description: "Keycloak is an open-source Identity and Access Management tool."
+  web: keycloak
+  domain_input: domain
+  secrets:
+    - admin_password
+    - database_key
+  inputs:
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    database_user:
+      type: "string"
+      default: "database"
+      description: "Database username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    command:
+    - start
+    environment:
+
+    - TZ=${TIMEZONE:-UTC}
+    - KC_BOOTSTRAP_ADMIN_USERNAME=${admin_user}
+    - KC_BOOTSTRAP_ADMIN_PASSWORD=${admin_password}
+    - KC_DB=postgres
+    - KC_DB_USERNAME=${database_user}
+    - KC_DB_PASSWORD=${database_key}
+    - KC_DB_URL_PORT=5432
+    - KC_DB_URL=jdbc:postgresql://postgres/${POSTGRESQL_DATABASE:-keycloak}
+    - KC_HOSTNAME=${domain}
+    - KC_HTTP_ENABLED=${KC_HTTP_ENABLED:-true}
+    - KC_HEALTH_ENABLED=${KC_HEALTH_ENABLED:-true}
+    - KC_PROXY_HEADERS=${KC_PROXY_HEADERS:-xforwarded}
+    volumes:
+    - keycloak-data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - "exec 3<>/dev/tcp/127.0.0.1/9000; echo -e 'GET /health/ready HTTP/1.1\r\n\
+        Host: localhost:9000\r\nConnection: close\r\n\r\n' >&3;cat <&3 | grep -q '\"\
+        status\": \"UP\"' && exit 0 || exit 1"
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8080:8080
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+    - keycloak-postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${database_user}
+    - POSTGRES_PASSWORD=${database_key}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-keycloak}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

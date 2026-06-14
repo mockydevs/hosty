@@ -1,0 +1,56 @@
+x-hosty:
+  name: "Miniflux"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Miniflux is a minimalist and opinionated feed reader."
+  secrets:
+    - admin_key
+    - postgres_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  miniflux:
+    image: ghcr.io/miniflux/miniflux:latest
+    environment:
+
+      - BASE_URL=${domain}
+      - PORT=${PORT:-8080}
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-1}
+      - CREATE_ADMIN=${CREATE_ADMIN:-1}
+      - ADMIN_USERNAME=${admin_user}
+      - ADMIN_PASSWORD=${admin_key}
+      - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@postgres:5432/${POSTGRES_DB:-miniflux-db}?sslmode=disable
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+      - miniflux-postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${postgres_user}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_DB=${POSTGRES_DB:-miniflux-db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 20s
+      retries: 10

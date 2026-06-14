@@ -1,0 +1,38 @@
+x-hosty:
+  name: "Fileflows"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "FileFlows can drastically reduce your files, up to 90%, saving you space and money. No need to buy more hard drives, just shrink your files and start saving."
+  web: fileflows
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  fileflows:
+    image: revenz/fileflows
+    environment:
+
+    - _APP_URL=${domain}_FLOWS
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-America/Toronto}
+    volumes:
+    - fileflows_temp:/temp
+    - fileflows_configs:/app/Data
+    - fileflows_logs:/app/Logs
+    - fileflows_common:/app/common
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:5000/api/system/version
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 5000:5000

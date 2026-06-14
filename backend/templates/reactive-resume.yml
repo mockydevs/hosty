@@ -1,0 +1,130 @@
+x-hosty:
+  name: "Reactive Resume"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A one-of-a-kind resume builder that keeps your privacy in mind."
+  web: reactive-resume
+  domain_input: domain
+  secrets:
+    - postgres_password
+    - accesstoken_password
+    - refreshtoken_password
+    - chrometoken_password
+    - minio_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+    minio_user:
+      type: "string"
+      default: "minio"
+      description: "Minio username"
+
+services:
+  reactive-resume:
+    image: amruthpillai/reactive-resume:v4.3.7
+    environment:
+
+    - PUBLIC_URL=${domain}
+    - STORAGE_URL=${domain}/default
+    - DATABASE_URL=postgresql://${postgres_user}:${postgres_password}@postgres:5432/${POSTGRES_DB:-postgres}
+    - ACCESS_TOKEN_SECRET=${accesstoken_password}
+    - REFRESH_TOKEN_SECRET=${refreshtoken_password}
+    - CHROME_TOKEN=${chrometoken_password}
+    - CHROME_URL=ws://chrome:3000/chrome
+    - REDIS_URL=redis://redis:6379
+    - STORAGE_ENDPOINT=minio
+    - STORAGE_PORT=9000
+    - STORAGE_REGION=us-east-1
+    - STORAGE_BUCKET=default
+    - STORAGE_ACCESS_KEY=${minio_user}
+    - STORAGE_SECRET_KEY=${minio_password}
+    - STORAGE_USE_SSL=false
+    - DISABLE_SIGNUPS=${SERVICE_DISABLE_SIGNUPS:-false}
+    - DISABLE_EMAIL_AUTH=${SERVICE_DISABLE_EMAIL_AUTH:-false}
+    depends_on:
+    - postgres
+    - minio
+    - chrome
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - 'require(''http'').get(''http://127.0.0.1:3000'', res => process.exit(res.statusCode
+        === 200 ? 0 : 1)).on(''error'', () => process.exit(1))'
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    ports:
+    - 3000:3000
+  postgres:
+    image: postgres:16-alpine
+    environment:
+    - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  minio:
+    image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+    command: server /data --console-address ":9001"
+    environment:
+    - MINIO_SERVER_URL=$MINIO_SERVER_URL
+    - MINIO_BROWSER_REDIRECT_URL=$MINIO_BROWSER_REDIRECT_URL
+    - MINIO_ROOT_USER=${minio_user}
+    - MINIO_ROOT_PASSWORD=${minio_password}
+    volumes:
+    - minio-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - mc
+      - ready
+      - local
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  chrome:
+    image: ghcr.io/browserless/chrome:latest
+    platform: linux/amd64
+    environment:
+    - HEALTH=true
+    - TIMEOUT=10000
+    - CONCURRENT=10
+    - TOKEN=${chrometoken_password}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:3000/
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    command: redis-server
+    volumes:
+    - redis_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 20s
+      retries: 10

@@ -1,0 +1,29 @@
+x-hosty:
+  name: "MinIO"
+  version: 1
+  category: "Storage"
+  icon: "hard-drive"
+  description: "MinIO is a high-performance, S3-compatible object storage server for AI/ML, analytics, and cloud-native workloads."
+  ports:
+    - web
+  web: web
+  secrets:
+    - root_password
+  inputs:
+    root_user:
+      type: "string"
+      default: "minioadmin"
+      description: "Root access key (username)"
+
+services:
+  web:
+    image: docker.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: ${root_user}
+      MINIO_ROOT_PASSWORD: ${root_password}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data

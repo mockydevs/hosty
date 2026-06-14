@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Excalidraw"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Virtual whiteboard for sketching hand-drawn like diagrams"
+  web: excalidraw
+
+services:
+  excalidraw:
+    image: excalidraw/excalidraw:latest
+    environment:
+
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - --quiet
+      - http://localhost
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+    - 80:80

@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Apprise API"
+  version: 1
+  category: "Automation"
+  icon: "zap"
+  description: "Push Notifications API"
+  web: apprise-api
+
+services:
+  apprise-api:
+    image: linuxserver/apprise-api:latest
+    environment:
+
+    - PUID=1000
+    - PGID=1000
+    - TZ=UTC
+    volumes:
+    - /apprise-api/config:/config
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:8000/
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8000:8000

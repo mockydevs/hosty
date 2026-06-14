@@ -1,0 +1,64 @@
+x-hosty:
+  name: "Metamcp"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "MCP Aggregator, Orchestrator, Middleware, Gateway in one app"
+  web: app
+  domain_input: domain
+  secrets:
+    - postgres_password
+    - auth_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  app:
+    image: ghcr.io/metatool-ai/metamcp:2.4
+    environment:
+
+    - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+    - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-metamcp_db}
+    - DATABASE_URL=postgresql://${postgres_user}:${postgres_password}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-metamcp_db}
+    - APP_URL=${domain}
+    - NEXT_PUBLIC_APP_URL=${domain}
+    - BETTER_AUTH_SECRET=${auth_password}
+    - TRANSFORM_LOCALHOST_TO_DOCKER_INTERNAL=${TRANSFORM_LOCALHOST_TO_DOCKER_INTERNAL:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:12008/health
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+    - 12008:12008
+  postgres:
+    image: postgres:16-alpine
+    environment:
+    - POSTGRES_DB=${POSTGRES_DB:-metamcp_db}
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${postgres_user} -d ${POSTGRES_DB:-metamcp_db}
+      interval: 10s
+      timeout: 5s
+      retries: 5

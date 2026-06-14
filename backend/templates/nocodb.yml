@@ -1,36 +1,27 @@
 x-hosty:
-  name: "NocoDB"
+  name: "Nocodb"
   version: 1
-  category: "Databases"
-  icon: "database"
-  description: "NocoDB is an open source #NoCode platform that turns any database into a smart spreadsheet."
-  ports:
-    - web
-  web: web  # mark the web service → auto-generated external URL + HTTPS via Caddy
-  secrets:
-    - db_password
-    - jwt_secret
-  inputs:
-    version:
-      type: "string"
-      default: "2026.06.0"
-      description: "NocoDB version"
-services:
-  db:
-    image: docker.io/library/postgres:15
-    environment:
-      POSTGRES_DB: nocodb
-      POSTGRES_USER: nocodb
-      POSTGRES_PASSWORD: ${db_password}
-    volumes:
-      - db-data:/var/lib/postgresql/data
+  category: "Applications"
+  icon: "box"
+  description: "NocoDB is an open source Airtable alternative. Turns any MySQL, PostgreSQL, SQL Server, SQLite & MariaDB into a smart-spreadsheet."
+  web: nocodb
 
-  web:
-    image: docker.io/nocodb/nocodb:${version}
-    ports:
-      - 8080:8080
+services:
+  nocodb:
+    image: nocodb/nocodb
     environment:
-      NC_DB: "pg://db:5432?u=nocodb&p=${db_password}&d=nocodb"
-      NC_AUTH_JWT_SECRET: ${jwt_secret}
+
     volumes:
-      - nc-data:/usr/app/data/
+    - nocodb-data:/usr/app/data/
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8080/api/v1/health
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8080:8080

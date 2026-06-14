@@ -1,0 +1,55 @@
+x-hosty:
+  name: "Glance"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A self-hosted dashboard that puts all your feeds in one place."
+  web: glance
+
+services:
+  glance:
+    image: glanceapp/glance:latest
+    environment:
+
+    volumes:
+    - ./config:/app/config
+    - type: bind
+      source: ./config/glance.yml
+      target: /app/config/glance.yml
+      content: "pages:\n  - name: Home\n    server:\n      host: 0.0.0.0\n      port:\
+        \ 8080\n      assets-path: /user/assets\n    columns:\n      - size: small\n\
+        \        widgets:\n          - type: calendar\n\n          - type: rss\n \
+        \           limit: 10\n            collapse-after: 3\n            cache: 3h\n\
+        \            feeds:\n              - url: https://ciechanow.ski/atom.xml\n\
+        \              - url: https://www.joshwcomeau.com/rss.xml\n              \
+        \  title: Josh Comeau\n              - url: https://samwho.dev/rss.xml\n \
+        \             - url: https://awesomekling.github.io/feed.xml\n           \
+        \   - url: https://ishadeed.com/feed.xml\n                title: Ahmad Shadeed\n\
+        \n          - type: twitch-channels\n            channels:\n             \
+        \ - theprimeagen\n              - heyandras\n              - cohhcarnage\n\
+        \              - christitustech\n              - blurbs\n              - asmongold\n\
+        \              - jembawls\n\n      - size: full\n        widgets:\n      \
+        \    - type: hacker-news\n\n          - type: videos\n            channels:\n\
+        \              - UCR-DXc1voovS8nhAvccRZhg # Jeff Geerling\n              -\
+        \ UCv6J_jJa8GJqFwQNgNrMuww # ServeTheHome\n              - UCOk-gHyjcWZNj3Br4oxwh0A\
+        \ # Techno Tim\n\n          - type: reddit\n            subreddit: selfhosted\n\
+        \n      - size: small\n        widgets:\n          - type: weather\n     \
+        \       location: London, United Kingdom\n\n          - type: stocks\n   \
+        \         stocks:\n              - symbol: SPY\n                name: S&P\
+        \ 500\n              - symbol: BTC-USD\n                name: Bitcoin\n  \
+        \            - symbol: NVDA\n                name: NVIDIA\n              -\
+        \ symbol: AAPL\n                name: Apple\n              - symbol: MSFT\n\
+        \                name: Microsoft\n              - symbol: GOOGL\n        \
+        \        name: Google\n              - symbol: AMD\n                name:\
+        \ AMD\n              - symbol: RDDT\n                name: Reddit\n"
+    - glance-assets:/user/assets
+    healthcheck:
+      test:
+      - CMD
+      - echo
+      - '[+] Should be working fine.'
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8080:8080

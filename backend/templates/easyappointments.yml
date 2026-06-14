@@ -1,0 +1,55 @@
+x-hosty:
+  name: "Easyappointments"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Schedule Anything. Let's start with easy! Get the best free online appointment scheduler on your server, today."
+  web: easyappointments
+  domain_input: domain
+  secrets:
+    - easyappointments_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  easyappointments:
+    image: alextselegidis/easyappointments:latest
+    environment:
+
+    - BASE_URL=${domain}
+    - DB_HOST=mysql
+    - DB_NAME=easyappointments
+    - DB_USERNAME=root
+    - DB_PASSWORD=${easyappointments_password}
+    depends_on:
+    - mysql
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    ports:
+    - 80:80
+  mysql:
+    image: mysql:8
+    volumes:
+    - easyappointments-mysql-data:/var/lib/mysql
+    environment:
+    - MYSQL_ROOT_PASSWORD=${easyappointments_password}
+    - MYSQL_DATABASE=easyappointments
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - 127.0.0.1
+      interval: 5s
+      timeout: 20s
+      retries: 10

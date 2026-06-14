@@ -1,0 +1,54 @@
+x-hosty:
+  name: "Ryot"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Roll your own tracker! Ryot is a self-hosted platform for tracking various aspects of life such as media consumption, fitness activities, and more."
+  web: ryot
+  secrets:
+    - postgres_password
+    - ryot_key
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  ryot:
+    image: ignisda/ryot:v10.3.0
+    environment:
+
+    - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@postgresql:5432/${POSTGRES_DB}
+    - SERVER_ADMIN_ACCESS_TOKEN=${ryot_key}
+    - TZ=${TZ:-Europe/Amsterdam}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8000/health
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8000:8000
+  postgresql:
+    image: postgres:16-alpine
+    volumes:
+    - ryot_postgresql_data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-ryot-db}
+    - TZ=${TZ:-Europe/Amsterdam}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

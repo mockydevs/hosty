@@ -1,17 +1,28 @@
 x-hosty:
-  name: "phpMyAdmin"
+  name: "Phpmyadmin"
   version: 1
-  category: "Developer Tools"
+  category: "Databases"
   icon: "database"
-  description: "Deploy phpMyAdmin with arbitrary MySQL or MariaDB server login."
-  web: web
-  ports:
-    - web
+  description: "phpMyAdmin is a web-based database management tool for administering your MySQL and MariaDB databases through a user-friendly interface."
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
 
 services:
-  web:
-    image: docker.io/library/phpmyadmin:5
-    ports:
-      - 80:80
+  phpmyadmin:
+    image: lscr.io/linuxserver/phpmyadmin:latest
     environment:
-      PMA_ARBITRARY: "1"
+
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - PMA_ARBITRARY=1
+      - PMA_ABSOLUTE_URI=${domain}
+    volumes:
+      - phpmyadmin-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 2s
+      timeout: 10s
+      retries: 15

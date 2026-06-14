@@ -1,0 +1,80 @@
+x-hosty:
+  name: "Yamtrack With Postgresql"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Yamtrack is a self hosted media tracker for movies, tv shows, anime, manga, video games and books."
+  web: yamtrack
+  domain_input: domain
+  secrets:
+    - secret_password
+    - postgresql_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgresql_user:
+      type: "string"
+      default: "postgresql"
+      description: "Postgresql username"
+
+services:
+  yamtrack:
+    image: ghcr.io/fuzzygrim/yamtrack
+    environment:
+
+    - URLS=${domain}
+    - TZ=${TZ:-Europe/Berlin}
+    - SECRET=${secret_password}
+    - REGISTRATION=${REGISTRATION_ENABLED:-true}
+    - REDIS_URL=redis://redis:6379
+    - DB_HOST=postgres
+    - DB_NAME=${POSTGRESQL_DATABASE:-yamtrack-db}
+    - DB_USER=${postgresql_user}
+    - DB_PASSWORD=${postgresql_password}
+    - DB_PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://127.0.0.1:8000/health/
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8000:8000
+  postgres:
+    image: postgres:16-alpine
+    environment:
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-yamtrack-db}
+    volumes:
+    - yamtrack_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    volumes:
+    - yamtrack_redis_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 20s
+      retries: 10

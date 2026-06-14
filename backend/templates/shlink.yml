@@ -1,0 +1,49 @@
+x-hosty:
+  name: "Shlink"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "The definitive self-hosted URL shortener"
+  web: shlink
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  shlink:
+    image: shlinkio/shlink:stable
+    environment:
+
+    - DEFAULT_DOMAIN=${domain}
+    - IS_HTTPS_ENABLED=false
+    - INITIAL_API_KEY=${SERVICE_BASE64_SHLINKAPIKEY}
+    volumes:
+    - shlink-data:/etc/shlink/data
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8080/rest/v3/health
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 8080:8080
+  shlink-web:
+    image: shlinkio/shlink-web-client
+    environment:
+
+    - SHLINK_SERVER_API_KEY=${SERVICE_BASE64_SHLINKAPIKEY}
+    - SHLINK_SERVER_URL=${domain}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8080
+      interval: 2s
+      timeout: 10s
+      retries: 15

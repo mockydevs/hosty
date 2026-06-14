@@ -1,0 +1,79 @@
+x-hosty:
+  name: "Immich"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Self-hosted photo and video management solution."
+  web: immich
+  secrets:
+    - postgres_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  immich:
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    volumes:
+    - immich-uploads:/usr/src/app/upload
+    - /etc/localtime:/etc/localtime:ro
+    environment:
+
+    - UPLOAD_LOCATION=./library
+    - DB_DATA_LOCATION=./postgres
+    - DB_PASSWORD=${postgres_password}
+    - DB_USERNAME=${postgres_user}
+    - DB_DATABASE_NAME=${DB_DATABASE_NAME:-immich}
+    - TZ=${TZ:-Etc/UTC}
+    depends_on:
+      redis:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    healthcheck:
+      disable: false
+    ports:
+    - 2283:2283
+  immich-machine-learning:
+    container_name: immich_machine_learning
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+    volumes:
+    - immich-model-cache:/cache
+    environment:
+    - UPLOAD_LOCATION=./library
+    - DB_DATA_LOCATION=./postgres
+    - DB_PASSWORD=${postgres_password}
+    - DB_USERNAME=${postgres_user}
+    - DB_DATABASE_NAME=${DB_DATABASE_NAME:-immich}
+    - TZ=${TZ:-Etc/UTC}
+    healthcheck:
+      disable: false
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - PING
+      interval: 5s
+      timeout: 10s
+      retries: 20
+  database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    environment:
+      POSTGRES_PASSWORD: ${postgres_password}
+      POSTGRES_USER: ${postgres_user}
+      POSTGRES_DB: ${DB_DATABASE_NAME:-immich}
+      POSTGRES_INITDB_ARGS: --data-checksums
+      DB_STORAGE_TYPE: ${DB_STORAGE_TYPE:-SSD}
+    volumes:
+    - immich-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

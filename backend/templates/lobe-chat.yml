@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Lobe Chat"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "An open-source, modern-design AI chat framework."
+  web: lobe-chat
+  secrets:
+    - accesscode_password
+
+services:
+  lobe-chat:
+    image: lobehub/lobe-chat:1.135.5
+    environment:
+
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - OPENAI_PROXY_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+    - ACCESS_CODE=${accesscode_password}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://localhost:3210/ || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 3210:3210

@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Slash"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "An open source, self-hosted links shortener and sharing platform."
+  web: slash
+
+services:
+  slash:
+    image: yourselfhosted/slash
+    environment:
+
+    volumes:
+    - slash-data:/var/opt/slash
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:5231
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 5231:5231

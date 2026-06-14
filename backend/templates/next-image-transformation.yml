@@ -1,0 +1,37 @@
+x-hosty:
+  name: "Next Image Transformation"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Drop-in replacement for Vercel's Nextjs image optimization service."
+  web: next-image-transformation
+
+services:
+  next-image-transformation:
+    image: ghcr.io/coollabsio/next-image-transformation:latest
+    environment:
+
+    - NODE_ENV=production
+    - ALLOWED_REMOTE_DOMAINS=${ALLOWED_REMOTE_DOMAINS:-*}
+    - IMGPROXY_URL=${IMGPROXY_URL:-http://imgproxy:8080}
+    healthcheck:
+      test: wget -qO- http://127.0.0.1:3000/health || exit 1
+      interval: 2s
+      timeout: 10s
+      retries: 5
+    ports:
+    - 3000:3000
+  imgproxy:
+    image: darthsim/imgproxy
+    environment:
+    - IMGPROXY_ENABLE_WEBP_DETECTION=true
+    - IMGPROXY_JPEG_PROGRESSIVE=true
+    - IMGPROXY_USE_ETAG=true
+    healthcheck:
+      test:
+      - CMD
+      - imgproxy
+      - health
+      interval: 2s
+      timeout: 10s
+      retries: 5

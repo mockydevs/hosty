@@ -1,0 +1,98 @@
+x-hosty:
+  name: "Matrix Synapse With Postgresql"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Chat securely with your family, friends, community, or build great apps with Matrix!"
+  web: synapse
+  domain_input: domain
+  secrets:
+    - admin_password
+    - postgresql_password
+  inputs:
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    postgresql_user:
+      type: "string"
+      default: "postgresql"
+      description: "Postgresql username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  synapse:
+    image: matrixdotorg/synapse:latest
+    environment:
+
+    - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME:?}
+    - SYNAPSE_REPORT_STATS=${SYNAPSE_REPORT_STATS:-no}
+    - ENABLE_REGISTRATION=${ENABLE_REGISTRATION:-false}
+    - SERVICE_USER_ADMIN=${admin_user}
+    - SERVICE_PASSWORD_ADMIN=${admin_password}
+    - SERVICE_USER_POSTGRESQL=${postgresql_user}
+    - SERVICE_PASSWORD_POSTGRESQL=${postgresql_password}
+    - POSTGRES_DB=${POSTGRES_DB:-synapse-db}
+    volumes:
+    - synapse-data:/data
+    entrypoint:
+    - /bin/bash
+    - -c
+    - "! test -f /data/homeserver.yaml && /start.py generate\n\n# Extract secrets\
+      \ from generated config\ngrep \"registration_shared_secret\" /data/homeserver.yaml\
+      \ \\\n| awk '{print $2}' > ./registration_shared_secret\n\ngrep \"macaroon_secret_key\"\
+      \ /data/homeserver.yaml \\\n| awk '{print $2}' > ./macaroon_secret_key\n\ngrep\
+      \ \"form_secret\" /data/homeserver.yaml \\\n| awk '{print $2}' > ./form_secret\n\
+      \n# Create homeserver.yaml with PostgreSQL\ncat <<EOF > /data/homeserver.yaml\n\
+      server_name: \"${SYNAPSE_SERVER_NAME}\"\npid_file: /data/homeserver.pid\npublic_baseurl:\
+      \ \"${domain}/\"\n\nlisteners:\n  - port: 8008\n    tls: false\n\
+      \    type: http\n    x_forwarded: true\n    bind_addresses: ['0.0.0.0']\n  \
+      \  resources:\n      - names: [client, federation]\n        compress: false\n\
+      \ndatabase:\n  name: psycopg2\n  args:\n    user: ${postgresql_user}\n\
+      \    password: ${postgresql_password}\n    database: ${POSTGRES_DB:-synapse-db}\n\
+      \    host: postgres\n    port: 5432\n    cp_min: 5\n    cp_max: 10\n\nlog_config:\
+      \ \"/data/${SYNAPSE_SERVER_NAME}.log.config\"\nmedia_store_path: /data/media_store\n\
+      report_stats: ${SYNAPSE_REPORT_STATS}\n\nregistration_shared_secret: $(<./registration_shared_secret)\n\
+      macaroon_secret_key: $(<./macaroon_secret_key)\nform_secret: $(<./form_secret)\n\
+      signing_key_path: \"/data/${SYNAPSE_SERVER_NAME}.signing.key\"\n\ntrusted_key_servers:\n\
+      \  - server_name: \"matrix.org\"\nEOF\n\n[ \"${ENABLE_REGISTRATION}\" = \"true\"\
+      \ ] && ! grep \"#registration\" /data/homeserver.yaml &>/dev/null \\\n&& echo\
+      \ >> /data/homeserver.yaml \\\n&& cat <<EOF >> /data/homeserver.yaml\nenable_registration:\
+      \ true\nEOF\n\n# Register admin user if provided\nregister_admin(){\n  while\
+      \ ! curl -sf http://localhost:8008/health > /dev/null; do\n    sleep 2\n  done\n\
+      \  register_new_matrix_user \\\n    -a \\\n    -u ${admin_user} \\\n\
+      \    -p ${admin_password} \\\n    -c /data/homeserver.yaml \\\n    http://localhost:8008\
+      \ &>/dev/null\n}\n[ -n \"${admin_user}\" ] && register_admin &\n\n/start.py\n"
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8008/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+    - 8008:8008
+  postgres:
+    image: postgres:16-alpine
+    environment:
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - POSTGRES_DB=${POSTGRES_DB:-synapse-db}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C --lc-ctype=C
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB:-synapse-db}
+      interval: 5s
+      timeout: 5s
+      retries: 10

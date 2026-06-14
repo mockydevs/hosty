@@ -1,0 +1,55 @@
+x-hosty:
+  name: "Uptime Kuma With Mysql"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "Uptime Kuma is a monitoring tool for tracking the status and performance of your applications in real-time."
+  web: uptime-kuma
+  secrets:
+    - mysql_password
+    - root_password
+  inputs:
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    environment:
+
+    - TZ=${TZ:-Etc/UTC}
+    volumes:
+    - uptime-kuma-data:/app/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - extra/healthcheck
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+    - 3001:3001
+  mysql:
+    image: mysql:8
+    environment:
+    - MYSQL_USER=${mysql_user}
+    - MYSQL_PASSWORD=${mysql_password}
+    - MYSQL_ROOT_PASSWORD=${root_password}
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-uptime-kuma-db}
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - 127.0.0.1
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    volumes:
+    - mysql-data:/var/lib/mysql

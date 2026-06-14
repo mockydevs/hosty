@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Babybuddy"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "It helps parents track their baby's daily activities, growth, and health with ease."
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  babybuddy:
+    image: lscr.io/linuxserver/babybuddy:latest
+    environment:
+
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - CSRF_TRUSTED_ORIGINS=${domain}
+    volumes:
+      - babybuddy-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000"]
+      interval: 2s
+      timeout: 10s
+      retries: 15

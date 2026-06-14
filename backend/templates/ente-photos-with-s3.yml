@@ -1,0 +1,140 @@
+x-hosty:
+  name: "Ente Photos With S3"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Ente Photos is a fully open source, End to End Encrypted alternative to Google Photos and Apple Photos."
+  web: museum
+  domain_input: domain
+  secrets:
+    - postgres_password
+    - minio_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+    minio_user:
+      type: "string"
+      default: "minio"
+      description: "Minio username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  museum:
+    image: ghcr.io/ente-io/server:613c6a96390d7a624cf30b946955705d632423cc
+    environment:
+
+    - ENTE_DB_HOST=postgres
+    - ENTE_DB_PORT=5432
+    - ENTE_DB_NAME=${POSTGRES_DB:-ente_db}
+    - ENTE_DB_USER=${postgres_user}
+    - ENTE_DB_PASSWORD=${postgres_password}
+    - ENTE_HTTP_USE_TLS=${ENTE_HTTP_USE_TLS:-false}
+    - ENTE_S3_ARE_LOCAL_BUCKETS=false
+    - ENTE_S3_USE_PATH_STYLE_URLS=true
+    - ENTE_S3_B2_EU_CEN_KEY=${minio_user}
+    - ENTE_S3_B2_EU_CEN_SECRET=${minio_password}
+    - ENTE_S3_B2_EU_CEN_ENDPOINT=${domain}_9000}
+    - ENTE_S3_B2_EU_CEN_REGION=eu-central-2
+    - ENTE_S3_B2_EU_CEN_BUCKET=b2-eu-cen
+    - ENTE_KEY_ENCRYPTION=${SERVICE_REALBASE64_ENCRYPTION}
+    - ENTE_KEY_HASH=${SERVICE_REALBASE64_64_HASH}
+    - ENTE_JWT_SECRET=${SERVICE_REALBASE64_JWT}
+    - ENTE_INTERNAL_ADMIN=${ENTE_INTERNAL_ADMIN:-1580559962386438}
+    - ENTE_INTERNAL_DISABLE_REGISTRATION=${ENTE_INTERNAL_DISABLE_REGISTRATION:-false}
+    - ENTE_SMTP_HOST=${ENTE_SMTP_HOST:-smtp.gmail.com}
+    - ENTE_SMTP_PORT=${ENTE_SMTP_PORT:-587}
+    - ENTE_SMTP_USERNAME=${ENTE_SMTP_USERNAME}
+    - ENTE_SMTP_PASSWORD=${ENTE_SMTP_PASSWORD}
+    - ENTE_SMTP_EMAIL=${ENTE_SMTP_EMAIL}
+    - ENTE_SMTP_SENDER_NAME=${ENTE_SMTP_SENDER_NAME}
+    - ENTE_SMTP_ENCRYPTION=${ENTE_SMTP_ENCRYPTION:-tls}
+    volumes:
+    - museum-data:/data
+    - museum-config:/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - http://127.0.0.1:8080/ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+    - 8080:8080
+  web:
+    image: ghcr.io/ente-io/web:ca03165f5e7f2a50105e6e40019c17ae6cdd934f
+    environment:
+
+    - ENTE_API_ORIGIN=${domain}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - --fail
+      - http://localhost:3000
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  postgres:
+    image: postgres:15-alpine
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-ente_db}
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${postgres_user} -d ${POSTGRES_DB:-ente_db}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  minio:
+    image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+    command: server /data --console-address ":9001"
+    environment:
+    - MINIO_SERVER_URL=$MINIO_SERVER_URL
+    - MINIO_BROWSER_REDIRECT_URL=$MINIO_BROWSER_REDIRECT_URL
+    - MINIO_ROOT_USER=${minio_user}
+    - MINIO_ROOT_PASSWORD=${minio_password}
+    volumes:
+    - minio-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - mc
+      - ready
+      - local
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_started
+    restart: on-failure
+    exclude_from_hc: true
+    environment:
+    - MINIO_ROOT_USER=${minio_user}
+    - MINIO_ROOT_PASSWORD=${minio_password}
+    - MINIO_CORS_URLS=${domain},${domain}
+    entrypoint: "/bin/sh -c \"\n  echo \\\"MINIO_CORS_URLS: \\$${MINIO_CORS_URLS}\\\
+      \";\n  sleep 5;\n  until mc alias set minio http://minio:9000 \\$${MINIO_ROOT_USER}\
+      \ \\$${MINIO_ROOT_PASSWORD}; do\n    echo 'Waiting for MinIO...';\n    sleep\
+      \ 2;\n  done;\n  mc admin config set minio api cors_allow_origin='$MINIO_CORS_URLS'\
+      \ || true;\n  mc mb minio/b2-eu-cen --ignore-existing;\n  mc mb minio/wasabi-eu-central-2-v3\
+      \ --ignore-existing;\n  mc mb minio/scw-eu-fr-v3 --ignore-existing;\n  echo\
+      \ 'MinIO buckets and CORS configured';\n\""

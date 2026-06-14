@@ -1,0 +1,26 @@
+x-hosty:
+  name: "Imgcompress"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Offline image compression, conversion, and AI background removal for Docker homelabs."
+  web: imgcompress
+
+services:
+  imgcompress:
+    image: karimz1/imgcompress:0.6.0
+    environment:
+
+    - DISABLE_LOGO=${DISABLE_LOGO:-false}
+    - DISABLE_STORAGE_MANAGEMENT=${DISABLE_STORAGE_MANAGEMENT:-false}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:5000
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+    - 5000:5000

@@ -1,0 +1,55 @@
+x-hosty:
+  name: "Freshrss With Postgresql"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A free, self-hostable feed aggregator."
+  web: freshrss
+  secrets:
+    - postgresql_password
+  inputs:
+    postgresql_user:
+      type: "string"
+      default: "postgresql"
+      description: "Postgresql username"
+
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    environment:
+
+    - CRON_MIN=${CRON_MIN:-1,31}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-freshrss}
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - POSTGRES_HOST=freshrss-db
+    volumes:
+    - freshrss-data:/var/www/FreshRSS/data
+    - freshrss-extensions:/var/www/FreshRSS/extensions
+    depends_on:
+      freshrss-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 80:80
+  freshrss-db:
+    image: postgres:16
+    volumes:
+    - freshrss-postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-freshrss}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

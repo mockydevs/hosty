@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Readeck"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Simple web application that lets you save the precious readable content of web pages you like and want to keep forever."
+
+services:
+  readeck:
+    image: codeberg.org/readeck/readeck:latest
+    environment:
+
+      - READECK_USE_X_FORWARDED=${READECK_USE_X_FORWARDED:-true}
+    volumes:
+      - readeck_data:/readeck
+    healthcheck:
+      test:
+        - CMD
+        - /bin/readeck
+        - healthcheck
+        - '-config'
+        - config.toml
+      interval: 30s
+      timeout: 2s
+      retries: 3

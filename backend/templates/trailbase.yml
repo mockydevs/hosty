@@ -1,0 +1,17 @@
+x-hosty:
+  name: "Trailbase"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A blazingly fast Rust/SQLite/Wasmtime app server with type-safe APIs"
+  web: trailbase
+
+services:
+  trailbase:
+    image: trailbase/trailbase:0.22.6
+    environment:
+
+    volumes:
+    - trailbase-data:/app/traildepot
+    ports:
+    - 4000:4000

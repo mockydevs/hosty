@@ -1,0 +1,26 @@
+x-hosty:
+  name: "Vvveb"
+  version: 1
+  category: "CMS"
+  icon: "file-text"
+  description: "Powerful and easy to use cms to build websites, blogs or ecommerce stores."
+  web: vvveb
+
+services:
+  vvveb:
+    image: vvveb/vvvebcms:latest
+    volumes:
+    - vvveb-data:/var/www/html
+    environment:
+
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    ports:
+    - 80:80

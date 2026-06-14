@@ -1,0 +1,32 @@
+x-hosty:
+  name: "Overseerr"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Overseerr is a request management and media discovery tool built to work with your existing Plex ecosystem."
+  web: overseerr
+
+services:
+  overseerr:
+    image: sctx/overseerr:latest
+    environment:
+
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-America/Toronto}
+    volumes:
+    - overseerr-config:/app/config
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --tries
+      - '1'
+      - --no-verbose
+      - --spider
+      - http://localhost:5055/api/v1/status
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 5055:5055

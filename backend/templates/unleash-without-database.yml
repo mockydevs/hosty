@@ -1,0 +1,39 @@
+x-hosty:
+  name: "Unleash Without Database"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Open source feature flag management for enterprises."
+  web: unleash
+  domain_input: domain
+  secrets:
+    - unleash_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  unleash:
+    image: unleashorg/unleash-server:latest
+    environment:
+
+    - UNLEASH_URL=${domain}
+    - UNLEASH_DEFAULT_ADMIN_PASSWORD=${unleash_password}
+    - DATABASE_URL=${DATABASE_URL}
+    - DATABASE_SSL=${DATABASE_SSL:-false}
+    - LOG_LEVEL=warn
+    - INIT_FRONTEND_API_TOKENS=default:default:development.unleash-insecure-frontend-api-token
+    - INIT_CLIENT_API_TOKENS=default:development.unleash-insecure-api-token
+    command:
+    - node
+    - index.js
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://127.0.0.1:4242/health || exit
+        1
+      interval: 1s
+      timeout: 1m
+      retries: 5
+      start_period: 15s
+    ports:
+    - 4242:4242

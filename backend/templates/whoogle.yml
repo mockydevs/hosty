@@ -1,0 +1,24 @@
+x-hosty:
+  name: "Whoogle"
+  version: 1
+  category: "Search"
+  icon: "search"
+  description: "Whoogle is a self-hosted, privacy-focused search engine front-end for accessing Google search results without tracking and data collection."
+  web: whoogle
+
+services:
+  whoogle:
+    image: benbusby/whoogle-search:latest
+    environment:
+
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:5000
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 5000:5000

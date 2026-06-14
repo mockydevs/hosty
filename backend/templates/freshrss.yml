@@ -1,0 +1,26 @@
+x-hosty:
+  name: "Freshrss"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A free, self-hostable feed aggregator."
+  web: freshrss
+
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    environment:
+
+    - CRON_MIN=${CRON_MIN:-1,31}
+    volumes:
+    - freshrss-data:/var/www/FreshRSS/data
+    - freshrss-extensions:/var/www/FreshRSS/extensions
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 80:80

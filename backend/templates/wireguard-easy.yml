@@ -1,0 +1,40 @@
+x-hosty:
+  name: "Wireguard Easy"
+  version: 1
+  category: "Security"
+  icon: "shield"
+  description: "The easiest way to run WireGuard VPN + Web-based Admin UI."
+  web: wg-easy
+  domain_input: domain
+  secrets:
+    - admin_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:latest
+    environment:
+
+      - WG_HOST=${domain}
+      - LANG=${LANG:-en}
+      - WG_PORT=51820
+      - _PASSWORD=${admin_password}
+    volumes:
+      - wg-easy:/etc/wireguard
+    ports:
+      - 51820:51820/udp
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=1
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        eval "wgpw '${admin_password}' > /pass-hash"
+        eval "$(cat /pass-hash) dumb-init node server.js"

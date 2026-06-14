@@ -1,0 +1,35 @@
+x-hosty:
+  name: "Silverbullet"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "SilverBullet is a tool to develop, organize, and structure your personal knowledge and to make it universally accessible across all your devices."
+  web: silverbullet
+  secrets:
+    - silverbullet_password
+  inputs:
+    silverbullet_user:
+      type: "string"
+      default: "silverbullet"
+      description: "Silverbullet username"
+
+services:
+  silverbullet:
+    image: ghcr.io/silverbulletmd/silverbullet:v2
+    environment:
+
+    - SB_USER=${silverbullet_user}:${silverbullet_password}
+    volumes:
+    - silverbullet-space:/space
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - --quiet
+      - http://127.0.0.1:3000
+      interval: 2s
+      timeout: 10s
+      retries: 5
+    ports:
+    - 3000:3000

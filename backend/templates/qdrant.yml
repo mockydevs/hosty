@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Qdrant"
+  version: 1
+  category: "Databases"
+  icon: "database"
+  description: "Qdrant is a vector similarity search engine that provides a production-ready service with a convenient API to store, search, and manage points (i.e. vectors) with an additional payload."
+  web: qdrant
+  secrets:
+    - qdrantapikey_password
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    environment:
+
+    - QDRANT__SERVICE__API_KEY=${qdrantapikey_password}
+    volumes:
+    - qdrant-storage:/qdrant/storage
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 6333:6333

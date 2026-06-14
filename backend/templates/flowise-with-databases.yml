@@ -1,0 +1,95 @@
+x-hosty:
+  name: "Flowise With Databases"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "Flowise is an open source low-code tool for developers to build customized LLM orchestration flows & AI agents. Also deploys Redis, Postgres and other services."
+  web: flowise
+  secrets:
+    - flowise_password
+    - postgres_password
+    - qdrantapikey_password
+  inputs:
+    flowise_user:
+      type: "string"
+      default: "flowise"
+      description: "Flowise username"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  flowise:
+    image: flowiseai/flowise:latest
+    depends_on:
+      pg-record-manager:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    environment:
+
+    - DEBUG=${DEBUG:-false}
+    - DISABLE_FLOWISE_TELEMETRY=${DISABLE_FLOWISE_TELEMETRY:-true}
+    - PORT=${PORT:-3001}
+    - DATABASE_PATH=/root/.flowise
+    - APIKEY_PATH=/root/.flowise
+    - SECRETKEY_PATH=/root/.flowise
+    - LOG_PATH=/root/.flowise/logs
+    - BLOB_STORAGE_PATH=/root/.flowise/storage
+    - FLOWISE_USERNAME=${flowise_user}
+    - FLOWISE_PASSWORD=${flowise_password}
+    volumes:
+    - flowise-data:/root/.flowise
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:3001 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 3001:3001
+  pg-record-manager:
+    image: postgres:16
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-pg-record-manager}
+    volumes:
+    - pg-record-manager-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  redis-cache:
+    image: redis:7
+    volumes:
+    - flowise-redis-cache-data:/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - redis-cli -h localhost -p 6379 ping
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  qdrant:
+    image: qdrant/qdrant:latest
+    environment:
+
+    - QDRANT__SERVICE__API_KEY=${qdrantapikey_password}
+    volumes:
+    - flowise-qdrant-data:/qdrant/storage
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 3

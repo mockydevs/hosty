@@ -1,0 +1,61 @@
+x-hosty:
+  name: "Codimd"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Realtime collaborative markdown notes on all platforms"
+  web: codimd
+  domain_input: domain
+  secrets:
+    - sessionsecret_password
+    - postgres_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  codimd:
+    image: nabo.codimd.dev/hackmdio/hackmd:latest
+    environment:
+
+    - CMD_DOMAIN=${domain}
+    - CMD_PROTOCOL_USESSL=${CMD_PROTOCOL_USESSL:-true}
+    - CMD_SESSION_SECRET=${sessionsecret_password}
+    - CMD_USECDN=${CMD_USECDN:-false}
+    - CMD_DB_URL=postgres://${postgres_user}:${postgres_password}@postgres:5432/${POSTGRES_DB:-codimd-db}
+    - CMD_EMAIL=${CMD_EMAIL:-true}
+    - CMD_ALLOW_EMAIL_REGISTER=${CMD_ALLOW_EMAIL_REGISTER:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:3000/ || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 5
+    volumes:
+    - uploads_data:/home/hackmd/app/public/uploads
+    ports:
+    - 3000:3000
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+    - codimd_postgres_data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-codimd-db}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

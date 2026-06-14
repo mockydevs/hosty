@@ -3,15 +3,22 @@ x-hosty:
   version: 1
   category: "Monitoring"
   icon: "activity"
-  description: "A fancy self-hosted monitoring tool."
-  ports:
-    - web
-  web: web  # mark the web service → auto-generated external URL + HTTPS via Caddy
+  description: "Uptime Kuma is a monitoring tool for tracking the status and performance of your applications in real-time."
+  web: uptime-kuma
 
 services:
-  web:
-    image: docker.io/louislam/uptime-kuma:1
-    ports:
-      - 3001:3001
+  uptime-kuma:
+    image: docker.io/louislam/uptime-kuma:2
+    environment:
+
     volumes:
-      - uptime-kuma-data:/app/data
+    - uptime-kuma-data:/app/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - extra/healthcheck
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+    - 3001:3001

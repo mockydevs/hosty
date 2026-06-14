@@ -1,0 +1,61 @@
+x-hosty:
+  name: "Joplin"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Self-hosted sync server for Joplin"
+  web: joplin
+  domain_input: domain
+  secrets:
+    - postgres_key
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  postgres:
+    image: postgres:16
+    volumes:
+    - joplin-postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_PASSWORD=${postgres_key}
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_DB=joplin
+    healthcheck:
+      test:
+      - CMD
+      - pg_isready
+      - -d
+      - joplin
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  joplin:
+    image: joplin/server:latest
+    platform: linux/amd64
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+
+    - APP_BASE_URL=${domain}
+    - DB_CLIENT=pg
+    - POSTGRES_PASSWORD=${postgres_key}
+    - POSTGRES_DATABASE=joplin
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PORT=5432
+    - POSTGRES_HOST=postgres
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/22300' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 22300:22300

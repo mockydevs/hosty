@@ -1,0 +1,60 @@
+x-hosty:
+  name: "Docker Registry"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "The Docker Registry lets you distribute Docker images."
+  web: registry
+  secrets:
+    - registry_password
+  inputs:
+    registry_user:
+      type: "string"
+      default: "registry"
+      description: "Registry username"
+
+services:
+  registry:
+    image: registry:3
+    environment:
+
+    - USERNAME=${registry_user}
+    - PASSWORD=${registry_password}
+    - REGISTRY_AUTH=htpasswd
+    - REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm
+    - REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password
+    command:
+    - /entrypoint.sh
+    volumes:
+    - registry-data:/var/lib/registry
+    - type: bind
+      source: ./etc/entrypoint.sh
+      target: /entrypoint.sh
+      mode: '0755'
+      content: "#!/usr/bin/env sh\nset -e \n\nif [ -z \"$USERNAME\" ] || [ -z \"$PASSWORD\"\
+        \ ]; then\n    echo \"Error: USERNAME and PASSWORD environment variables must\
+        \ be set\"\n    exit 1\nfi\n\napk add --no-cache apache2-utils\nmkdir -p \"\
+        $(dirname \"$REGISTRY_AUTH_HTPASSWD_PATH\")\"\nchmod 755 \"$(dirname \"$REGISTRY_AUTH_HTPASSWD_PATH\"\
+        )\"\nhtpasswd -Bbc \"$REGISTRY_AUTH_HTPASSWD_PATH\" \"$USERNAME\" \"$PASSWORD\"\
+        \nregistry serve /etc/docker/registry/config.yml\n"
+    - type: bind
+      source: ./config/config.yml
+      target: /etc/docker/registry/config.yml
+      isDirectory: false
+      content: "version: 0.1\nlog:\n  fields:\n    service: registry\nstorage:\n \
+        \ cache:\n    blobdescriptor: inmemory\n  filesystem:\n    rootdirectory:\
+        \ /var/lib/registry\nhttp:\n  addr: :5000\n  headers:\n    X-Content-Type-Options:\
+        \ [nosniff]\nhealth:\n  storagedriver:\n    enabled: true\n    interval: 10s\n\
+        \    threshold: 3"
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://localhost:5000/
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 5000:5000

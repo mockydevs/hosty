@@ -1,0 +1,175 @@
+x-hosty:
+  name: "Librechat"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "Self-hosted, powerful, and privacy-focused chat UI for multiple AI models"
+  web: librechat
+  domain_input: domain
+  secrets:
+    - mongo_password
+    - meili_password
+    - jwt_password
+    - jwt_key
+    - creds_key
+    - creds_password
+    - postgres_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    mongo_user:
+      type: "string"
+      default: "mongo"
+      description: "Mongo username"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  librechat:
+    image: ghcr.io/danny-avila/librechat-dev-api:6ecd1b510faaa593ad954fb6276c18e5f12a8e53
+    environment:
+
+    - DOMAIN_CLIENT=${domain}
+    - DOMAIN_SERVER=${domain}
+    - HOST=0.0.0.0
+    - PORT=3080
+    - MONGO_URI=mongodb://${mongo_user}:${mongo_password}@mongodb:27017/librechat?authSource=admin
+    - MEILI_HOST=http://meilisearch:7700
+    - MEILI_MASTER_KEY=${meili_password}
+    - RAG_PORT=8000
+    - RAG_API_URL=http://rag-api:8000
+    - JWT_SECRET=${jwt_password}
+    - JWT_REFRESH_SECRET=${jwt_key}
+    - APP_TITLE=${APP_TITLE:-LibreChat}
+    - ALLOW_EMAIL_LOGIN=${ALLOW_EMAIL_LOGIN:-true}
+    - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-true}
+    - ALLOW_SOCIAL_LOGIN=${ALLOW_SOCIAL_LOGIN:-false}
+    - ALLOW_SOCIAL_REGISTRATION=${ALLOW_SOCIAL_REGISTRATION:-false}
+    - ALLOW_PASSWORD_RESET=${ALLOW_PASSWORD_RESET:-false}
+    - ALLOW_UNVERIFIED_EMAIL_LOGIN=${ALLOW_UNVERIFIED_EMAIL_LOGIN:-true}
+    - CREDS_KEY=${creds_key}
+    - CREDS_IV=${creds_password}
+    - ANTHROPIC_API_KEY=${SERVICE_ANTHROPIC_API_KEY:-user_provided}
+    - GOOGLE_KEY=${SERVICE_GOOGLE_API_KEY:-user_provided}
+    - OPENAI_API_KEY=${SERVICE_OPENAI_API_KEY:-user_provided}
+    - ASSISTANTS_API_KEY=${SERVICE_ASSISTANTS_API_KEY:-user_provided}
+    - DEBUG_LOGGING=${DEBUG_LOGGING:-false}
+    - DEBUG_OPENAI=${DEBUG_OPENAI:-false}
+    - DEBUG_PLUGINS=${DEBUG_OPENAI:-false}
+    - NO_INDEX=${NO_INDEX:-true}
+    volumes:
+    - librechat-images:/app/client/public/images
+    - librechat-logs:/app/api/logs
+    - librechat-uploads:/app/uploads
+    - type: bind
+      source: ./librechat.yaml
+      target: /app/librechat.yaml
+      content: 'version: 1.2.8
+
+        '
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      vectordb:
+        condition: service_healthy
+      rag-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://127.0.0.1:3080/health
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    ports:
+    - 3080:3080
+  mongodb:
+    image: mongo:8
+    environment:
+    - MONGO_INITDB_ROOT_USERNAME=${mongo_user}
+    - MONGO_INITDB_ROOT_PASSWORD=${mongo_password}
+    volumes:
+    - mongodb-data:/data/db
+    healthcheck:
+      test:
+      - CMD
+      - mongosh
+      - --eval
+      - db.runCommand('ping').ok
+      - 127.0.0.1:27017/test
+      - --quiet
+      interval: 5s
+      timeout: 10s
+      retries: 3
+  meilisearch:
+    image: getmeili/meilisearch:v1.35.1
+    environment:
+    - MEILI_MASTER_KEY=${meili_password}
+    - MEILI_NO_ANALYTICS=${MEILI_NO_ANALYTICS:-false}
+    - MEILI_ENV=production
+    - MEILI_HOST=http://meilisearch:7700
+    volumes:
+    - meilisearch-data:/meili_data
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:7700/health
+      interval: 2s
+      timeout: 10s
+      retries: 15
+  vectordb:
+    image: ankane/pgvector:v0.5.1
+    environment:
+    - POSTGRES_DB=rag
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+    - vectordb-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD
+      - pg_isready
+      - --username=${postgres_user}
+      - --host=127.0.0.1
+      - --port=5432
+      - --dbname=rag
+      interval: 2s
+      timeout: 1m
+      retries: 5
+      start_period: 10s
+  rag-api:
+    image: ghcr.io/danny-avila/librechat-rag-api-dev-lite:v0.7.3
+    environment:
+    - POSTGRES_DB=rag
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - DB_HOST=vectordb
+    - DB_USER=${postgres_user}
+    - DB_PASSWORD=${postgres_password}
+    - DB_NAME=rag
+    - RAG_PORT=8000
+    - RAG_OPENAI_API_KEY=${SERVICE_OPENAI_API_KEY:-user_provided}
+    depends_on:
+      vectordb:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')
+      interval: 5s
+      timeout: 10s
+      retries: 10

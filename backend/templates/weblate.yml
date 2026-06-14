@@ -1,0 +1,85 @@
+x-hosty:
+  name: "Weblate"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Weblate is a libre software web-based continuous localization system."
+  web: weblate
+  domain_input: domain
+  secrets:
+    - weblate_password
+    - postgres_password
+    - redis_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  weblate:
+    image: weblate/weblate:latest
+    environment:
+
+    - WEBLATE_SITE_DOMAIN=${domain}
+    - WEBLATE_ADMIN_NAME=${WEBLATE_ADMIN_NAME:-Admin}
+    - WEBLATE_ADMIN_EMAIL=${WEBLATE_ADMIN_EMAIL:-admin@example.com}
+    - WEBLATE_ADMIN_PASSWORD=${weblate_password}
+    - DEFAULT_FROM_EMAIL=${WEBLATE_ADMIN_EMAIL:-admin@example.com}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_DATABASE=${POSTGRES_DB:-weblate}
+    - POSTGRES_HOST=postgresql
+    - POSTGRES_PORT=5432
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - REDIS_PASSWORD=${redis_password}
+    volumes:
+    - weblate-data:/app/data
+    - weblate-cache:/app/cache
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8080
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    ports:
+    - 8080:8080
+  postgresql:
+    image: postgres:16-alpine
+    volumes:
+    - postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=${POSTGRES_DB:-weblate}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    command: '--appendonly yes --requirepass ${redis_password}
+
+      '
+    environment:
+    - REDIS_PASSWORD=${redis_password}
+    volumes:
+    - weblate-redis-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 20s
+      retries: 10

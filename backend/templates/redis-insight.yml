@@ -1,0 +1,35 @@
+x-hosty:
+  name: "Redis Insight"
+  version: 1
+  category: "Databases"
+  icon: "database"
+  description: "Redis Insight lets you do both GUI- and CLI-based interactions in a fully-featured desktop GUI client."
+  web: redisinsight
+  secrets:
+    - ri_password
+
+services:
+  redisinsight:
+    image: redis/redisinsight:2.70
+    environment:
+
+    - RI_APP_HOST=0.0.0.0
+    - RI_APP_PORT=5540
+    - RI_ENCRYPTION_KEY=${ri_password}_ENCRYPTION_KEY}
+    - RI_LOG_LEVEL=${RI_LOG_LEVEL:-info}
+    - RI_FILES_LOGGER=${RI_FILES_LOGGER:-true}
+    - RI_STDOUT_LOGGER=${RI_STDOUT_LOGGER:-true}
+    volumes:
+    - redis_insight_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - http://0.0.0.0:5540/api/health
+      interval: 10s
+      retries: 3
+      timeout: 10s
+      start_period: 10s
+    ports:
+    - 5540:5540

@@ -1,0 +1,62 @@
+x-hosty:
+  name: "Tolgee"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Tolgee is a localization management platform for developers and translators."
+  web: tolgee
+  secrets:
+    - tolgee_password
+    - jwt_password
+    - postgresql_password
+  inputs:
+    postgresql_user:
+      type: "string"
+      default: "postgresql"
+      description: "Postgresql username"
+
+services:
+  tolgee:
+    image: tolgee/tolgee
+    environment:
+
+    - TOLGEE_AUTHENTICATION_ENABLED=true
+    - TOLGEE_AUTHENTICATION_INITIAL_PASSWORD=${tolgee_password}
+    - TOLGEE_AUTHENTICATION_INITIAL_USERNAME=admin
+    - TOLGEE_AUTHENTICATION_JWT_SECRET=${jwt_password}
+    - TOLGEE_POSTGRES_AUTOSTART_ENABLED=false
+    - SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql:5432/${POSTGRES_DB:-tolgee}
+    - SPRING_DATASOURCE_USERNAME=${postgresql_user}
+    - SPRING_DATASOURCE_PASSWORD=${postgresql_password}
+    volumes:
+    - tolgee-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8080
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+    - 8080:8080
+  postgresql:
+    image: postgres:16-alpine
+    volumes:
+    - tolgee-postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-tolgee}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

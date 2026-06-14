@@ -1,0 +1,24 @@
+x-hosty:
+  name: "Vert"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "The next-generation file converter. Open source, fully local and free forever."
+  web: vert
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  vert:
+    image: ghcr.io/vert-sh/vert:latest
+    environment:
+
+    - PUB_VERT_URL=${domain}_80}
+    - PUB_HOSTNAME=${domain}_80}
+    - PUB_PORT=80
+    - PUB_ENV=production
+    ports:
+    - 80:80

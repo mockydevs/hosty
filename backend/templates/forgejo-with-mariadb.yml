@@ -1,0 +1,64 @@
+x-hosty:
+  name: "Forgejo With Mariadb"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Forgejo is a self-hosted lightweight software forge. Easy to install and low maintenance, it just does the job."
+  web: forgejo
+  domain_input: domain
+  secrets:
+    - mysql_password
+    - mysqlroot_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:8
+    environment:
+
+      - FORGEJO__server__ROOT_URL=${domain}
+      - FORGEJO__migrations__ALLOWED_DOMAINS=${FORGEJO__migrations__ALLOWED_DOMAINS}
+      - FORGEJO__migrations__ALLOW_LOCALNETWORKS=${FORGEJO__migrations__ALLOW_LOCALNETWORKS-false}
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=mysql
+      - FORGEJO__database__HOST=mariadb
+      - FORGEJO__database__NAME=${MYSQL_DATABASE-forgejo}
+      - FORGEJO__database__USER=${mysql_user}
+      - FORGEJO__database__PASSWD=${mysql_password}
+    volumes:
+      - forgejo-data:/data
+      - forgejo-timezone:/etc/timezone:ro
+      - forgejo-localtime:/etc/localtime:ro
+    ports:
+      - 22222:22
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+
+  mariadb:
+    image: mariadb:11
+    volumes:
+      - forgejo-mariadb-data:/var/lib/mysql
+    environment:
+      - MYSQL_USER=${mysql_user}
+      - MYSQL_PASSWORD=${mysql_password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_ROOT_PASSWORD=${mysqlroot_password}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 20s
+      retries: 10

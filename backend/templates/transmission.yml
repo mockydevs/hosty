@@ -1,0 +1,41 @@
+x-hosty:
+  name: "Transmission"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Fast, easy, and free BitTorrent client."
+  web: transmission
+  secrets:
+    - admin_password
+  inputs:
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+
+services:
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    environment:
+
+    - PUID=1000
+    - PGID=1000
+    - USER=${admin_user}
+    - PASS=${admin_password}
+    volumes:
+    - transmission-config:/config
+    - transmission-downloads:/downloads
+    - transmission-watch:/watch
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sSfL
+      - -u
+      - ${admin_user}:${admin_password}
+      - http://localhost:9091/
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+    - 9091:9091

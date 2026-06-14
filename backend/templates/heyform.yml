@@ -1,0 +1,73 @@
+x-hosty:
+  name: "Heyform"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Allows anyone to create engaging conversational forms for surveys, questionnaires, quizzes, and polls. No coding skills required."
+  web: heyform
+  domain_input: domain
+  secrets:
+    - keydb_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  heyform:
+    image: heyform/community-edition:latest
+    volumes:
+    - heyform-assets:/app/static/upload
+    depends_on:
+      mongo:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+    environment:
+
+    - APP_HOMEPAGE_URL=${domain}
+    - SESSION_KEY=${SERVICE_BASE64_64_SESSION}
+    - FORM_ENCRYPTION_KEY=${SERVICE_BASE64_64_FORM}
+    - MONGO_URI=mongodb://mongo:27017/heyform
+    - REDIS_HOST=keydb
+    - REDIS_PORT=6379
+    - REDIS_PASSWORD=${keydb_password}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:9157 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 9157:9157
+  mongo:
+    image: percona/percona-server-mongodb:latest
+    volumes:
+    - heyform-mongo-data:/data/db
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - echo 'ok' > /dev/null 2>&1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+  keydb:
+    image: eqalpha/keydb:latest
+    command: keydb-server --appendonly yes
+    environment:
+    - KEYDB_PASSWORD=${keydb_password}
+    volumes:
+    - heyform-keydb-data:/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - keydb-cli
+      - --pass
+      - ${keydb_password}
+      - ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s

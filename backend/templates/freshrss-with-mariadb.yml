@@ -1,0 +1,58 @@
+x-hosty:
+  name: "Freshrss With Mariadb"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A free, self-hostable feed aggregator."
+  web: freshrss
+  secrets:
+    - mariadb_password
+    - root_password
+  inputs:
+    mariadb_user:
+      type: "string"
+      default: "mariadb"
+      description: "Mariadb username"
+
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    environment:
+
+    - CRON_MIN=${CRON_MIN:-1,31}
+    - MARIADB_DB=${MARIADB_DATABASE:-freshrss}
+    - MARIADB_USER=${mariadb_user}
+    - MARIADB_PASSWORD=${mariadb_password}
+    volumes:
+    - freshrss-data:/var/www/FreshRSS/data
+    - freshrss-extensions:/var/www/FreshRSS/extensions
+    depends_on:
+      freshrss-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 80:80
+  freshrss-db:
+    image: mariadb:11
+    volumes:
+    - mariadb-data:/var/lib/mysql
+    environment:
+    - MYSQL_ROOT_PASSWORD=${root_password}
+    - MYSQL_DATABASE=${MARIADB_DATABASE:-freshrss}
+    - MYSQL_USER=${mariadb_user}
+    - MYSQL_PASSWORD=${mariadb_password}
+    healthcheck:
+      test:
+      - CMD
+      - healthcheck.sh
+      - --connect
+      - --innodb_initialized
+      interval: 5s
+      timeout: 20s
+      retries: 10

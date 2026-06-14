@@ -1,0 +1,52 @@
+x-hosty:
+  name: "Neon Ws Proxy"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "The database you love, on a serverless platform designed to help you build reliable and scalable applications faster."
+  web: neon-proxy
+  secrets:
+    - postgresql_password
+  inputs:
+    postgresql_user:
+      type: "string"
+      default: "postgresql"
+      description: "Postgresql username"
+
+services:
+  neon-proxy:
+    image: ghcr.io/neondatabase/wsproxy:latest
+    environment:
+
+    - APPEND_PORT=postgres:5432
+    - ALLOW_ADDR_REGEX=.*
+    - LOG_TRAFFIC=false
+    - LOG_CONN_INFO=true
+    restart: unless-stopped
+    depends_on:
+    - postgres
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - nc -z 127.0.0.1 80
+      interval: 5s
+      timeout: 2s
+      retries: 20
+    ports:
+    - 2112:2112
+  postgres:
+    image: postgres:17-alpine
+    volumes:
+    - postgresql-data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-postgres}
+    - POSTGRES_HOST_AUTH_METHOD=password
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

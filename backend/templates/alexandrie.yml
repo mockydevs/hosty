@@ -1,0 +1,111 @@
+x-hosty:
+  name: "Alexandrie"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A powerful Markdown workspace designed for speed, clarity, and creativity."
+  web: frontend
+  domain_input: domain
+  secrets:
+    - jwt_password
+    - mysql_password
+    - rustfs_password
+    - mysqlroot_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+    rustfs_user:
+      type: "string"
+      default: "rustfs"
+      description: "Rustfs username"
+
+services:
+  frontend:
+    image: ghcr.io/smaug6739/alexandrie-frontend:v8.7.2
+    environment:
+
+    - PORT=8200
+    - NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE=${CONFIG_DISABLE_SIGNUP:-false}
+    - NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE=${CONFIG_DISABLE_LANDING:-false}
+    - NUXT_PUBLIC_BASE_API=${domain}
+    - NUXT_PUBLIC_BASE_CDN=${domain}
+    - NUXT_PUBLIC_CDN_ENDPOINT=${CDN_ENDPOINT:-/alexandrie/}
+    - NUXT_PUBLIC_BASE_URL=${domain}
+    depends_on:
+    - backend
+    ports:
+    - 8200:8200
+  backend:
+    image: ghcr.io/smaug6739/alexandrie-backend:v8.7.2
+    environment:
+
+    - BACKEND_PORT=8201
+    - GIN_MODE=release
+    - JWT_SECRET=${jwt_password}
+    - COOKIE_DOMAIN=${domain}
+    - FRONTEND_URL=${domain}
+    - ALLOW_UNSECURE=${ALLOW_UNSECURE:-false}
+    - DATABASE_HOST=mysql
+    - DATABASE_PORT=3306
+    - DATABASE_NAME=${MYSQL_DATABASE:-alexandrie-db}
+    - DATABASE_USER=${mysql_user}
+    - DATABASE_PASSWORD=${mysql_password}
+    - MINIO_ENDPOINT=rustfs:9000
+    - MINIO_PUBLIC_URL=${domain}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESSKEY=${rustfs_user}
+    - MINIO_SECRETKEY=${rustfs_password}
+    - MINIO_BUCKET=${MINIO_BUCKET:-alexandrie}
+    - SMTP_HOST=${SMTP_HOST:-}
+    - SMTP_MAIL=${SMTP_MAIL:-}
+    - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+  mysql:
+    image: mysql:8.0
+    environment:
+    - MYSQL_ROOT_PASSWORD=${mysqlroot_password}
+    - MYSQL_USER=${mysql_user}
+    - MYSQL_PASSWORD=${mysql_password}
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-alexandrie-db}
+    volumes:
+    - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - localhost
+      - -u
+      - root
+      - -p${mysqlroot_password}
+      timeout: 5s
+      interval: 10s
+      retries: 5
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.90
+    environment:
+
+    - RUSTFS_ACCESS_KEY=${rustfs_user}
+    - RUSTFS_SECRET_KEY=${rustfs_password}
+    - RUSTFS_CONSOLE_ENABLE=${RUSTFS_CONSOLE_ENABLE:-false}
+    - RUSTFS_LOG_LEVEL=${RUSTFS_LOG_LEVEL:-info}
+    volumes:
+    - rustfs-data:/data
+    - rustfs-logs:/logs
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - nc -z localhost 9000 || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5

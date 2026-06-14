@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Organizr"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Homelab Services Organizer"
+  web: organizr
+
+services:
+  organizr:
+    image: organizr/organizr:latest
+    environment:
+
+    - branch=${branch:-v2-master}
+    volumes:
+    - organizr-data:/config
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -sf http://localhost:80 || exit 1
+      interval: 10s
+      timeout: 1s
+      retries: 3
+    ports:
+    - 80:80

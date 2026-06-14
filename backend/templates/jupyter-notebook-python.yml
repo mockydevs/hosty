@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Jupyter Notebook Python"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Jupyter Notebook is an open-source web application that allows you to create and share documents that contain live code, equations, visualizations, and narrative text."
+  web: jupyter-notebook-python
+
+services:
+  jupyter-notebook-python:
+    image: quay.io/jupyter/base-notebook:latest
+    environment:
+
+    volumes:
+    - /jupyter:/home/jovyan/work
+    command: start-notebook.sh
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:8888/
+      interval: 30s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 8888:8888

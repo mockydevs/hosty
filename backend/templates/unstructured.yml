@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Unstructured"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "Unstructured provides a platform and tools to ingest and process unstructured documents for Retrieval Augmented Generation (RAG) and model fine-tuning."
+  web: unstructured
+  secrets:
+    - apikey_password
+
+services:
+  unstructured:
+    image: downloads.unstructured.io/unstructured-io/unstructured-api:latest
+    environment:
+
+    - UNSTRUCTURED_API_KEY=${apikey_password}
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://0.0.0.0:8000/healthcheck
+      interval: 5s
+      timeout: 30s
+      retries: 10
+    ports:
+    - 8000:8000

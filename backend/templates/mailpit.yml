@@ -1,0 +1,37 @@
+x-hosty:
+  name: "Mailpit"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Email & SMTP testing tool with API for developers"
+  web: mailpit
+
+services:
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - 1025:1025
+    volumes:
+      - "mailpit-data:/data"
+      - type: bind
+        source: ./htpasswd
+        target: /data/htpasswd
+        isDirectory: false
+        content: ""
+    environment:
+
+      - MP_MAX_MESSAGES=5000
+      - MP_DATABASE=/data/mailpit.db
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+      - MP_UI_AUTH_FILE=/data/htpasswd
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/mailpit",
+          "readyz",
+        ]
+      interval: 5s
+      timeout: 20s
+      retries: 10

@@ -1,0 +1,83 @@
+x-hosty:
+  name: "Strapi"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Open-source headless CMS to build powerful APIs with built-in content management."
+  web: strapi
+  domain_input: domain
+  secrets:
+    - postgresql_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgresql_user:
+      type: "string"
+      default: "postgresql"
+      description: "Postgresql username"
+
+services:
+  strapi:
+    image: elestio/strapi-production:v5.33.4
+    entrypoint: /bin/sh
+    command:
+    - -c
+    - "cat > /opt/app/src/admin/vite.config.js << 'EOFVITE'\nconst { mergeConfig }\
+      \ = require('vite');\nmodule.exports = (config) => {\n  return mergeConfig(config,\
+      \ {\n    resolve: {\n      alias: {\n        '@': '/src',\n      },\n    },\n\
+      \    server: {\n      allowedHosts: ['${domain}']\n    }\n  });\n\
+      };\nEOFVITE\nexec npm run develop\n"
+    environment:
+
+    - DATABASE_CLIENT=postgres
+    - DATABASE_HOST=postgresql
+    - DATABASE_PORT=5432
+    - DATABASE_NAME=${POSTGRESQL_DATABASE:-strapi}
+    - DATABASE_USERNAME=${postgresql_user}
+    - DATABASE_PASSWORD=${postgresql_password}
+    - JWT_SECRET=$SERVICE_BASE64_64_SECRET
+    - ADMIN_JWT_SECRET=$SERVICE_BASE64_64_SECRET
+    - APP_KEYS=$SERVICE_BASE64_64_KEY
+    - STRAPI_TELEMETRY_DISABLED=${STRAPI_TELEMETRY_DISABLED:-true}
+    - STRAPI_LICENSE=${STRAPI_LICENSE}
+    - NODE_ENV=${NODE_ENV:-development}
+    - BROWSER=${BROWSER:-true}
+    - STRAPI_PLUGIN_I18N_INIT_LOCALE_CODE=${STRAPI_PLUGIN_I18N_INIT_LOCALE_CODE:-en}
+    - STRAPI_ENFORCE_SOURCEMAPS=${STRAPI_ENFORCE_SOURCEMAPS:-false}
+    - FAST_REFRESH=${FAST_REFRESH:-true}
+    volumes:
+    - strapi-config:/opt/app/config
+    - strapi-src:/opt/app/src
+    - strapi-uploads:/opt/app/public/uploads
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:1337/
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+    - 1337:1337
+  postgresql:
+    image: elestio/postgres:latest
+    environment:
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-strapi}
+    - POSTGRES_USER=${postgresql_user}
+    - POSTGRES_PASSWORD=${postgresql_password}
+    - PGDATA=/var/lib/postgresql/data
+    volumes:
+    - strapi-postgresql-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10

@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Firefox"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Fast, private, and self-hosted secure browser for browsing without limits."
+  web: firefox
+
+services:
+  firefox:
+    image: jlesage/firefox
+    environment:
+
+    volumes:
+    - firefox_config:/config
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:5800/
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 5800:5800

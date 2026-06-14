@@ -1,0 +1,21 @@
+x-hosty:
+  name: "Proxyscotch"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A simple proxy server created for https://hoppscotch.io - CORS proxy"
+  web: proxyscotch
+  secrets:
+    - token_password
+
+services:
+  proxyscotch:
+    image: hoppscotch/proxyscotch:v0.1.4
+    environment:
+
+    - PROXYSCOTCH_TOKEN=${token_password}
+    - PROXYSCOTCH_ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    - PROXYSCOTCH_BANNED_OUTPUTS=${BANNED_OUTPUTS}
+    - PROXYSCOTCH_BANNED_DESTS=${BANNED_DESTS}
+    ports:
+    - 9159:9159

@@ -1,0 +1,38 @@
+x-hosty:
+  name: "Plex"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Plex organizes video, music and photos from personal media libraries and streams them to smart TVs, streaming boxes and mobile devices."
+  web: plex
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    environment:
+
+    - _APP_URL=${domain}
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-America/Toronto}
+    - PLEX_CLAIM=${PLEX_CLAIM}
+    volumes:
+    - plex-config:/config
+    - plex-tv:/tv
+    - plex-movies:/movies
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:32400/identity
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 32400:32400

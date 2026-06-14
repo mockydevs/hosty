@@ -1,0 +1,33 @@
+x-hosty:
+  name: "Dozzle With Auth"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Dozzle is a simple and lightweight web UI for Docker logs."
+  web: dozzle
+
+services:
+  dozzle:
+    image: amir20/dozzle:latest
+    environment:
+
+    - DOZZLE_AUTH_PROVIDER=simple
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - type: bind
+      source: ./data/users.yml
+      target: /data/users.yml:ro
+      content: "users:\n  # \"admin\" is the username\n  admin:\n    email: test@email.com\n\
+        \    name: Admin\n    # A sha-256 hash of the password you want to use. Can\
+        \ be computed with \"echo -n password | shasum -a 256\". Default password\
+        \ is \"Test\".\n    password: $2a$11$viucCvFLlHWvBNOOI6uypuVU.D09UWb.zswRxEg0MkDPi1q/bKbdG\n"
+    healthcheck:
+      test:
+      - CMD
+      - /dozzle
+      - healthcheck
+      interval: 3s
+      timeout: 30s
+      retries: 5
+    ports:
+    - 8080:8080

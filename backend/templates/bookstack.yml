@@ -1,0 +1,83 @@
+x-hosty:
+  name: "Bookstack"
+  version: 1
+  category: "CMS"
+  icon: "file-text"
+  description: "BookStack is a simple, self-hosted, easy-to-use platform for organising and storing information"
+  web: bookstack
+  domain_input: domain
+  secrets:
+    - appkey_password
+    - mysql_password
+    - mysqlroot_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+
+services:
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    environment:
+
+    - APP_URL=${domain}
+    - APP_KEY=${appkey_password}
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-Europe/Berlin}
+    - DB_HOST=mariadb
+    - DB_PORT=3306
+    - DB_USERNAME=${mysql_user}
+    - DB_PASSWORD=${mysql_password}
+    - DB_DATABASE=${MYSQL_DATABASE:-bookstackapp}
+    - QUEUE_CONNECTION=${QUEUE_CONNECTION}
+    - GITHUB_APP_ID=${GITHUB_APP_ID}
+    - GITHUB_APP_SECRET=${GITHUB_APP_SECRET}
+    - MAIL_DRIVER=${MAIL_DRIVER:-smtp}
+    - MAIL_HOST=${MAIL_HOST}
+    - MAIL_PORT=${MAIL_PORT:-587}
+    - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+    - MAIL_USERNAME=${MAIL_USERNAME}
+    - MAIL_PASSWORD=${MAIL_PASSWORD}
+    - MAIL_FROM=${MAIL_FROM}
+    - MAIL_FROM_NAME=${MAIL_FROM_NAME:-BookStack}
+    volumes:
+    - bookstack-data:/config
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://127.0.0.1:80/
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+    - 80:80
+  mariadb:
+    image: lscr.io/linuxserver/mariadb:latest
+    environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-Europe/Berlin}
+    - MYSQL_ROOT_PASSWORD=${mysqlroot_password}
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-bookstack}
+    - MYSQL_USER=${mysql_user}
+    - MYSQL_PASSWORD=${mysql_password}
+    volumes:
+    - bookstack-mariadb-data:/config
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - 127.0.0.1
+      interval: 5s
+      timeout: 20s
+      retries: 10

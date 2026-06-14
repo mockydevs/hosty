@@ -1,0 +1,31 @@
+x-hosty:
+  name: "Emby"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "A media server software that allows you to organize, stream, and access your multimedia content effortlessly."
+  web: emby
+
+services:
+  emby:
+    image: lscr.io/linuxserver/emby:latest
+    environment:
+
+    - PUID=1000
+    - PGID=1000
+    - TZ=Europe/Madrid
+    volumes:
+    - emby-config:/config
+    - emby-tvshows:/tvshows
+    - emby-movies:/movies
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8096
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 8096:8096

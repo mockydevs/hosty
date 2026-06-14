@@ -1,0 +1,65 @@
+x-hosty:
+  name: "Matrix Synapse With Sqlite"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Chat securely with your family, friends, community, or build great apps with Matrix!"
+  web: synapse
+  domain_input: domain
+  secrets:
+    - admin_password
+  inputs:
+    admin_user:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  synapse:
+    image: matrixdotorg/synapse:latest
+    environment:
+
+    - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME:?}
+    - SYNAPSE_REPORT_STATS=${SYNAPSE_REPORT_STATS:-no}
+    - ENABLE_REGISTRATION=${ENABLE_REGISTRATION:-false}
+    - SERVICE_USER_ADMIN=${admin_user}
+    - SERVICE_PASSWORD_ADMIN=${admin_password}
+    volumes:
+    - synapse-data:/data
+    entrypoint: /bin/bash
+    command:
+    - -c
+    - "# Generate config on first run\nif [ ! -f /data/homeserver.yaml ]; then\n \
+      \ # Generate default config using SYNAPSE_SERVER_NAME (permanent, used in user\
+      \ IDs)\n  /start.py generate\n\n  # Set public_baseurl to actual deployment\
+      \ URL (may differ from server_name)\n  # This allows hosting at matrix.example.org\
+      \ while server_name is example.org\n  if ! grep -q \"public_baseurl\" /data/homeserver.yaml;\
+      \ then\n    sed -i \"/^server_name:/a public_baseurl: ${domain}/\"\
+      \ /data/homeserver.yaml\n  fi\n\n  # Configure listener for reverse proxy\n\
+      \  sed -i 's/bind_addresses: \\[.*\\]/bind_addresses: [\"0.0.0.0\"]/' /data/homeserver.yaml\n\
+      \  sed -i '/x_forwarded:/d' /data/homeserver.yaml\n  sed -i '/type: http/a \\\
+      \    x_forwarded: true' /data/homeserver.yaml\n\n  # Enable registration if\
+      \ requested\n  if [ \"${ENABLE_REGISTRATION}\" = \"true\" ] && ! grep -q \"\
+      enable_registration\" /data/homeserver.yaml; then\n    echo \"enable_registration:\
+      \ true\" >> /data/homeserver.yaml\n  fi\nfi\n\n# Register admin user if credentials\
+      \ provided\nif [ -n \"${admin_user}\" ] && [ -n \"${admin_password}\"\
+      \ ]; then\n  (\n    while ! curl -sf http://localhost:8008/health > /dev/null\
+      \ 2>&1; do\n      sleep 2\n    done\n    register_new_matrix_user -a \\\n  \
+      \    -u \"${admin_user}\" \\\n      -p \"${admin_password}\"\
+      \ \\\n      -c /data/homeserver.yaml \\\n      http://localhost:8008 2>/dev/null\
+      \ || true\n  ) &\nfi\n\nexec /start.py\n"
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8008/health
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    ports:
+    - 8008:8008

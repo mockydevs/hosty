@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Librespeed"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Self-hosted lightweight Speed Test."
+  web: librespeed
+
+services:
+  librespeed:
+    container_name: librespeed
+    image: ghcr.io/librespeed/speedtest:latest
+    environment:
+
+    - MODE=standalone
+    - TELEMETRY=false
+    - DISTANCE=km
+    - WEBPORT=82
+    healthcheck:
+      test: curl 127.0.0.1:82 || exit 1
+      timeout: 1s
+      interval: 1m0s
+      retries: 1
+    ports:
+    - 82:82

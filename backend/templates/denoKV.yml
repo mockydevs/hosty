@@ -1,0 +1,31 @@
+x-hosty:
+  name: "Denokv"
+  version: 1
+  category: "Databases"
+  icon: "database"
+  description: "The Denoland key-value database"
+  web: denokv
+  secrets:
+    - denokv_password
+
+services:
+  denokv:
+    image: ghcr.io/denoland/denokv:latest
+    environment:
+    - ACCESS_TOKEN=${denokv_password}
+
+    volumes:
+    - ${COOLIFY_VOLUME_APP}:/data
+    command: --sqlite-path /data/denokv.sqlite serve --access-token ${denokv_password}
+    healthcheck:
+      test:
+      - CMD
+      - nc
+      - -zv
+      - 127.0.0.1
+      - '4512'
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 4512:4512

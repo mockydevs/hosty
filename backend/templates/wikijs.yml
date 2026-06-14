@@ -1,0 +1,49 @@
+x-hosty:
+  name: "Wikijs"
+  version: 1
+  category: "CMS"
+  icon: "file-text"
+  description: "The most powerful and extensible open source Wiki software."
+  web: wikijs
+  secrets:
+    - postgres_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  wikijs:
+    image: ghcr.io/requarks/wiki:2
+    depends_on:
+    - postgres
+    environment:
+
+    - DB_TYPE=postgres
+    - DB_HOST=postgres
+    - DB_PORT=5432
+    - DB_USER=${postgres_user}
+    - DB_PASS=${postgres_password}
+    - DB_NAME=${POSTGRESQL_DATABASE:-wiki-db}
+    healthcheck:
+      test: curl --fail http://localhost:3000 || exit 1
+    ports:
+    - 3000:3000
+  postgres:
+    image: postgres:16-alpine
+    environment:
+    - POSTGRES_DB=${POSTGRESQL_DATABASE:-wiki-db}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_USER=${postgres_user}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    logging:
+      driver: none
+    volumes:
+    - wikijs-postgresql-data:/var/lib/postgresql/data

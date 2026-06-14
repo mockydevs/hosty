@@ -1,0 +1,28 @@
+x-hosty:
+  name: "Pairdrop"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Pairdrop is a self-hosted file sharing and collaboration platform, offering secure file sharing and collaboration capabilities for efficient teamwork."
+  web: pairdrop
+
+services:
+  pairdrop:
+    image: lscr.io/linuxserver/pairdrop:latest
+    environment:
+
+    - PUID=1000
+    - PGID=1000
+    - TZ=Europe/Madrid
+    - DEBUG_MODE=false
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:3000
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 3000:3000

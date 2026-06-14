@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Statusnook"
+  version: 1
+  category: "Monitoring"
+  icon: "activity"
+  description: "Effortlessly deploy a status page and start monitoring endpoints in minutes"
+  web: statusnook
+
+services:
+  statusnook:
+    environment:
+
+    volumes:
+    - statusnook-data:/app/statusnook-data
+    image: goksan/statusnook
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8000
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 8000:8000

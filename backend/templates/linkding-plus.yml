@@ -1,0 +1,32 @@
+x-hosty:
+  name: "Linkding Plus"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A self-hosted bookmark manager designed to be minimal, fast, and easy to set up. (Includes feature for archiving websites as HTML snapshots)"
+  web: linkding-plus
+  secrets:
+    - linkding_password
+  inputs:
+    linkding_user:
+      type: "string"
+      default: "linkding"
+      description: "Linkding username"
+
+services:
+  linkding-plus:
+    image: sissbruecker/linkding:latest-plus
+    volumes:
+    - linkding_data:/etc/linkding/data
+    environment:
+
+    - LD_SUPERUSER_NAME=${linkding_user}
+    - LD_SUPERUSER_PASSWORD=${linkding_password}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/9090' || exit 1
+      interval: 5s
+      timeout: 5s
+    ports:
+    - 9090:9090

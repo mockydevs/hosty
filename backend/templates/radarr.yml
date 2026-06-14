@@ -1,0 +1,35 @@
+x-hosty:
+  name: "Radarr"
+  version: 1
+  category: "Media"
+  icon: "film"
+  description: "Radarr⁠ - A fork of Sonarr to work with movies à la Couchpotato."
+  web: radarr
+  domain_input: domain
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment:
+
+    - _APP_URL=${domain}
+    - PUID=1000
+    - PGID=1000
+    - TZ=${TZ:-America/Toronto}
+    volumes:
+    - radarr-config:/config
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:7878/ping
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 7878:7878

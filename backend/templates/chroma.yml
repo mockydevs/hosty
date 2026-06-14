@@ -1,0 +1,28 @@
+x-hosty:
+  name: "Chroma"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "Chroma is the open-source search and retrieval database for AI applications."
+  web: chromadb
+
+services:
+  chromadb:
+    image: chromadb/chroma:1.0.15
+    volumes:
+    - chroma-data:/data
+    environment:
+
+    - IS_PERSISTENT=TRUE
+    - PERSIST_DIRECTORY=/data
+    healthcheck:
+      test:
+      - CMD
+      - /bin/bash
+      - -c
+      - cat < /dev/null > /dev/tcp/localhost/8000
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+    - 8000:8000

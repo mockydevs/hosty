@@ -1,0 +1,21 @@
+x-hosty:
+  name: "Drizzle Gateway"
+  version: 1
+  category: "Developer Tools"
+  icon: "code-2"
+  description: "Free self-hosted Drizzle Studio on steroids"
+  web: drizzle-gateway
+  secrets:
+    - drizzle_password
+
+services:
+  drizzle-gateway:
+    image: ghcr.io/drizzle-team/gateway:latest
+    environment:
+
+    - STORE_PATH=/app
+    - MASTERPASS=${drizzle_password}
+    volumes:
+    - drizzle-gateway-data:/app
+    ports:
+    - 4983:4983

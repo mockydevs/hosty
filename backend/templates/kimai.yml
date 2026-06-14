@@ -1,0 +1,67 @@
+x-hosty:
+  name: "Kimai"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Open source time-tracking app."
+  web: kimai
+  secrets:
+    - mysql_password
+    - root_password
+    - appsecret_password
+    - adminpass_password
+  inputs:
+    mysql_user:
+      type: "string"
+      default: "mysql"
+      description: "Mysql username"
+
+services:
+  mysql:
+    image: mysql:8
+    volumes:
+    - kimai-mysql-data:/var/lib/mysql
+    environment:
+    - MYSQL_DATABASE=${MYSQL_DATABASE:-kimai}
+    - MYSQL_USER=${mysql_user}
+    - MYSQL_PASSWORD=${mysql_password}
+    - MYSQL_ROOT_PASSWORD=${root_password}
+    command: --default-storage-engine innodb
+    healthcheck:
+      test:
+      - CMD
+      - mysqladmin
+      - ping
+      - -h
+      - 127.0.0.1
+      interval: 5s
+      timeout: 20s
+      retries: 10
+  kimai:
+    image: kimai/kimai2:apache
+    container_name: kimai
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+    - kimai-data:/opt/kimai/var/data
+    environment:
+
+    - APP_SECRET=${appsecret_password}
+    - MAILER_FROM=${MAILER_FROM:-kimai@example.com}
+    - MAILER_URL=${MAILER_URL:-null://null}
+    - ADMINMAIL=${ADMINMAIL:-admin@kimai.local}
+    - ADMINPASS=${adminpass_password}
+    - DATABASE_URL=mysql://${mysql_user}:${mysql_password}@mysql/${MYSQL_DATABASE}?charset=utf8mb4&serverVersion=8.3.0
+    - TRUSTED_HOSTS=${TRUSTED_HOSTS}|localhost|127.0.0.1
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8001
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 8001:8001

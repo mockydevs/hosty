@@ -1,0 +1,59 @@
+x-hosty:
+  name: "Redmine"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Redmine is a flexible project management web application."
+  web: redmine
+  secrets:
+    - redmine_key
+    - postgres_key
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  redmine:
+    image: redmine:6-alpine
+    environment:
+
+    - SECRET_KEY_BASE=${redmine_key}
+    - REDMINE_DB_POSTGRES=postgresql
+    - REDMINE_DB_PORT=5432
+    - REDMINE_DB_USERNAME=${postgres_user}
+    - REDMINE_DB_PASSWORD=${postgres_key}
+    - REDMINE_DB_DATABASE=${POSTGRES_DATABASE:-redmine-db}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:3000/
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+    - redmine-config:/usr/src/redmine/config
+    - redmine-files:/usr/src/redmine/files
+    - redmine-themes:/usr/src/redmine/themes
+    - redmine-plugins:/usr/src/redmine/plugins
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+    - 3000:3000
+  postgresql:
+    image: postgres:17-alpine
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_key}
+    - POSTGRES_DB=${POSTGRES_DATABASE:-redmine-db}
+    volumes:
+    - postgresql-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 5

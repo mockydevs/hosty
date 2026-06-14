@@ -1,0 +1,33 @@
+x-hosty:
+  name: "Soketi"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Soketi is your simple, fast, and resilient open-source WebSockets server."
+  web: soketi
+  inputs:
+    soketi_user:
+      type: "string"
+      default: "soketi"
+      description: "Soketi username"
+
+services:
+  soketi:
+    image: quay.io/soketi/soketi:1.6-16-debian
+    environment:
+
+    - SOKETI_DEBUG=${DEBUG:-0}
+    - SOKETI_DEFAULT_APP_ID=${soketi_user}
+    - SOKETI_DEFAULT_APP_KEY=${SERVICE_REALBASE64_64_SOKETIKEY}
+    - SOKETI_DEFAULT_APP_SECRET=${SERVICE_REALBASE64_64_SOKETISECRET}
+    - SOKETI_PUSHER_SCHEME=${SOKETI_PUSHER_SCHEME:-https}
+    - SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES=${DEFAULT_APP_ENABLE_CLIENT_MESSAGES}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/6001' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 6001:6001

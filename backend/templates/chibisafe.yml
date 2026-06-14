@@ -1,0 +1,73 @@
+x-hosty:
+  name: "Chibisafe"
+  version: 1
+  category: "Storage"
+  icon: "hard-drive"
+  description: "A beautiful and performant vault to save all your files in the cloud."
+  web: caddy
+
+services:
+  chibisafe:
+    image: chibisafe/chibisafe:v6.5.5
+    environment:
+    - BASE_API_URL=http://chibisafe-server:8000
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - --quiet
+      - http://127.0.0.1:8001
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  chibisafe-server:
+    image: chibisafe/chibisafe-server:v6.5.5
+    volumes:
+    - chibisafe-database:/app/database:rw
+    - chibisafe-uploads:/app/uploads:rw
+    - chibisafe-logs:/app/logs:rw
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - --quiet
+      - http://127.0.0.1:8000/api/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  caddy:
+    image: caddy:2-alpine
+    environment:
+
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --spider
+      - --quiet
+      - http://127.0.0.1:80
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+    - uploads:/app/uploads:ro
+    - type: bind
+      source: ./Caddyfile
+      target: /etc/caddy/Caddyfile
+      content: "# chibisafe/Caddyfile\n# https://chibisafe.moe/guides/running-with-docker\n\
+        :80 {\n  route {\n    file_server * {\n        root /app/uploads\n       \
+        \ pass_thru\n    }\n    @api path /api/*\n    reverse_proxy @api http://chibisafe-server:8000\
+        \ {\n        header_up Host {http.reverse_proxy.upstream.hostport}\n     \
+        \   header_up X-Real-IP {http.request.header.X-Real-IP}\n    }\n    @docs\
+        \ path /docs*\n    reverse_proxy @docs http://chibisafe-server:8000 {\n  \
+        \      header_up Host {http.reverse_proxy.upstream.hostport}\n        header_up\
+        \ X-Real-IP {http.request.header.X-Real-IP}\n    }\n    reverse_proxy http://chibisafe:8001\
+        \ {\n        header_up Host {http.reverse_proxy.upstream.hostport}\n     \
+        \   header_up X-Real-IP {http.request.header.X-Real-IP}\n    }\n  }\n}\n"
+    ports:
+    - 80:80

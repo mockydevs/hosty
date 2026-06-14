@@ -1,0 +1,28 @@
+x-hosty:
+  name: "Open Webui"
+  version: 1
+  category: "AI"
+  icon: "brain-circuit"
+  description: "User-friendly AI Interface (Supports Ollama, OpenAI API, ...)"
+  web: open-webui
+
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    volumes:
+    - open-webui:/app/backend/data
+    environment:
+
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:8080
+      interval: 5s
+      timeout: 30s
+      retries: 10
+    ports:
+    - 8080:8080
+volumes:
+  open-webui: null

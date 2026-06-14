@@ -1,0 +1,194 @@
+x-hosty:
+  name: "Openpanel"
+  version: 1
+  category: "Analytics"
+  icon: "bar-chart-2"
+  description: "Open source alternative to Mixpanel and Plausible for product analytics"
+  web: openpanel-dashboard
+  domain_input: domain
+  secrets:
+    - postgres_password
+    - redis_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  openpanel-dashboard:
+    image: lindesvard/openpanel-dashboard:2
+    environment:
+    - NODE_ENV=production
+    - SELF_HOSTED=true
+
+    - API_URL=${domain}
+    - DASHBOARD_URL=${domain}
+    - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@postgres:5432/${OPENPANEL_POSTGRES_DB:-openpanel-db}?schema=public
+    - REDIS_URL=redis://default:${redis_password}@redis:6379
+    - CLICKHOUSE_URL=http://clickhouse:8123/openpanel
+    depends_on:
+      openpanel-api:
+        condition: service_healthy
+      openpanel-worker:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:3000/api/healthcheck || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    ports:
+    - 3000:3000
+  openpanel-api:
+    image: lindesvard/openpanel-api:2
+    command: "sh -c \"\n  echo 'Running migrations...'\n  CI=true pnpm -r run migrate:deploy\n\
+      \n  pnpm start\n\"\n"
+    environment:
+    - NODE_ENV=production
+    - SELF_HOSTED=true
+
+    - API_URL=${domain}
+    - DASHBOARD_URL=${domain}
+    - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@postgres:5432/${OPENPANEL_POSTGRES_DB:-openpanel-db}?schema=public
+    - DATABASE_URL_DIRECT=postgres://${postgres_user}:${postgres_password}@postgres:5432/${OPENPANEL_POSTGRES_DB:-openpanel-db}?schema=public
+    - REDIS_URL=redis://default:${redis_password}@redis:6379
+    - CLICKHOUSE_URL=http://clickhouse:8123/openpanel
+    - COOKIE_SECRET=${SERVICE_BASE64_COOKIESECRET}
+    - ALLOW_REGISTRATION=${OPENPANEL_ALLOW_REGISTRATION:-false}
+    - ALLOW_INVITATION=${OPENPANEL_ALLOW_INVITATION:-false}
+    - EMAIL_SENDER=${OPENPANEL_EMAIL_SENDER}
+    - RESEND_API_KEY=${RESEND_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:3000/healthcheck || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  openpanel-worker:
+    image: lindesvard/openpanel-worker:2
+    environment:
+    - DISABLE_BULLBOARD=${DISABLE_BULLBOARD:-1}
+    - NODE_ENV=production
+    - SELF_HOSTED=true
+
+    - API_URL=${domain}
+    - DATABASE_URL=postgres://${postgres_user}:${postgres_password}@postgres:5432/${OPENPANEL_POSTGRES_DB:-openpanel-db}?schema=public
+    - DATABASE_URL_DIRECT=postgres://${postgres_user}:${postgres_password}@postgres:5432/${OPENPANEL_POSTGRES_DB:-openpanel-db}?schema=public
+    - REDIS_URL=redis://default:${redis_password}@redis:6379
+    - CLICKHOUSE_URL=http://clickhouse:8123/openpanel
+    depends_on:
+      openpanel-api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:3000/healthcheck || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+    - openpanel_postgres_data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_DB=${OPENPANEL_POSTGRES_DB:-openpanel-db}
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7.4-alpine
+    volumes:
+    - openpanel_redis_data:/data
+    environment:
+    - REDIS_PASSWORD=${redis_password}
+    command: redis-server --requirepass ${redis_password} --maxmemory-policy
+      noeviction
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - -a
+      - ${redis_password}
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.10.2.65
+    environment:
+    - CLICKHOUSE_SKIP_USER_SETUP=1
+    volumes:
+    - openpanel_clickhouse_data:/var/lib/clickhouse
+    - openpanel_clickhouse_logs:/var/log/clickhouse-server
+    - type: bind
+      source: ./clickhouse-config.xml
+      target: /etc/clickhouse-server/config.d/op-config.xml
+      read_only: true
+      content: "<clickhouse>\n    <logger>\n        <level>warning</level>\n     \
+        \   <console>true</console>\n    </logger>\n    <keep_alive_timeout>10</keep_alive_timeout>\n\
+        \    <!-- Stop all the unnecessary logging -->\n    <query_thread_log remove=\"\
+        remove\"/>\n    <query_log remove=\"remove\"/>\n    <text_log remove=\"remove\"\
+        />\n    <trace_log remove=\"remove\"/>\n    <metric_log remove=\"remove\"\
+        />\n    <asynchronous_metric_log remove=\"remove\"/>\n    <session_log remove=\"\
+        remove\"/>\n    <part_log remove=\"remove\"/>\n    <listen_host>0.0.0.0</listen_host>\n\
+        \    <interserver_listen_host>0.0.0.0</interserver_listen_host>\n    <interserver_http_host>opch</interserver_http_host>\n\
+        \    <!-- Disable cgroup memory observer -->\n    <cgroups_memory_usage_observer_wait_time>0</cgroups_memory_usage_observer_wait_time>\n\
+        \    <!-- Not used anymore, but kept for backwards compatibility -->\n   \
+        \ <macros>\n        <shard>1</shard>\n        <replica>replica1</replica>\n\
+        \        <cluster>openpanel_cluster</cluster>\n    </macros>\n</clickhouse>\n"
+    - type: bind
+      source: ./clickhouse-user-config.xml
+      target: /etc/clickhouse-server/users.d/op-user-config.xml
+      read_only: true
+      content: "<clickhouse>\n    <profiles>\n        <default>\n            <log_queries>0</log_queries>\n\
+        \            <log_query_threads>0</log_query_threads>\n        </default>\n\
+        \    </profiles>\n</clickhouse>\n"
+    - type: bind
+      source: ./init-db.sh
+      target: /docker-entrypoint-initdb.d/init-db.sh
+      content: "#!/bin/sh\nset -e\n\nclickhouse client -n <<-EOSQL\n  CREATE DATABASE\
+        \ IF NOT EXISTS openpanel;\nEOSQL\n"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - clickhouse-client --query "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5

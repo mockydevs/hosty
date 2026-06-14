@@ -1,0 +1,27 @@
+x-hosty:
+  name: "Cyberchef"
+  version: 1
+  category: "Security"
+  icon: "shield"
+  description: "The Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis"
+  web: cyberchef
+
+services:
+  cyberchef:
+    image: ghcr.io/gchq/cyberchef:latest
+    platform: linux/amd64
+    environment:
+
+    volumes:
+    - cyberchef-data:/app/data
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:80
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+    - 80:80

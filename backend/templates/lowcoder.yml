@@ -1,0 +1,32 @@
+x-hosty:
+  name: "Lowcoder"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "Lowcoder (forked from OpenBlocks) is a self-hosted, open-source, low-code platform for building internal tools."
+  web: lowcoder
+  secrets:
+    - encryption_password
+    - salt_password
+
+services:
+  lowcoder:
+    image: lowcoderorg/lowcoder-ce
+    environment:
+
+    - LOWCODER_EMAIL_SIGNUP_ENABLED=${LOWCODER_EMAIL_SIGNUP_ENABLED:-true}
+    - LOWCODER_DB_ENCRYPTION_PASSWORD=${encryption_password}
+    - LOWCODER_DB_ENCRYPTION_SALT=${salt_password}
+    volumes:
+    - lowcoder_data:/lowcoder-stacks
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:3000/health
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    ports:
+    - 3000:3000

@@ -1,0 +1,79 @@
+x-hosty:
+  name: "Osticket"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "osTicket is a widely-used open source support ticket system."
+  web: osticket
+  domain_input: domain
+  secrets:
+    - mariadb_password
+    - osticketsecret_password
+    - osticketadminpass_password
+    - mariadbroot_password
+  inputs:
+    domain:
+      type: "string"
+      description: "Public domain (e.g. https://app.example.com)"
+    mariadb_user:
+      type: "string"
+      default: "mariadb"
+      description: "Mariadb username"
+    osticketadmin_user:
+      type: "string"
+      default: "osticketadmin"
+      description: "Osticketadmin username"
+
+services:
+  osticket:
+    image: tiredofit/osticket:latest
+    environment:
+
+    - APP_URL=${domain}
+    - CRON_INTERVAL=${CRON_INTERVAL:-10}
+    - DB_HOST=mariadb
+    - DB_NAME=${OSTICKET_DATABASE:-osticket-db}
+    - DB_USER=${mariadb_user}
+    - DB_PASS=${mariadb_password}
+    - INSTALL_SECRET=${osticketsecret_password}
+    - ADMIN_FIRSTNAME=${OSTICKET_FIRSTNAME:-Admin}
+    - ADMIN_LASTNAME=${OSTICKET_LASTNAME:-istrator}
+    - ADMIN_EMAIL=${OSTICKET_ADMIN_EMAIL:-admin@example.com}
+    - ADMIN_USER=${osticketadmin_user}
+    - ADMIN_PASS=${osticketadminpass_password}
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1/
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+    - osticket-data:/www/osticket
+    ports:
+    - 80:80
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${mariadbroot_password}
+      MARIADB_DATABASE: ${OSTICKET_DATABASE:-osticket-db}
+      MARIADB_USER: ${mariadb_user}
+      MARIADB_PASSWORD: ${mariadb_password}
+    healthcheck:
+      test:
+      - CMD
+      - healthcheck.sh
+      - --connect
+      - --innodb_initialized
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    volumes:
+    - osticket-mariadb-data:/var/lib/mysql

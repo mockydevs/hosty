@@ -1,0 +1,25 @@
+x-hosty:
+  name: "Actualbudget"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A local-first personal finance app."
+  web: actual_server
+
+services:
+  actual_server:
+    image: actualbudget/actual-server:latest
+    environment:
+
+    - ACTUAL_LOGIN_METHOD=password
+    volumes:
+    - actual_data:/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/5006' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 5006:5006

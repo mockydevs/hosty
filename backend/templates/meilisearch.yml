@@ -3,20 +3,29 @@ x-hosty:
   version: 1
   category: "Search"
   icon: "search"
-  description: "Deploy Meilisearch for fast application search."
-  web: web
-  ports:
-    - web
+  description: "MeiliSearch is a powerful, fast, easy to use and deploy search engine."
+  web: meilisearch
   secrets:
-    - master_key
+    - meilisearch_password
 
 services:
-  web:
-    image: docker.io/getmeili/meilisearch:v1.12
-    ports:
-      - 7700:7700
+  meilisearch:
+    image: getmeili/meilisearch:latest
     environment:
-      MEILI_ENV: production
-      MEILI_MASTER_KEY: ${master_key}
+
+    - MEILI_NO_ANALYTICS=${MEILI_NO_ANALYTICS:-true}
+    - MEILI_ENV=${MEILI_ENV:-production}
+    - MEILI_MASTER_KEY=${meilisearch_password}
     volumes:
-      - meili-data:/meili_data
+    - meilisearch-data:/meili_data
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://127.0.0.1:7700/health
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    ports:
+    - 7700:7700

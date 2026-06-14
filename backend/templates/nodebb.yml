@@ -1,0 +1,57 @@
+x-hosty:
+  name: "Nodebb"
+  version: 1
+  category: "Applications"
+  icon: "box"
+  description: "A next-generation discussion platform."
+  web: nodebb
+  secrets:
+    - postgres_password
+  inputs:
+    postgres_user:
+      type: "string"
+      default: "postgres"
+      description: "Postgres username"
+
+services:
+  nodebb:
+    image: ghcr.io/nodebb/nodebb:latest
+    environment:
+
+    volumes:
+    - nodebb_build:/usr/src/app/build
+    - nodebb_uploads:/usr/src/app/public/uploads
+    - nodebb_config:/opt/config
+    command: "/bin/bash -c \" cat > /usr/src/app/setup.json <<EOL {\n    \\\"defaults\\\
+      \": {\n        \\\"postgres\\\": {\n            \\\"host\\\": \\\"postgres\\\
+      \",\n            \\\"port\\\": 5432,\n            \\\"database\\\": \\\"nodebb\\\
+      \",\n            \\\"username\\\": \\\"${postgres_user}\\\",\n     \
+      \       \\\"password\\\": \\\"${postgres_password}\\\"\n        }\n\
+      \    }\n} EOL && tini -- entrypoint.sh \"\n"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c ':> /dev/tcp/127.0.0.1/4567' || exit 1
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    ports:
+    - 4567:4567
+  postgres:
+    image: postgres:17.2-alpine
+    environment:
+    - POSTGRES_USER=${postgres_user}
+    - POSTGRES_PASSWORD=${postgres_password}
+    - POSTGRES_DB=nodebb
+    volumes:
+    - nodebb_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 20s
+      retries: 10
