@@ -28,6 +28,13 @@ def git_sync_unit(stack: StackSpec, token: str | None = None) -> str:
         host = parsed.netloc
         git_bin = f"/usr/bin/git -c url.{scheme}://x-access-token:{token}@{host}/.insteadOf={scheme}://{host}/"
 
+    build_services = [
+        f"{stack.name}-{s.name}-build.service"
+        for s in stack.services
+        if s.build_repo
+    ]
+    part_of_lines = [f"PartOf={bs}" for bs in build_services]
+
     return "\n".join([
         MANAGED_HEADER,
         f"# hosty-stack={stack.name}",
@@ -36,6 +43,7 @@ def git_sync_unit(stack: StackSpec, token: str | None = None) -> str:
         f"Description=Sync Git repository for stack {stack.name}",
         "After=network-online.target",
         "Wants=network-online.target",
+        *part_of_lines,
         "",
         "[Service]",
         "Type=oneshot",

@@ -232,6 +232,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
         "depends_on": list(service.depends_on),
         "command": list(service.command),
+        "generation": stack.generation,  # bump forces planner to rewrite+restart on git.rebuild
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:32]
