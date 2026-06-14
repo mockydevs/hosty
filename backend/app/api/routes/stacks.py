@@ -900,6 +900,7 @@ async def list_stack_operations(
             "status": op.status,
             "steps": _json.loads(op.steps_json),
             "error": op.error,
+            "log_lines": op.log_lines or "",
             "created_at": op.created_at.isoformat(),
             "finished_at": op.finished_at.isoformat() if op.finished_at else None,
         }

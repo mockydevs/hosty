@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ type StackOp = {
   status: string;
   steps: Step[];
   error: string | null;
+  log_lines: string;
   created_at: string;
   finished_at: string | null;
 };
@@ -121,6 +123,58 @@ function StepRow({ step }: { step: Step }) {
   );
 }
 
+// ── Terminal log ─────────────────────────────────────────────────────────────
+
+function colorLine(line: string): { cls: string; text: string } {
+  if (line.includes("✗") || line.toLowerCase().includes("error") || line.toLowerCase().includes("failed")) {
+    return { cls: "text-red-400", text: line };
+  }
+  if (line.includes("✓") || line.includes("Done —")) {
+    return { cls: "text-emerald-400", text: line };
+  }
+  if (line.includes("→") || line.includes("Starting")) {
+    return { cls: "text-blue-300", text: line };
+  }
+  return { cls: "text-zinc-300", text: line };
+}
+
+function LogTerminal({ logLines, isRunning }: { logLines: string; isRunning: boolean }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const lines = logLines ? logLines.split("\n").filter(Boolean) : [];
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logLines]);
+
+  if (lines.length === 0 && !isRunning) return null;
+
+  return (
+    <div className="border-t border-border/60 bg-zinc-950 rounded-b-xl">
+      <div className="h-56 overflow-y-auto px-4 py-3 font-mono text-xs leading-5 scrollbar-thin scrollbar-thumb-zinc-700">
+        {lines.length === 0 ? (
+          <span className="text-zinc-500 animate-pulse">Waiting for output...</span>
+        ) : (
+          lines.map((line, i) => {
+            const { cls, text } = colorLine(line);
+            return (
+              <div key={i} className={cls}>
+                {text}
+              </div>
+            );
+          })
+        )}
+        {isRunning && (
+          <div className="mt-1 flex items-center gap-1.5 text-zinc-500">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Running…</span>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
 // ── Single operation card ────────────────────────────────────────────────────
 
 function OpCard({ op, live = false }: { op: StackOp; live?: boolean }) {
@@ -184,8 +238,13 @@ function OpCard({ op, live = false }: { op: StackOp; live?: boolean }) {
         </div>
       )}
 
-      {/* Error message */}
-      {op.status === "failed" && op.error && (
+      {/* Terminal log — shown whenever there are lines, or while live+running */}
+      {(op.log_lines || (live && isRunning)) && (
+        <LogTerminal logLines={op.log_lines} isRunning={isRunning} />
+      )}
+
+      {/* Error message (when no log lines to show it) */}
+      {op.status === "failed" && op.error && !op.log_lines && (
         <div className="border-t border-red-500/20 bg-red-500/5 px-4 py-2">
           <p className="text-xs text-red-400 font-mono break-all">{op.error}</p>
         </div>

@@ -299,6 +299,8 @@ class Operation(Base):
     # JSON list of {"name": str, "label": str, "status": "pending|running|done|failed|rolled_back"}
     steps_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Newline-separated log lines written by the reconciler for live terminal display.
+    log_lines: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, onupdate=utcnow

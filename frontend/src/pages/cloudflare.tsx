@@ -130,7 +130,7 @@ export function CloudflareZonesPage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={zone.status === "active" && !zone.paused ? "success" : "outline"}>
+                  <Badge variant={zone.status === "active" && !zone.paused ? "default" : "outline"}>
                     {zone.paused ? "paused" : zone.status}
                   </Badge>
                 </TableCell>
@@ -141,7 +141,7 @@ export function CloudflareZonesPage() {
             ))}
           </TableBody>
         </Table>
-      )}
+      ) : null}
     </div>
   );
 }

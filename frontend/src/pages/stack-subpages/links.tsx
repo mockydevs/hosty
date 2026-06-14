@@ -204,11 +204,14 @@ function EndpointRow({ endpoint }: { endpoint: Endpoint }) {
         <p className="text-xs text-muted-foreground">{endpoint.service_name}</p>
       </div>
       <CopyButton value={url} />
-      <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-        <a href={url} target="_blank" rel="noopener noreferrer">
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </Button>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+      </a>
     </div>
   );
 }

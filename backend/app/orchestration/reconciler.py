@@ -337,7 +337,9 @@ class Reconciler:
             if op is not None:
                 op.status = "running"
                 op.steps_json = operations.initial_steps_json(actions)
+                op.log_lines = ""
                 await db.commit()
+                await operations.append_log(db, op, f"Starting {op.kind.replace('_', ' ')} for {name} ({len(actions)} steps)")
 
             async def tenant_in_use(tenant: str) -> bool:
                 return tenant in tenants_in_use
@@ -354,9 +356,10 @@ class Reconciler:
             )
             executed = 0
             for action in actions:
-                step_name, _ = operations.step_for(action)
+                step_name, step_label = operations.step_for(action)
                 if op is not None:
                     await operations.set_step(db, op, step_name, "running")
+                    await operations.append_log(db, op, f"→ {step_label}")
                 try:
                     await executor.execute(action, ctx)
                 except Exception as exc:
@@ -364,6 +367,7 @@ class Reconciler:
                     log.error("stack_action_failed", stack=name, step=step_name, error=str(exc))
                     if op is not None:
                         await operations.set_step(db, op, step_name, "failed")
+                        await operations.append_log(db, op, f"✗ {step_label}: {exc}")
                         await operations.finish(db, op, status="failed", error=error[:500])
                     await self._on_stack_status(db, name, "degraded", error[:500])
                     return StackOutcome(
@@ -371,9 +375,11 @@ class Reconciler:
                     )
                 if op is not None:
                     await operations.set_step(db, op, step_name, "done")
+                    await operations.append_log(db, op, f"✓ {step_label}")
                 executed += 1
 
             if op is not None:
+                await operations.append_log(db, op, f"Done — all {executed} steps completed successfully")
                 await operations.finish(db, op, status="succeeded")
             status = "absent" if spec is None else ("suspended" if spec.suspended else "ready")
             await self._on_stack_status(db, name, status, None)

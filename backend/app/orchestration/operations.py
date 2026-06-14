@@ -55,6 +55,14 @@ def initial_steps_json(actions: list[act.Action]) -> str:
     )
 
 
+async def append_log(db: AsyncSession, op: Operation, message: str) -> None:
+    """Append a timestamped line to op.log_lines and flush to DB."""
+    ts = utcnow().strftime("%H:%M:%S")
+    line = f"[{ts}] {message}\n"
+    op.log_lines = (op.log_lines or "") + line
+    await db.commit()
+
+
 async def set_step(db: AsyncSession, op: Operation, name: str, status: str) -> None:
     steps = json.loads(op.steps_json)
     for step in steps:
