@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Clean up from a potentially aborted previous migration run that left the index behind
+    op.execute("DROP INDEX IF EXISTS ix_stacks_server_id")
+    
     with op.batch_alter_table("stacks") as batch_op:
         batch_op.add_column(sa.Column("server_id", sa.Integer(), nullable=True))
         batch_op.create_index(batch_op.f("ix_stacks_server_id"), ["server_id"], unique=False)
