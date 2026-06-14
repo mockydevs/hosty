@@ -240,7 +240,7 @@ async def refresh_installation(
     private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
     now = int(time.time())
     app_jwt = pyjwt.encode(
-        {"iat": now - 60, "exp": now + 540, "iss": source.app_id},
+        {"iat": now - 60, "exp": now + 540, "iss": str(source.app_id)},
         private_key,
         algorithm="RS256",
     )
@@ -290,7 +290,7 @@ async def list_source_repos(
 
     now = int(time.time())
     app_jwt = pyjwt.encode(
-        {"iat": now - 60, "exp": now + 540, "iss": source.app_id},
+        {"iat": now - 60, "exp": now + 540, "iss": str(source.app_id)},
         private_key,
         algorithm="RS256",
     )
@@ -387,7 +387,7 @@ async def github_install(
             private_key = decrypt_secret(source.private_key_encrypted, settings.secret_key)
             now = int(time.time())
             app_jwt = pyjwt.encode(
-                {"iat": now - 60, "exp": now + 540, "iss": source.app_id},
+                {"iat": now - 60, "exp": now + 540, "iss": str(source.app_id)},
                 private_key,
                 algorithm="RS256",
             )
