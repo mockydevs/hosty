@@ -841,29 +841,42 @@ function TemplateDeployForm({
 }) {
   const templates = blueprints.filter((bp) => !["git", "raw-image"].includes(bp.id));
   const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
 
+  // Sorted list of categories, preserving insertion order within each sort
   const categories = useMemo(() => {
     const cats = new Set<string>();
     for (const bp of templates) {
       const cat = (bp as BlueprintWithMeta).category;
       if (cat) cats.add(cat);
     }
-    return ["All", ...Array.from(cats).sort()];
+    return Array.from(cats).sort();
   }, [templates]);
 
-  const filtered = templates.filter((bp) => {
-    const term = query.trim().toLowerCase();
-    const meta = bp as BlueprintWithMeta;
-    const matchSearch =
-      !term ||
-      bp.id.includes(term) ||
-      blueprintDisplayName(bp).toLowerCase().includes(term) ||
-      (meta.description ?? "").toLowerCase().includes(term);
-    const matchCat =
-      activeCategory === "All" || meta.category === activeCategory;
-    return matchSearch && matchCat;
-  });
+  const term = query.trim().toLowerCase();
+  const isSearching = term.length > 0;
+
+  // When searching: flat filtered list. Otherwise: group by category.
+  const searchResults = isSearching
+    ? templates.filter((bp) => {
+        const meta = bp as BlueprintWithMeta;
+        return (
+          bp.id.includes(term) ||
+          blueprintDisplayName(bp).toLowerCase().includes(term) ||
+          (meta.description ?? "").toLowerCase().includes(term)
+        );
+      })
+    : [];
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, Blueprint[]>();
+    for (const cat of categories) map.set(cat, []);
+    for (const bp of templates) {
+      const cat = (bp as BlueprintWithMeta).category ?? "Other";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(bp);
+    }
+    return map;
+  }, [templates, categories]);
 
   if (templates.length === 0) {
     return <ErrorState message="No one-click templates are available." />;
@@ -885,71 +898,68 @@ function TemplateDeployForm({
 
   // ── Grid browse view ──
   return (
-    <div className="space-y-5">
-      {/* Search + category filter bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            aria-label="Search templates"
-            placeholder="Search templates…"
-            className="pl-9"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-
-        {categories.length > 2 && (
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setActiveCategory(cat)}
-                className={[
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  activeCategory === cat
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                ].join(" ")}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
+    <div className="space-y-8">
+      {/* Search bar — full width, no category pills */}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          aria-label="Search templates"
+          placeholder="Search templates…"
+          className="pl-9"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
       </div>
 
-      {/* Results count */}
-      {query && (
-        <p className="text-sm text-muted-foreground">
-          {filtered.length} result{filtered.length !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
-        </p>
+      {/* ── Search results (flat) ── */}
+      {isSearching && (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
+          </p>
+          {searchResults.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-16 text-center">
+              <Boxes className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden />
+              <p className="font-medium">No templates match your search.</p>
+              <button
+                type="button"
+                className="mt-2 text-sm text-primary hover:underline"
+                onClick={() => setQuery("")}
+              >
+                Clear search
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {searchResults.map((bp) => (
+                <TemplateCard key={bp.id} blueprint={bp} onClick={() => onSelectTemplate(bp)} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Responsive card grid (matches Coolify xl:grid-cols-3) */}
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-16 text-center">
-          <Boxes className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden />
-          <p className="font-medium">No templates match your search.</p>
-          <button
-            type="button"
-            className="mt-2 text-sm text-primary hover:underline"
-            onClick={() => { setQuery(""); setActiveCategory("All"); }}
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((bp) => (
-            <TemplateCard key={bp.id} blueprint={bp} onClick={() => onSelectTemplate(bp)} />
-          ))}
-        </div>
-      )}
+      {/* ── Grouped by category ── */}
+      {!isSearching &&
+        categories.map((cat) => {
+          const items = grouped.get(cat) ?? [];
+          if (items.length === 0) return null;
+          return (
+            <section key={cat}>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+                {cat}
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {items.map((bp) => (
+                  <TemplateCard key={bp.id} blueprint={bp} onClick={() => onSelectTemplate(bp)} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
     </div>
   );
 }
