@@ -17,8 +17,8 @@ import type { components } from "@/lib/api/schema";
  * status pills driven by the reconciler's generation/observed_generation
  * projection, not optimistic UI.
  */
-import { useQuery } from "@tanstack/react-query";
-import { Boxes, Plus, Search } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Boxes, Plus, Search, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
@@ -50,6 +50,37 @@ export function StackStatusBadge({ stack }: { stack: Stack }) {
 
 export function isSettling(stack: Stack): boolean {
   return stackDisplayStatus(stack) === "converging" || stack.status === "deleting";
+}
+
+function RetryDeleteButton({ stack }: { stack: Stack }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  async function retry() {
+    setBusy(true);
+    try {
+      await api.DELETE(`/api/stacks/${stack.id}` as any, {
+        body: { confirm_name: stack.name } as any,
+      });
+      qc.invalidateQueries({ queryKey: ["stacks"] });
+    } catch {
+      // ignore — list will auto-refresh
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={retry}
+      disabled={busy}
+      className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+      title="Re-queue deletion"
+    >
+      <RotateCcw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+      Retry
+    </button>
+  );
 }
 
 export function StacksPage() {
@@ -134,7 +165,10 @@ export function StacksPage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <StackStatusBadge stack={stack} />
+                  <div className="flex items-center">
+                    <StackStatusBadge stack={stack} />
+                    {stack.status === "deleting" && <RetryDeleteButton stack={stack} />}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline">{stack.blueprint_id}</Badge>
