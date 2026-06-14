@@ -773,6 +773,7 @@ class ConfigUpdateRequest(BaseModel):
     branch: str | None = None
     auto_deploy: bool | None = None
     force_rebuild: bool | None = None
+    source_id: int | None = None
 
 @router.patch("/{stack_id}/config")
 async def update_stack_config(
@@ -794,6 +795,14 @@ async def update_stack_config(
         inputs["auto_deploy"] = body.auto_deploy
     if body.force_rebuild is not None:
         inputs["force_rebuild"] = body.force_rebuild
+    if body.source_id is not None:
+        if body.source_id == 0:
+            inputs.pop("source_id", None)
+        else:
+            source = await db.get(GitSource, body.source_id)
+            if not source or source.owner_id != user.id:
+                raise NotFoundError("Git source not found")
+            inputs["source_id"] = body.source_id
 
     stack.inputs_encrypted = stacks_service.encrypt_inputs(inputs, settings)
     await db.commit()

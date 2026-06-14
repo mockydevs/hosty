@@ -24,6 +24,10 @@ x-hosty:
       type: "string"
       default: ""
       description: "Public domain — leave blank to auto-generate one"
+    source_id:
+      type: "string"
+      default: ""
+      description: "GitHub App Source ID — link to a Git source to enable automatic webhook redeployment"
 
 services:
   web:

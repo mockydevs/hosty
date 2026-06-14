@@ -6,7 +6,7 @@ import hmac
 import json
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,6 @@ router = APIRouter()
 @router.post("/github", status_code=status.HTTP_202_ACCEPTED)
 async def github_webhook(
     request: Request,
-    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Receives GitHub App push events and triggers rebuilds for matching stacks."""
@@ -97,12 +96,9 @@ async def github_webhook(
         return {"status": "ignored", "reason": "no matching stacks"}
 
     await db.commit()
+    reconciler = request.app.state.reconciler
     for stack_obj, op_obj in matched:
         await db.refresh(op_obj)
-        background.add_task(
-            request.app.state.reconciler.converge_stack,
-            stack_obj.name,
-            operation_id=op_obj.id,
-        )
+        reconciler.enqueue(stack_obj.name, op_obj.id)
 
     return {"status": "accepted", "triggered": len(matched)}

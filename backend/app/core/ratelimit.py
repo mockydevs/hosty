@@ -26,9 +26,6 @@ class SlidingWindowLimiter:
         hits = self._hits.setdefault(key, deque())
         while hits and now - hits[0] >= self._window:
             hits.popleft()
-        if not hits:
-            del self._hits[key]
-            return True
         if len(hits) >= self._max:
             return False
         hits.append(now)
