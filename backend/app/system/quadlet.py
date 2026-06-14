@@ -12,7 +12,7 @@ Env values never enter unit text: each service gets an EnvironmentFile
 (0600, tenant-owned, content from `env_file_text`).
 
 Placement: root-managed per-user units in `/etc/containers/systemd/users/
-<uid>/` (podman ≥ 4.9, Ubuntu 24.04). The `# hosty-spec-hash=` marker is
+<uid>/` (podman ≥ 4.6). The `# hosty-spec-hash=` marker is
 the convergence fingerprint observers read back (domain `spec_hash`).
 """
 
