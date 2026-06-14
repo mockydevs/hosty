@@ -31,6 +31,7 @@ const NAV = [
   { to: "/stacks", label: "Deployments", icon: Boxes },
   { to: "/sources", label: "Sources", icon: GitBranch },
   { to: "/databases", label: "Databases", icon: Database },
+  { to: "/servers", label: "Servers", icon: Server, adminOnly: true },
   // Phase 11b: DNS zones are tenant-scoped — clients manage their own.
   { to: "/dns", label: "DNS", icon: Network },
   { to: "/backups", label: "Backups", icon: Archive },

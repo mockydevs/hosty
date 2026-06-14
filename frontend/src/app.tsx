@@ -65,6 +65,9 @@ const ChangePasswordForm = lazy(() =>
 const TerminalPage = lazy(() =>
   import("@/pages/terminal").then((m) => ({ default: m.TerminalPage })),
 );
+const ServersPage = lazy(() =>
+  import("@/pages/servers").then((m) => ({ default: m.ServersPage })),
+);
 
 /** Phase 11a: accounts with a temporary password must change it before
  * anything else — the API blocks every other endpoint with 403 anyway. */
@@ -149,6 +152,14 @@ export function App() {
                 <Route path="/stacks/:stackId" element={<StackDetailPage />} />
                 <Route path="/stacks/:stackId/terminal/:serviceName" element={<TerminalPage />} />
                 <Route path="/sources" element={<SourcesPage />} />
+                <Route
+                  path="/servers"
+                  element={
+                    <RequireAdmin>
+                      <ServersPage />
+                    </RequireAdmin>
+                  }
+                />
                 <Route path="/sources/github/callback" element={<GitHubCallbackPage />} />
                 <Route path="/sources/github/install" element={<GitHubInstallPage />} />
                 <Route path="/databases" element={<DatabasesPage />} />

@@ -411,6 +411,38 @@ class SshKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
 
+class Server(Base):
+    """A host that runs containers for this panel (local or remote VPS).
+
+    is_localhost=True  → the panel's own machine; no SSH needed.
+    is_localhost=False → remote VPS; ssh_key_id picks which SshKey to use.
+
+    status: pending | connected | error
+    """
+
+    __tablename__ = "servers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    hostname: Mapped[str] = mapped_column(String(255), nullable=False)
+    port: Mapped[int] = mapped_column(Integer, nullable=False, default=22)
+    ssh_user: Mapped[str] = mapped_column(String(64), nullable=False, default="root")
+    ssh_key_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ssh_keys.id", ondelete="SET NULL"), nullable=True
+    )
+    is_localhost: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Fields populated by the validate endpoint.
+    os_info: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    cpu_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    memory_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    disk_free_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    podman_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ApiToken(Base):
     """Personal Access Tokens for REST API access."""
 

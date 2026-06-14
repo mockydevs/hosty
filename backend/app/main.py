@@ -26,6 +26,7 @@ from app.api.routes import (
     notifications,
     plans,
     security,
+    servers,
     sites,
     sources,
     stacks,
@@ -137,6 +138,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "startup_converge_failed", error=str(exc)
                 )
             reconciler_task = asyncio.create_task(reconciler.run_loop())
+
+        # Ensure a localhost Server row always exists so the servers page
+        # has something to show even before any remote host is added.
+        try:
+            from sqlalchemy import select as sa_select
+
+            from app.db.models import Server
+
+            async with factory() as db:
+                existing = (
+                    await db.execute(sa_select(Server).where(Server.is_localhost.is_(True)))
+                ).scalar_one_or_none()
+                if existing is None:
+                    import socket
+
+                    db.add(
+                        Server(
+                            name="Localhost",
+                            hostname=socket.gethostname() or "localhost",
+                            port=22,
+                            ssh_user="root",
+                            is_localhost=True,
+                            status="pending",
+                        )
+                    )
+                    await db.commit()
+        except Exception as exc:
+            structlog.get_logger("hosty.startup").warning(
+                "localhost_server_init_failed", error=str(exc)
+            )
+
         yield
         for task in (scheduler_task, reconciler_task):
             if task is not None:
@@ -195,6 +227,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
     app.include_router(usage.router, prefix="/api/usage", tags=["usage"])
     app.include_router(security.router, prefix="/api/security", tags=["security"])
+    app.include_router(servers.router, prefix="/api/servers", tags=["servers"])
     app.include_router(terminal.router, prefix="/api", tags=["terminal"])
     app.include_router(backups.router, prefix="/api/backups", tags=["backups"])
     app.include_router(backups.site_router, prefix="/api/sites", tags=["backups"])
