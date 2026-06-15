@@ -565,6 +565,8 @@ async def set_stack_domain(
     services, _, endpoints = await stacks_service.stack_children(db, stack.id)
     web = next((s for s in services if s.is_web and s.internal_port is not None), None)
     if web is None:
+        web = next((s for s in services if s.internal_port is not None), None)
+    if web is None:
         raise StackValidationError("This stack has no web-facing service to route a domain to")
 
     raw = (body.domain or "").strip().lower()

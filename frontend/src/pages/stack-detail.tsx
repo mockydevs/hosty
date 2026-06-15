@@ -594,7 +594,7 @@ function EndpointsCard({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [domain, setDomain] = useState("");
-  const hasWeb = stack.services.some((s) => s.is_web && s.internal_port != null);
+  const hasWeb = stack.services.some((s) => s.internal_port != null);
 
   const setDomainMut = useMutation({
     mutationFn: async (value: string | null) => {
