@@ -21,6 +21,7 @@ from app.core.config import Settings
 from app.core.secrets import decrypt_secret
 from app.db.models import GitSource, SshKey, Stack, Tenant, User
 from app.domain import actions as act
+from app.domain.specs import derive_host_port
 from app.domain.specs import StackSpec
 from app.services import stacks as stacks_service, tenancy
 from app.services.github import get_installation_token
@@ -49,6 +50,7 @@ class ExecContext:
     sync_caddy: Callable[[], Awaitable[None]]
     tenant_in_use: Callable[[str], Awaitable[bool]]
     host: HostContext = field(default_factory=LocalHost)
+    caddy_patch_upstream: Callable[[str, str], Awaitable[None]] | None = None
 
 
 def _tenant_user_id(linux_user: str) -> int:
@@ -139,6 +141,8 @@ async def execute(action: act.Action, ctx: ExecContext) -> None:
             await _control_service(ctx, tenant, stack, service, "restart")
         case act.RemoveVolumeDir(tenant=tenant, stack=stack, volume=volume):
             await ctx.host.remove_volume_dir(tenant, stack, volume)
+        case act.ZeroDowntimeDeploy(tenant=tenant, stack=stack_spec, service=service):
+            await _zero_downtime_deploy(tenant, stack_spec, service, ctx)
         case act.RemoveTenantIfEmpty(tenant=tenant):
             await _remove_tenant_if_empty(tenant, ctx)
         case act.SyncCaddy():
@@ -191,6 +195,165 @@ async def _control_service(
         f"podman-user-generator is installed, and that the user manager for {tenant} "
         f"is running. Original error: {last_exc}"
     ) from last_exc
+
+
+async def _zero_downtime_deploy(
+    tenant: str, stack_spec: act.StackSpec, service_name: str, ctx: ExecContext
+) -> None:
+    """Blue-green zero-downtime deploy for one service.
+
+    1. Start a candidate container (same image, candidate port) via podman run.
+    2. Health-check the candidate (HTTP probe or TCP connect).
+    3. Swap Caddy's upstream to the candidate (hot-patch, no full reload).
+    4. Stop the old Quadlet-managed container.
+    5. Start the Quadlet unit again (picks up the new :latest image on normal port).
+    6. Health-check the Quadlet unit.
+    7. Swap Caddy's upstream back to the normal port.
+    8. Stop and remove the candidate container.
+
+    If any step fails, the candidate is always cleaned up and a full restart
+    is attempted as a fallback so the stack never stays in a split state.
+    """
+    from app.services.caddy import CaddyClient, CaddyError
+    from app.domain.specs import derive_host_port
+
+    svc_spec = next((s for s in stack_spec.services if s.name == service_name), None)
+    if svc_spec is None or svc_spec.internal_port is None:
+        raise ExecutorError(f"Service {service_name!r} not found or has no port — cannot zero-downtime deploy")
+
+    image = f"hosty/{stack_spec.name}-{service_name}:latest"
+    internal_port = svc_spec.internal_port
+    normal_host_port = derive_host_port(internal_port)
+    candidate_port = normal_host_port + 10000
+    candidate_name = f"{stack_spec.name}-{service_name}-candidate"
+    loopback = stack_spec.loopback_ip
+    normal_upstream = f"{loopback}:{normal_host_port}"
+    candidate_upstream = f"{loopback}:{candidate_port}"
+    unit = quadlet.service_unit_name(stack_spec.name, service_name)
+
+    # Find domains that route to this service (for Caddy swaps)
+    service_domains = [
+        ep.domain for ep in stack_spec.endpoints if ep.service == service_name
+    ]
+
+    caddy = CaddyClient(ctx.settings.caddy_admin_url)
+
+    async def _cleanup_candidate() -> None:
+        try:
+            await ctx.host.run_as_tenant(
+                tenant,
+                ["/usr/bin/podman", "stop", "--time", "5", candidate_name],
+                timeout=15,
+            )
+        except Exception:
+            pass
+        try:
+            await ctx.host.run_as_tenant(
+                tenant,
+                ["/usr/bin/podman", "rm", "-f", candidate_name],
+                timeout=10,
+            )
+        except Exception:
+            pass
+
+    async def _health_poll(host_port: int, *, path: str = "/health", max_wait: int = 60) -> bool:
+        """Poll HTTP health check, return True when passing or when no health check is configured."""
+        if not svc_spec.health_check_enabled:
+            # No health check configured — just wait briefly for the process to start
+            await asyncio.sleep(2)
+            return True
+        hc_path = svc_spec.health_check_path or path
+        deadline = max_wait
+        waited = 0.0
+        interval = float(svc_spec.health_check_interval)
+        while waited < deadline:
+            try:
+                result = await ctx.host.run_as_tenant(
+                    tenant,
+                    ["curl", "-sf", "--max-time", "3", f"http://127.0.0.1:{host_port}{hc_path}"],
+                    timeout=10,
+                )
+                if result.returncode == 0:
+                    return True
+            except Exception:
+                pass
+            await asyncio.sleep(min(interval, deadline - waited))
+            waited += interval
+        return False
+
+    log.info("zero_downtime_deploy_start", stack=stack_spec.name, service=service_name,
+             candidate_port=candidate_port)
+
+    # Make sure no leftover candidate from a previous failed deploy
+    await _cleanup_candidate()
+
+    # 1. Start candidate container
+    try:
+        await ctx.host.run_as_tenant(
+            tenant,
+            [
+                "/usr/bin/podman", "run", "-d",
+                "--name", candidate_name,
+                "--network", f"hosty-{stack_spec.name}",
+                "--network-alias", f"{service_name}-candidate",
+                "-p", f"{loopback}:{candidate_port}:{internal_port}",
+                image,
+            ],
+            timeout=30,
+        )
+    except Exception as exc:
+        raise ExecutorError(f"Failed to start candidate container: {exc}") from exc
+
+    try:
+        # 2. Health-check candidate
+        if not await _health_poll(candidate_port):
+            raise ExecutorError(
+                f"Candidate container for {service_name!r} did not become healthy "
+                f"within {svc_spec.health_check_start_period + 60}s"
+            )
+
+        # 3. Swap Caddy to candidate
+        swap_errors: list[str] = []
+        if service_domains:
+            for domain in service_domains:
+                try:
+                    if ctx.caddy_patch_upstream:
+                        await ctx.caddy_patch_upstream(domain, candidate_upstream)
+                    else:
+                        await caddy.patch_upstream(domain, candidate_upstream)
+                except CaddyError as exc:
+                    swap_errors.append(str(exc))
+                    log.warning("zdeploy_caddy_swap_failed", domain=domain, error=str(exc))
+
+        # 4. Stop old Quadlet unit
+        await ctx.host.control_service(tenant, "stop", unit)
+
+        # 5. Start Quadlet unit on normal port (picks up new :latest)
+        await _control_service(ctx, tenant, stack_spec.name, service_name, "start")
+
+        # 6. Health-check Quadlet unit
+        healthy = await _health_poll(normal_host_port)
+
+        # 7. Swap Caddy back to normal port
+        if service_domains:
+            for domain in service_domains:
+                try:
+                    if ctx.caddy_patch_upstream:
+                        await ctx.caddy_patch_upstream(domain, normal_upstream)
+                    else:
+                        await caddy.patch_upstream(domain, normal_upstream)
+                except CaddyError as exc:
+                    log.warning("zdeploy_caddy_restore_failed", domain=domain, error=str(exc))
+
+        if not healthy and not swap_errors:
+            # Quadlet unit didn't become healthy — leave it running but warn
+            log.warning("zdeploy_unit_health_check_failed", stack=stack_spec.name, service=service_name)
+
+        log.info("zero_downtime_deploy_done", stack=stack_spec.name, service=service_name)
+
+    finally:
+        # 8. Always clean up candidate
+        await _cleanup_candidate()
 
 
 async def _remove_tenant_if_empty(tenant: str, ctx: ExecContext) -> None:

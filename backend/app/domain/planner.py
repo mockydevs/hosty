@@ -44,6 +44,7 @@ from app.domain.actions import (
     StopService,
     SyncCaddy,
     WriteUnits,
+    ZeroDowntimeDeploy,
 )
 from app.domain.specs import Observed, ObservedStack, StackSpec, spec_hash
 
@@ -124,14 +125,21 @@ def _plan_converge(spec: StackSpec, obs: ObservedStack | None) -> list[Action]:
         actions.append(WriteUnits(spec))
         actions.append(DaemonReload(spec.tenant))
 
+    service_map = {svc.name: svc for svc in spec.services}
     for service in sorted(expected):
         unit = observed_units.get(service)
         active = unit.active if unit else False
+        svc_spec = service_map[service]
         if spec.suspended:
             if active:
                 actions.append(StopService(spec.tenant, spec.name, service))
         elif active and service in stale:
-            actions.append(RestartService(spec.tenant, spec.name, service))
+            if svc_spec.zero_downtime_deploy and svc_spec.internal_port is not None:
+                # Has an endpoint that Caddy routes: use blue-green swap instead of
+                # a hard restart. Falls back to RestartService if no port (nothing to swap).
+                actions.append(ZeroDowntimeDeploy(spec.tenant, spec, service))
+            else:
+                actions.append(RestartService(spec.tenant, spec.name, service))
         elif not active:
             actions.append(StartService(spec.tenant, spec.name, service))
 

@@ -515,12 +515,20 @@ class Reconciler:
             async def sync_caddy() -> None:
                 await self._sync_caddy(db)
 
+            from app.services.caddy import CaddyClient
+
+            _caddy_client = CaddyClient(self._settings.caddy_admin_url)
+
+            async def caddy_patch_upstream(domain: str, upstream: str) -> None:
+                await _caddy_client.patch_upstream(domain, upstream)
+
             ctx = executor.ExecContext(
                 db=db,
                 settings=self._settings,
                 sync_caddy=sync_caddy,
                 tenant_in_use=tenant_in_use,
                 host=host,
+                caddy_patch_upstream=caddy_patch_upstream,
             )
             executed = 0
             i = 0
@@ -528,8 +536,9 @@ class Reconciler:
                 action = actions[i]
 
                 # Batch consecutive same-type service actions → parallel execution
-                from app.domain.actions import StartService, StopService, RestartService
-                if isinstance(action, (StartService, StopService, RestartService)):
+                # (ZeroDowntimeDeploy manages its own lifecycle and is never batched)
+                from app.domain.actions import StartService, StopService, RestartService, ZeroDowntimeDeploy as _ZDT
+                if isinstance(action, (StartService, StopService, RestartService)) and not isinstance(action, _ZDT):
                     batch_cls = type(action)
                     batch: list[Action] = []
                     j = i

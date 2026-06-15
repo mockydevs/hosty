@@ -355,6 +355,7 @@ def spec_for(
                 health_check_retries=svc.health_check_retries,
                 health_check_start_period=svc.health_check_start_period,
                 health_check_timeout=svc.health_check_timeout,
+                zero_downtime_deploy=svc.zero_downtime_deploy,
             )
             for svc in sorted(services, key=lambda s: s.name)
         ),

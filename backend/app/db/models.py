@@ -273,6 +273,8 @@ class StackService(Base):
     health_check_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     health_check_start_period: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     health_check_timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    # Zero-downtime deploy: run candidate container, health-check it, swap Caddy, stop old.
+    zero_downtime_deploy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class StackVolume(Base):

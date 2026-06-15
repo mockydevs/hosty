@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { toast } from "sonner";
-import { Activity } from "lucide-react";
+import { Activity, Zap } from "lucide-react";
 
 // ── Advanced settings (auto deploy, force rebuild) ────────────────────────────
 
@@ -166,6 +166,88 @@ function ServiceHealthRow({
       {svc.internal_port === null && (
         <p className="text-xs text-muted-foreground">Health checks require a service with an internal port.</p>
       )}
+    </div>
+  );
+}
+
+// ── Zero-downtime deploy card ─────────────────────────────────────────────────
+
+export function ZeroDowntimeCard({
+  stackId,
+  services,
+}: {
+  stackId: number;
+  services: ServiceRow[];
+}) {
+  const queryClient = useQueryClient();
+  const webServices = services.filter((s) => s.internal_port !== null);
+  if (webServices.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Zap className="h-4 w-4 text-emerald-500" />
+          Zero-Downtime Deploys
+        </CardTitle>
+        <CardDescription>
+          When enabled, the next redeploy starts a candidate container alongside the live one,
+          health-checks it, swaps Caddy's upstream atomically, then gracefully replaces the old container.
+          No visible gap for end users.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {webServices.map((svc) => (
+          <ZeroDowntimeRow key={svc.name} stackId={stackId} svc={svc} queryClient={queryClient} />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ZeroDowntimeRow({
+  stackId,
+  svc,
+  queryClient,
+}: {
+  stackId: number;
+  svc: ServiceRow & { zero_downtime_deploy?: boolean };
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const [enabled, setEnabled] = useState(svc.zero_downtime_deploy ?? false);
+
+  const save = useMutation({
+    mutationFn: async (val: boolean) => {
+      // @ts-ignore
+      const res = await api.PUT(`/api/stacks/${stackId}/zero-downtime` as any, {
+        body: { service_name: svc.name, enabled: val },
+      });
+      if (res.error) throw new Error((res.error as any)?.detail ?? "Failed to save");
+      return res.data as any;
+    },
+    onSuccess: (_, val) => {
+      setEnabled(val);
+      toast.success(val ? `Zero-downtime enabled for ${svc.name}` : `Disabled for ${svc.name}`);
+      queryClient.invalidateQueries({ queryKey: ["stacks", stackId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+      <div>
+        <p className="text-sm font-medium">{svc.name}</p>
+        <p className="text-xs text-muted-foreground">
+          {enabled
+            ? "Blue-green deploy active — no gap on restart"
+            : "Standard restart (brief gap on deploy)"}
+        </p>
+      </div>
+      <Switch
+        checked={enabled}
+        disabled={save.isPending}
+        onCheckedChange={(val) => save.mutate(val)}
+      />
     </div>
   );
 }

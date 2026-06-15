@@ -254,8 +254,10 @@ def dockerfile_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
     build_args = "".join(f" --build-arg {key}" for key, _ in service.build_args)
     lines.extend(
         [
+            # --cache-from reuses layers from the previous build when it exists; silently
+            # ignored by Podman when the image is absent (first deploy).
             f"ExecStart=/usr/bin/podman build --file {service.dockerfile_path}"
-            f" --tag {image_tag}{build_args} .",
+            f" --tag {image_tag} --cache-from {image_tag}{build_args} .",
             # Tag with generation number so rollback can reference a specific build.
             f"ExecStart=/usr/bin/podman tag {image_tag} {image_tag}:gen-{stack.generation}",
             "RemainAfterExit=yes",
@@ -288,7 +290,8 @@ def nixpacks_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
             "[Service]",
             "Type=oneshot",
             f"WorkingDirectory={workspace}",
-            f"ExecStart=/usr/bin/env nixpacks build . --name {image_tag}",
+            # --cache-path preserves the Nixpacks/Nix build cache between deploys.
+            f"ExecStart=/usr/bin/env nixpacks build . --name {image_tag} --cache-path %h/.cache/nixpacks/{stack.name}-{service.name}",
             f"ExecStart=/usr/bin/podman tag {image_tag} {image_tag}:gen-{stack.generation}",
             "TimeoutStartSec=1800",
             "",

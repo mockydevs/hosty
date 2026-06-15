@@ -77,6 +77,17 @@ class RestartService:
 
 
 @dataclass(frozen=True)
+class ZeroDowntimeDeploy:
+    """Blue-green deploy: candidate container → health check → Caddy swap →
+    stop old → start Quadlet unit on normal port → Caddy swap back → cleanup.
+    Only emitted when the service is active+stale and zero_downtime_deploy=True."""
+
+    tenant: str
+    stack: StackSpec
+    service: str  # service name within the stack
+
+
+@dataclass(frozen=True)
 class RemoveVolumeDir:
     """Delete one volume directory (and its data) under the tenant's home."""
 
@@ -107,6 +118,7 @@ Action = (
     | StartService
     | StopService
     | RestartService
+    | ZeroDowntimeDeploy
     | RemoveVolumeDir
     | RemoveTenantIfEmpty
     | SyncCaddy

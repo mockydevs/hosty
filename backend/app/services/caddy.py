@@ -364,6 +364,32 @@ class CaddyClient:
         if resp.status_code // 100 != 2:
             raise CaddyError(f"Caddy rejected config ({resp.status_code}): {resp.text[:500]}")
 
+    async def patch_upstream(self, domain: str, upstream: str) -> None:
+        """Atomically swap the reverse-proxy upstream for one domain without a
+        full config reload. Used by zero-downtime deploys to redirect traffic
+        from the old container to the candidate and back."""
+        resp = await self._request("GET", f"/config/apps/http/servers/{SERVER_NAME}/routes")
+        if resp.status_code != 200:
+            raise CaddyError(f"GET routes returned {resp.status_code}: {resp.text[:200]}")
+        routes: list[dict[str, Any]] = resp.json()
+        for i, route in enumerate(routes):
+            for matcher in route.get("match", []):
+                if domain in matcher.get("host", []):
+                    for handler in route.get("handle", []):
+                        if handler.get("handler") == "reverse_proxy":
+                            handler["upstreams"] = [{"dial": upstream}]
+                            put = await self._request(
+                                "PUT",
+                                f"/config/apps/http/servers/{SERVER_NAME}/routes/{i}",
+                                json=route,
+                            )
+                            if put.status_code // 100 != 2:
+                                raise CaddyError(
+                                    f"PUT route {i} for {domain!r} returned {put.status_code}: {put.text[:200]}"
+                                )
+                            return
+        raise CaddyError(f"No reverse-proxy route found for domain {domain!r}")
+
     async def apply(self, config: dict[str, Any]) -> None:
         """Apply `config`; if anything goes wrong, restore the previous config."""
         previous = await self.get_config()

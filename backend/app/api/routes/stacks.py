@@ -76,6 +76,7 @@ class StackServiceResponse(BaseModel):
     health_check_retries: int
     health_check_start_period: int
     health_check_timeout: int
+    zero_downtime_deploy: bool
 
 
 class StackVolumeResponse(BaseModel):
@@ -955,6 +956,48 @@ async def set_health_check(
     await db.commit()
     await db.refresh(op)
 
+    request.app.state.reconciler.enqueue(stack.name, op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+
+
+# ── Zero-downtime deploy toggle ───────────────────────────────────────────────
+
+class SetZeroDowntimeRequest(BaseModel):
+    service_name: str
+    enabled: bool
+
+
+@router.put(
+    "/{stack_id}/zero-downtime",
+    response_model=StackOperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def set_zero_downtime(
+    request: Request,
+    stack_id: int,
+    body: SetZeroDowntimeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Enable or disable zero-downtime (blue-green) deploys for a service.
+    When enabled, the next redeploy starts a candidate container, health-checks
+    it, swaps Caddy's upstream, then gracefully replaces the running container."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    svc = next((s for s in services if s.name == body.service_name), None)
+    if svc is None:
+        raise NotFoundError(f"Service {body.service_name!r} not found")
+    if body.enabled and svc.internal_port is None:
+        raise StackValidationError("Zero-downtime deploys require a service with an internal port")
+
+    svc.zero_downtime_deploy = body.enabled
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
     request.app.state.reconciler.enqueue(stack.name, op.id)
     return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
 

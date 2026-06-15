@@ -26,7 +26,7 @@ import { copyToClipboard } from "@/lib/utils";
 import { ShowOnceDialog } from "@/pages/stack-create";
 import { StackStatusBadge, isSettling } from "@/pages/stacks";
 
-import { AdvancedSettings, HealthCheckCard } from "./stack-subpages/advanced";
+import { AdvancedSettings, HealthCheckCard, ZeroDowntimeCard } from "./stack-subpages/advanced";
 import { GitSourceSettings } from "./stack-subpages/git-source";
 import { ServersList } from "./stack-subpages/servers";
 import { ScheduledTasksList } from "./stack-subpages/scheduled-tasks";
@@ -1359,6 +1359,7 @@ export function StackDetailPage() {
               <>
                 <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />
                 <PostStartCommandCard stack={data} onOperation={setOperationId} />
+                <ZeroDowntimeCard stackId={Number(id)} services={(data.services ?? []) as any} />
                 <HealthCheckCard stackId={Number(id)} services={(data.services ?? []) as any} />
               </>
             )}

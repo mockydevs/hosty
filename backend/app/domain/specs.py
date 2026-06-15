@@ -86,6 +86,9 @@ class ServiceSpec:
     health_check_retries: int = 3
     health_check_start_period: int = 30
     health_check_timeout: int = 5
+    # Zero-downtime deploy: run candidate container beside the active one, health-check it,
+    # swap Caddy upstream atomically, then tear down the old container.
+    zero_downtime_deploy: bool = False
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
@@ -253,6 +256,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "health_check_start_period": service.health_check_start_period,
         "health_check_timeout": service.health_check_timeout,
         "generation": stack.generation,  # bump forces planner to rewrite+restart on git.rebuild
+        "zero_downtime_deploy": service.zero_downtime_deploy,
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:32]
