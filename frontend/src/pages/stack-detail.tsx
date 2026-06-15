@@ -799,7 +799,7 @@ function EnvVarsCard({
         {Object.keys(envObj).length === 0 ? (
           <p className="text-sm text-muted-foreground">No environment variables defined.</p>
         ) : (
-          <div className="rounded-md border bg-muted/40 p-3 max-h-48 overflow-y-auto">
+          <div className="rounded-md border bg-muted/40 p-3 max-h-96 overflow-y-auto">
             {Object.entries(envObj).map(([key, value]) => (
               <div key={key} className="flex gap-2 font-mono text-xs mb-1 last:mb-0">
                 <span className="font-semibold text-primary/80">{key}</span>
@@ -819,7 +819,7 @@ function EnvVarsCard({
           </DialogDescription>
           <div className="py-2">
             <textarea
-              className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-[400px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder={"PORT=3000\nDATABASE_URL=postgres://..."}
               value={envVars}
               onChange={(e) => setEnvVars(e.target.value)}
