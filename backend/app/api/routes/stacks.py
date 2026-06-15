@@ -27,7 +27,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, is_admin
 from app.core.errors import ConflictError, NotFoundError
 from app.core.secrets import SecretDecryptionError, decrypt_secret
-from app.db.models import App, GitSource, Operation, Site, Stack, StackEndpoint, User, ScheduledTask, Tag, StackTag, Deployment
+import json as _json_mod
+from fastapi.responses import StreamingResponse
+from app.db.models import App, GitSource, Operation, Site, Stack, StackEndpoint, StackService, User, ScheduledTask, Tag, StackTag, Deployment
 from app.domain.validate import SpecValidationError, validate_domain_name, validate_slug
 from app.orchestration.blueprints import list_blueprints
 from app.orchestration.blueprints.base import ActionResult, Blueprint
@@ -67,6 +69,13 @@ class StackServiceResponse(BaseModel):
     is_web: bool
     publicly_exposed: bool
     post_start_command: str | None
+    health_check_enabled: bool
+    health_check_path: str | None
+    health_check_port: int | None
+    health_check_interval: int
+    health_check_retries: int
+    health_check_start_period: int
+    health_check_timeout: int
 
 
 class StackVolumeResponse(BaseModel):
@@ -197,7 +206,7 @@ async def stack_response(db: AsyncSession, stack: Stack, request: Request) -> St
         services=[StackServiceResponse.model_validate(s) for s in services],
         volumes=[StackVolumeResponse.model_validate(v) for v in volumes],
         endpoints=[StackEndpointResponse.model_validate(e) for e in endpoints],
-        inputs=inputs,
+        inputs={**inputs, "watch_paths": _json_mod.loads(stack.watch_paths_json or "[]")},
         server_id=stack.server_id,
     )
 
@@ -349,6 +358,27 @@ async def stack_webhook(
             ).hexdigest()
             if not hmac.compare_digest(expected, signature_header):
                 raise ConflictError("Invalid webhook signature")
+
+    # Watch-paths filter: only rebuild when a changed file matches a configured pattern
+    watch_paths = _json_mod.loads(stack.watch_paths_json or "[]")
+    if watch_paths:
+        import fnmatch as _fnmatch
+        try:
+            payload_json = _json_mod.loads(payload if isinstance(payload, (bytes, str)) else "{}")
+        except Exception:
+            payload_json = {}
+        changed: set[str] = set()
+        for commit in payload_json.get("commits", []):
+            changed.update(commit.get("added", []))
+            changed.update(commit.get("modified", []))
+            changed.update(commit.get("removed", []))
+        matched = any(
+            _fnmatch.fnmatch(f, pat)
+            for f in changed
+            for pat in watch_paths
+        )
+        if not matched:
+            return {"status": "skipped", "reason": "no watched paths changed"}
 
     stack.generation += 1
     op = Operation(kind="webhook_rebuild", stack_id=stack.id, domain=stack.name)
@@ -872,6 +902,235 @@ async def set_post_start_command(
     await db.refresh(op)
 
     request.app.state.reconciler.enqueue(stack.name, op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+
+
+# ── Health checks ──────────────────────────────────────────────────────────────
+
+class SetHealthCheckRequest(BaseModel):
+    service_name: str
+    enabled: bool = False
+    path: str = Field(default="/health", max_length=255)
+    port: int | None = Field(default=None, ge=1, le=65535)
+    interval: int = Field(default=10, ge=1, le=300)
+    retries: int = Field(default=3, ge=1, le=20)
+    start_period: int = Field(default=30, ge=0, le=300)
+    timeout: int = Field(default=5, ge=1, le=60)
+
+
+@router.put(
+    "/{stack_id}/health-check",
+    response_model=StackOperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def set_health_check(
+    request: Request,
+    stack_id: int,
+    body: SetHealthCheckRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Configure (or disable) the HTTP health check for a service.
+    Renders Quadlet HealthCmd/HealthInterval/HealthRetries directives."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    svc = next((s for s in services if s.name == body.service_name), None)
+    if svc is None:
+        raise NotFoundError(f"Service {body.service_name!r} not found")
+    if svc.internal_port is None:
+        raise StackValidationError("Health checks require a service with an internal port")
+
+    svc.health_check_enabled = body.enabled
+    svc.health_check_path = body.path.strip() or "/health"
+    svc.health_check_port = body.port
+    svc.health_check_interval = body.interval
+    svc.health_check_retries = body.retries
+    svc.health_check_start_period = body.start_period
+    svc.health_check_timeout = body.timeout
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    request.app.state.reconciler.enqueue(stack.name, op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+
+
+# ── Watch paths ────────────────────────────────────────────────────────────────
+
+class SetWatchPathsRequest(BaseModel):
+    paths: list[str] = Field(default_factory=list, max_length=50)
+
+
+@router.put("/{stack_id}/watch-paths", status_code=status.HTTP_200_OK)
+async def set_watch_paths(
+    request: Request,
+    stack_id: int,
+    body: SetWatchPathsRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Set glob patterns for the webhook watch-path filter. Only pushes that
+    change at least one matching file will trigger a rebuild. Empty list = always rebuild."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.blueprint_id != "git":
+        raise ConflictError("Watch paths are only supported for git blueprint stacks")
+    stack.watch_paths_json = _json_mod.dumps(body.paths)
+    await db.commit()
+    return {"ok": True, "paths": body.paths}
+
+
+# ── SSE operation log streaming ────────────────────────────────────────────────
+
+@router.get("/{stack_id}/operations/{op_id}/stream")
+async def stream_operation_logs(
+    request: Request,
+    stack_id: int,
+    op_id: int,
+    token: str = Query(..., description="JWT access token"),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """Stream operation log lines as Server-Sent Events. Pass the JWT as the
+    `token` query parameter (EventSource cannot set custom headers)."""
+    from app.core.security import decode_access_token
+    from app.core.errors import AppError
+    settings = request.app.state.settings
+    try:
+        payload = decode_access_token(token, secret=settings.secret_key)
+        user = await db.get(User, int(payload["sub"]))
+        if user is None:
+            raise ValueError("user not found")
+    except Exception:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    stack = await fetch_owned_stack(db, user, stack_id)
+    op_result = await db.execute(
+        select(Operation).where(Operation.id == op_id, Operation.stack_id == stack_id)
+    )
+    op = op_result.scalar_one_or_none()
+    if op is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    async def event_generator():
+        last_len = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            await asyncio.sleep(0.4)
+            await db.refresh(op)
+            logs = op.log_lines or ""
+            if len(logs) > last_len:
+                for line in logs[last_len:].split("\n"):
+                    if line.strip():
+                        yield f"data: {_json_mod.dumps(line)}\n\n"
+                last_len = len(logs)
+            if op.status in ("succeeded", "failed"):
+                yield f"event: done\ndata: {_json_mod.dumps({'status': op.status})}\n\n"
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+# ── Rollback image list + image-based rollback ─────────────────────────────────
+
+@router.get("/{stack_id}/rollback-images")
+async def list_rollback_images(
+    request: Request,
+    stack_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """List locally tagged images available for instant rollback (no rebuild needed).
+    Images are tagged hosty/<stack>-<service>:gen-<N> during each build."""
+    from app.orchestration.reconciler import get_host_for_stack
+    stack = await fetch_owned_stack(db, user, stack_id)
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    build_services = [s for s in services if s.build_repo]
+    if not build_services:
+        return {"images": []}
+
+    try:
+        host = await get_host_for_stack(stack, request.app.state)
+        result = await host.run_as_tenant(
+            stacks_service.tenant_for(stack.owner_id),
+            ["/usr/bin/podman", "images", "--format", "{{.Repository}}:{{.Tag}}\t{{.CreatedAt}}\t{{.Size}}",
+             "--filter", f"reference=hosty/{stack.name}-*:gen-*"],
+            timeout=15,
+        )
+        images = []
+        for line in result.stdout.splitlines():
+            parts = line.strip().split("\t")
+            if len(parts) >= 1:
+                ref = parts[0]
+                name, _, tag = ref.rpartition(":")
+                images.append({
+                    "ref": ref,
+                    "service": name.replace(f"hosty/{stack.name}-", "", 1),
+                    "tag": tag,
+                    "created_at": parts[1] if len(parts) > 1 else None,
+                    "size": parts[2] if len(parts) > 2 else None,
+                })
+        return {"images": images}
+    except Exception as exc:
+        log.warning("rollback_images_failed", stack=stack.name, error=str(exc))
+        return {"images": [], "error": str(exc)}
+
+
+class RollbackImageRequest(BaseModel):
+    service_name: str
+    image_ref: str = Field(..., max_length=512)
+
+
+@router.post(
+    "/{stack_id}/rollback-image",
+    response_model=StackOperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def rollback_to_image(
+    request: Request,
+    stack_id: int,
+    body: RollbackImageRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Roll back a service to a previously built image tag (no rebuild).
+    Retags the image as :latest for that service and restarts the container."""
+    from app.orchestration.reconciler import get_host_for_stack
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    svc = next((s for s in services if s.name == body.service_name), None)
+    if svc is None:
+        raise NotFoundError(f"Service {body.service_name!r} not found")
+
+    latest_tag = f"hosty/{stack.name}-{body.service_name}:latest"
+    tenant = stacks_service.tenant_for(stack.owner_id)
+    unit = f"{stack.name}-{body.service_name}.service"
+
+    try:
+        host = await get_host_for_stack(stack, request.app.state)
+        # Retag the selected image as :latest
+        await host.run_as_tenant(tenant, ["/usr/bin/podman", "tag", body.image_ref, latest_tag])
+        # Restart the container (build service is already active-exited, so it won't re-run)
+        await host.control_service(tenant, "restart", unit)
+    except Exception as exc:
+        raise ConflictError(f"Rollback failed: {exc}") from exc
+
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
     return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
 
 

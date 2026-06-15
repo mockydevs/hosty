@@ -26,7 +26,7 @@ import { copyToClipboard } from "@/lib/utils";
 import { ShowOnceDialog } from "@/pages/stack-create";
 import { StackStatusBadge, isSettling } from "@/pages/stacks";
 
-import { AdvancedSettings } from "./stack-subpages/advanced";
+import { AdvancedSettings, HealthCheckCard } from "./stack-subpages/advanced";
 import { GitSourceSettings } from "./stack-subpages/git-source";
 import { ServersList } from "./stack-subpages/servers";
 import { ScheduledTasksList } from "./stack-subpages/scheduled-tasks";
@@ -1359,6 +1359,7 @@ export function StackDetailPage() {
               <>
                 <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />
                 <PostStartCommandCard stack={data} onOperation={setOperationId} />
+                <HealthCheckCard stackId={Number(id)} services={(data.services ?? []) as any} />
               </>
             )}
 
@@ -1382,7 +1383,7 @@ export function StackDetailPage() {
             {activeSubTab === "Preview Deployments" && <PreviewDeploymentsConfig />}
 
             {/* Rollback */}
-            {activeSubTab === "Rollback" && <RollbackList stackId={Number(id)} />}
+            {activeSubTab === "Rollback" && <RollbackList stackId={Number(id)} onOperation={setOperationId} />}
 
             {/* Resource Limits */}
             {activeSubTab === "Resource Limits" && (

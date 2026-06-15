@@ -78,6 +78,14 @@ class ServiceSpec:
     # Shell command run inside the container after it starts (e.g. DB migrations).
     # Rendered as ExecStartPost= in the systemd unit.  Empty string = disabled.
     post_start_command: str = ""
+    # HTTP health check — Quadlet HealthCmd=/HealthInterval=/etc.
+    health_check_enabled: bool = False
+    health_check_path: str = "/health"
+    health_check_port: int | None = None
+    health_check_interval: int = 10
+    health_check_retries: int = 3
+    health_check_start_period: int = 30
+    health_check_timeout: int = 5
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
@@ -237,6 +245,13 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "depends_on": list(service.depends_on),
         "command": list(service.command),
         "post_start_command": service.post_start_command,
+        "health_check_enabled": service.health_check_enabled,
+        "health_check_path": service.health_check_path,
+        "health_check_port": service.health_check_port,
+        "health_check_interval": service.health_check_interval,
+        "health_check_retries": service.health_check_retries,
+        "health_check_start_period": service.health_check_start_period,
+        "health_check_timeout": service.health_check_timeout,
         "generation": stack.generation,  # bump forces planner to rewrite+restart on git.rebuild
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))

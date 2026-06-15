@@ -348,6 +348,13 @@ def spec_for(
                 exposed=svc.publicly_exposed,
                 depends_on=tuple(json.loads(svc.depends_on_json or "[]")),
                 post_start_command=svc.post_start_command or "",
+                health_check_enabled=svc.health_check_enabled,
+                health_check_path=svc.health_check_path or "/health",
+                health_check_port=svc.health_check_port,
+                health_check_interval=svc.health_check_interval,
+                health_check_retries=svc.health_check_retries,
+                health_check_start_period=svc.health_check_start_period,
+                health_check_timeout=svc.health_check_timeout,
             )
             for svc in sorted(services, key=lambda s: s.name)
         ),

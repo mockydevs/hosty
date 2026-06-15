@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
+import { api, getAccessToken } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
@@ -138,7 +138,13 @@ function colorLine(line: string): { cls: string; text: string } {
   return { cls: "text-zinc-300", text: line };
 }
 
-function LogTerminal({ logLines, isRunning }: { logLines: string; isRunning: boolean }) {
+function LogTerminal({
+  logLines,
+  isRunning,
+}: {
+  logLines: string;
+  isRunning: boolean;
+}) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lines = logLines ? logLines.split("\n").filter(Boolean) : [];
 
@@ -175,9 +181,83 @@ function LogTerminal({ logLines, isRunning }: { logLines: string; isRunning: boo
   );
 }
 
+// ── SSE-enhanced log terminal (used only for live running ops) ────────────────
+
+function LiveLogTerminal({ stackId, opId }: { stackId: number; opId: number }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [done, setDone] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const url = `/api/stacks/${stackId}/operations/${opId}/stream?token=${encodeURIComponent(token)}`;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.body) return;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (!cancelled) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() ?? "";
+          for (const chunk of parts) {
+            for (const raw of chunk.split("\n")) {
+              if (raw.startsWith("event: done")) {
+                setDone(true);
+              } else if (raw.startsWith("data: ")) {
+                try {
+                  const text = JSON.parse(raw.slice(6));
+                  setLines((prev) => [...prev, text]);
+                } catch {}
+              }
+            }
+          }
+        }
+      } catch {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stackId, opId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lines]);
+
+  return (
+    <div className="border-t border-border/60 bg-zinc-950 rounded-b-xl">
+      <div className="h-56 overflow-y-auto px-4 py-3 font-mono text-xs leading-5 scrollbar-thin scrollbar-thumb-zinc-700">
+        {lines.length === 0 ? (
+          <span className="text-zinc-500 animate-pulse">Waiting for output…</span>
+        ) : (
+          lines.map((line, i) => {
+            const { cls, text } = colorLine(line);
+            return <div key={i} className={cls}>{text}</div>;
+          })
+        )}
+        {!done && (
+          <div className="mt-1 flex items-center gap-1.5 text-zinc-500">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Running…</span>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
 // ── Single operation card ────────────────────────────────────────────────────
 
-function OpCard({ op, live = false }: { op: StackOp; live?: boolean }) {
+function OpCard({ op, live = false, stackId }: { op: StackOp; live?: boolean; stackId: number }) {
   const isRunning = op.status === "running" || op.status === "pending";
   const dur = duration(op.created_at, op.finished_at);
 
@@ -238,10 +318,12 @@ function OpCard({ op, live = false }: { op: StackOp; live?: boolean }) {
         </div>
       )}
 
-      {/* Terminal log — shown whenever there are lines, or while live+running */}
-      {(op.log_lines || (live && isRunning)) && (
+      {/* Terminal log — SSE stream for live running ops, static for finished */}
+      {live && isRunning ? (
+        <LiveLogTerminal stackId={stackId} opId={op.id} />
+      ) : (op.log_lines || (live && isRunning)) ? (
         <LogTerminal logLines={op.log_lines} isRunning={isRunning} />
-      )}
+      ) : null}
 
       {/* Error message for failed ops with no log output (timed out / orphaned) */}
       {op.status === "failed" && op.error && !op.log_lines && (
@@ -306,6 +388,7 @@ export function DeploymentsTab({
         <OpCard
           key={op.id}
           op={op}
+          stackId={stackId}
           live={activeOperationId != null && op.id === activeOperationId}
         />
       ))}

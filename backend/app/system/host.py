@@ -97,6 +97,11 @@ class HostContext(ABC):
     @abstractmethod
     async def user_manager_ready(self, uid: int) -> bool: ...
 
+    # --- arbitrary tenant-level commands (rollback, image list) ---------------
+
+    @abstractmethod
+    async def run_as_tenant(self, tenant: str, argv: list[str], *, timeout: float = 60) -> CommandResult: ...
+
 
 # ---------------------------------------------------------------------------
 # LocalHost — delegates to existing local functions
@@ -177,6 +182,9 @@ class LocalHost(HostContext):
 
     async def user_manager_ready(self, uid: int) -> bool:
         return Path(f"/run/user/{uid}/bus").is_socket()
+
+    async def run_as_tenant(self, tenant: str, argv: list[str], *, timeout: float = 60) -> CommandResult:
+        return await runner.run(["sudo", "-u", tenant, *argv], timeout=timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -586,3 +594,6 @@ class RemoteSSHHost(HostContext):
             return result.returncode == 0
         except Exception:
             return False
+
+    async def run_as_tenant(self, tenant: str, argv: list[str], *, timeout: float = 60) -> CommandResult:
+        return await self._ssh_run(["sudo", "-u", tenant, *argv], timeout=timeout)

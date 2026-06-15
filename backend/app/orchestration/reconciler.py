@@ -27,6 +27,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 import structlog
 from sqlalchemy import select
@@ -112,6 +113,35 @@ async def _build_host_map(
             private_key_text=private_key,
         )
     return host_map
+
+
+async def get_host_for_stack(stack: Any, state: Any) -> HostContext:
+    """Return the HostContext for a stack ORM row. Uses `state.settings` and
+    a short-lived DB session from `state.db_factory`. Falls back to LocalHost
+    for localhost/missing servers."""
+    server_id: int | None = getattr(stack, "server_id", None)
+    if server_id is None:
+        return LocalHost()
+    settings: Settings = state.settings
+    db_factory = state.sessionmaker
+    async with db_factory() as db:
+        from app.db.models import Server as _Server, SshKey as _SshKey
+        server = await db.get(_Server, server_id)
+        if server is None or server.is_localhost:
+            return LocalHost()
+        if server.ssh_key_id is None:
+            return LocalHost()
+        key_row = await db.get(_SshKey, server.ssh_key_id)
+        if key_row is None:
+            return LocalHost()
+        from app.core.secrets import decrypt_secret as _decrypt
+        private_key = _decrypt(key_row.private_key_encrypted, settings.secret_key)
+        return RemoteSSHHost(
+            hostname=server.hostname,
+            port=server.port,
+            username=server.ssh_user,
+            private_key_text=private_key,
+        )
 
 
 async def _observe_remote(

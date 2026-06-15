@@ -158,6 +158,16 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
     if service.post_start_command:
         # Run inside the container after it becomes active (e.g. DB migrations).
         lines.append(f"ExecStartPost=/usr/bin/podman exec {stack.name}-{service.name} sh -c {service.post_start_command!r}")
+    if service.health_check_enabled and service.internal_port is not None:
+        hc_port = service.health_check_port or service.internal_port
+        hc_path = service.health_check_path or "/health"
+        lines.extend([
+            f"HealthCmd=curl -sf http://localhost:{hc_port}{hc_path} || exit 1",
+            f"HealthInterval={service.health_check_interval}s",
+            f"HealthRetries={service.health_check_retries}",
+            f"HealthStartPeriod={service.health_check_start_period}s",
+            f"HealthTimeout={service.health_check_timeout}s",
+        ])
     if service.env:
         lines.append(f"EnvironmentFile={env_file_path(stack.tenant, stack.name, service.name)}")
     # A volume mounted by exactly one service across the stack gets `:U` so
@@ -246,6 +256,8 @@ def dockerfile_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
         [
             f"ExecStart=/usr/bin/podman build --file {service.dockerfile_path}"
             f" --tag {image_tag}{build_args} .",
+            # Tag with generation number so rollback can reference a specific build.
+            f"ExecStart=/usr/bin/podman tag {image_tag} {image_tag}:gen-{stack.generation}",
             "RemainAfterExit=yes",
             "TimeoutStartSec=1800",
             "",
@@ -277,6 +289,7 @@ def nixpacks_build_unit(stack: StackSpec, service: ServiceSpec) -> str:
             "Type=oneshot",
             f"WorkingDirectory={workspace}",
             f"ExecStart=/usr/bin/env nixpacks build . --name {image_tag}",
+            f"ExecStart=/usr/bin/podman tag {image_tag} {image_tag}:gen-{stack.generation}",
             "TimeoutStartSec=1800",
             "",
             "[Install]",

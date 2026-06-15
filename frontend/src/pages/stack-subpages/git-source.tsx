@@ -8,7 +8,61 @@ import { Badge } from "@/components/ui/badge";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { toast } from "sonner";
-import { Webhook, Unlink } from "lucide-react";
+import { Webhook, Unlink, GitBranch } from "lucide-react";
+
+// ── Watch paths card ──────────────────────────────────────────────────────────
+
+export function WatchPathsCard({ stackId, inputs }: { stackId: number; inputs: any }) {
+  const queryClient = useQueryClient();
+  const existing: string[] = inputs.watch_paths ?? [];
+  const [paths, setPaths] = useState(existing.join("\n"));
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const list = paths
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      // @ts-ignore
+      const res = await api.PUT(`/api/stacks/${stackId}/watch-paths` as any, { body: { paths: list } });
+      if (res.error) throw new Error("Failed to save");
+      return res.data as any;
+    },
+    onSuccess: () => {
+      toast.success("Watch paths saved");
+      queryClient.invalidateQueries({ queryKey: ["stacks", stackId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <GitBranch className="h-4 w-4" />
+          Watch Paths
+        </CardTitle>
+        <CardDescription>
+          Only trigger a rebuild when a push changes a matching file. One glob pattern per line (e.g.{" "}
+          <code className="text-xs bg-muted rounded px-1">src/**</code>). Leave empty to rebuild on every push.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <textarea
+          value={paths}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPaths(e.target.value)}
+          placeholder={"src/**\nDockerfile\npackage.json"}
+          className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+          {save.isPending ? "Saving…" : "Save Watch Paths"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Main git-source component ─────────────────────────────────────────────────
 
 export function GitSourceSettings({ stackId, inputs }: { stackId: number, inputs: any }) {
   const queryClient = useQueryClient();
@@ -152,6 +206,8 @@ export function GitSourceSettings({ stackId, inputs }: { stackId: number, inputs
           )}
         </CardContent>
       </Card>
+
+      <WatchPathsCard stackId={stackId} inputs={inputs} />
     </div>
   );
 }

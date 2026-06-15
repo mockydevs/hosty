@@ -215,6 +215,9 @@ class Stack(Base):
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     observed_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # JSON array of glob patterns — webhook only triggers rebuild when a changed
+    # file matches at least one pattern (empty = always trigger).
+    watch_paths_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, onupdate=utcnow
@@ -262,6 +265,14 @@ class StackService(Base):
     # Optional shell command executed inside the container after it starts.
     # Rendered as ExecStartPost= in the Quadlet unit (e.g. DB migrations).
     post_start_command: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # HTTP health check configuration (Quadlet HealthCmd= etc.)
+    health_check_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    health_check_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    health_check_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    health_check_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    health_check_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    health_check_start_period: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    health_check_timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
 
 
 class StackVolume(Base):
