@@ -583,24 +583,97 @@ function DeleteStackDialog({
   );
 }
 
-// ─── EndpointsCard ────────────────────────────────────────────────────────────
-function EndpointsCard({
+// ─── PostStartCommandCard ─────────────────────────────────────────────────────
+function PostStartCommandCard({
   stack,
   onOperation,
 }: {
   stack: Stack;
+  onOperation: (id: number) => void;
+}) {
+  const queryClient = useQueryClient();
+  const portServices = stack.services.filter((s) => s.internal_port != null);
+  const [commands, setCommands] = useState<Record<string, string>>(
+    Object.fromEntries(portServices.map((s) => [s.name, (s as any).post_start_command ?? ""])),
+  );
+
+  const save = useMutation({
+    mutationFn: async (serviceName: string) => {
+      const { data, error } = await api.PUT("/api/stacks/{stack_id}/post-start-command" as any, {
+        params: { path: { stack_id: stack.id } },
+        body: { service_name: serviceName, command: commands[serviceName] ?? "" },
+      });
+      if (error || !data) throw new Error(apiErrorMessage(error, "Could not save command"));
+      return data as any;
+    },
+    onSuccess: (data, serviceName) => {
+      toast.success(`Post-start command saved for "${serviceName}"`);
+      onOperation(data.operation_id);
+      void queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to save command"),
+  });
+
+  if (portServices.length === 0) return null;
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="text-base">Post-start Commands</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Run a command inside the container after it starts — ideal for database migrations, cache
+          warming, or seed scripts.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {portServices.map((svc) => (
+          <div key={svc.name} className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">
+              Command for <span className="font-mono text-foreground">{svc.name}</span>
+            </p>
+            <div className="flex gap-2">
+              <Input
+                className="flex-1 font-mono text-sm"
+                placeholder="php artisan migrate --force"
+                value={commands[svc.name] ?? ""}
+                onChange={(e) => setCommands((prev) => ({ ...prev, [svc.name]: e.target.value }))}
+                spellCheck={false}
+              />
+              <Button
+                size="sm"
+                loading={save.isPending && save.variables === svc.name}
+                onClick={() => save.mutate(svc.name)}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── EndpointsCard ────────────────────────────────────────────────────────────
+function ServiceDomainRow({
+  stack,
+  serviceName,
+  currentDomain,
+  onOperation,
+}: {
+  stack: Stack;
+  serviceName: string;
+  currentDomain: string | undefined;
   onOperation: (operationId: number) => void;
 }) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [domain, setDomain] = useState("");
-  const hasWeb = stack.services.some((s) => s.internal_port != null);
+  const [domain, setDomain] = useState(currentDomain ?? "");
 
   const setDomainMut = useMutation({
     mutationFn: async (value: string | null) => {
       const { data, error } = await api.PUT("/api/stacks/{stack_id}/domain", {
         params: { path: { stack_id: stack.id } },
-        body: { domain: value, behind_cloudflare: false },
+        body: { domain: value, behind_cloudflare: false, service_name: serviceName },
       });
       if (error || !data) throw new Error(apiErrorMessage(error, "Could not set the domain"));
       return data;
@@ -608,15 +681,15 @@ function EndpointsCard({
     onSuccess: (data) => {
       toast.success("Updating domain…");
       onOperation(data.operation_id);
-      setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to set the domain"),
   });
 
   const autogenerate = async () => {
+    const slug = `${stack.name}-${serviceName}`;
     const { data, error } = await api.GET("/api/stacks/suggested-domain", {
-      params: { query: { name: stack.name } },
+      params: { query: { name: slug } },
     });
     if (error || !data) {
       toast.error(apiErrorMessage(error, "Set an apps base domain or server public IP first"));
@@ -626,82 +699,87 @@ function EndpointsCard({
   };
 
   return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">
+        Domain for <span className="font-mono text-foreground">{serviceName}</span>
+      </p>
+      <div className="flex items-center gap-2">
+        <Input
+          className="flex-1 font-mono text-sm"
+          value={domain}
+          placeholder="app.example.com"
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setDomain(e.target.value)}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={autogenerate}>
+          Generate
+        </Button>
+        <Button
+          size="sm"
+          loading={setDomainMut.isPending}
+          onClick={() => setDomainMut.mutate(domain.trim() || null)}
+        >
+          {currentDomain ? "Update" : "Set"}
+        </Button>
+      </div>
+      {currentDomain && (
+        <a
+          href={`https://${currentDomain}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" />
+          {currentDomain}
+        </a>
+      )}
+    </div>
+  );
+}
+
+function EndpointsCard({
+  stack,
+  onOperation,
+}: {
+  stack: Stack;
+  onOperation: (operationId: number) => void;
+}) {
+  const portServices = stack.services.filter((s) => s.internal_port != null);
+
+  if (portServices.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Endpoints</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">No services expose a port.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const endpointByService = Object.fromEntries(
+    stack.endpoints.map((ep) => [ep.service_name, ep.domain])
+  );
+
+  return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="pb-2">
         <CardTitle className="text-base">Endpoints</CardTitle>
-        {hasWeb && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setDomain(stack.endpoints[0]?.domain ?? "");
-              setEditing(true);
-            }}
-          >
-            {stack.endpoints.length ? "Change domain" : "Set domain"}
-          </Button>
-        )}
       </CardHeader>
-      <CardContent>
-        {stack.endpoints.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No public domains — services are reachable only inside the stack.
-          </p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {stack.endpoints.map((ep) => (
-              <li key={ep.domain} className="flex items-center gap-2">
-                <a
-                  href={`https://${ep.domain}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 font-medium hover:underline"
-                >
-                  {ep.domain}
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                </a>
-                <span className="font-mono text-xs text-muted-foreground">
-                  → {ep.service_name}
-                </span>
-                {ep.behind_cloudflare && <Badge variant="outline">Cloudflare</Badge>}
-              </li>
-            ))}
-          </ul>
-        )}
+      <CardContent className="space-y-4">
+        {portServices.map((svc) => (
+          <ServiceDomainRow
+            key={svc.name}
+            stack={stack}
+            serviceName={svc.name}
+            currentDomain={endpointByService[svc.name]}
+            onOperation={onOperation}
+          />
+        ))}
       </CardContent>
-      <Dialog open={editing} onClose={() => setEditing(false)}>
-        <DialogContent>
-          <DialogTitle>{stack.endpoints.length ? "Change domain" : "Set domain"}</DialogTitle>
-          <DialogDescription>
-            Point a public domain at this stack's web service. Leave blank to auto-generate one
-            (wildcard base, or sslip.io off the server IP).
-          </DialogDescription>
-          <div className="flex items-center gap-2">
-            <Input
-              className="flex-1"
-              value={domain}
-              placeholder="app.example.com"
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => setDomain(e.target.value)}
-            />
-            <Button type="button" variant="outline" onClick={autogenerate}>
-              Autogenerate
-            </Button>
-          </div>
-          <DialogActions>
-            <Button variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button
-              loading={setDomainMut.isPending}
-              onClick={() => setDomainMut.mutate(domain.trim() || null)}
-            >
-              Save
-            </Button>
-          </DialogActions>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }
@@ -768,6 +846,10 @@ function EnvVarsCard({
     },
     onSuccess: (data) => {
       toast.success("Environment variables updated. Restarting stack…");
+      // Show any advisory warnings (e.g. PORT mismatch)
+      for (const w of (data as any).warnings ?? []) {
+        toast.warning(w);
+      }
       onOperation(data.operation_id);
       setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ["stack", stack.id] });
@@ -1193,6 +1275,24 @@ export function StackDetailPage() {
 
       {/* ── Configuration tab: sub-nav + content ── */}
       {activeTab === "Configuration" && (
+        <>
+        {data.generation !== data.observed_generation && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+              <span>Configuration changed — click <strong>Redeploy</strong> to apply the changes.</span>
+            </div>
+            {canRedeploy && (
+              <button
+                className="shrink-0 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                disabled={redeploy.isPending || data.status === "converging"}
+                onClick={() => redeploy.mutate()}
+              >
+                {redeploy.isPending ? "Redeploying…" : "Redeploy now"}
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex min-h-[600px]">
           {/* Left sub-nav (matches Coolify sub-menu-wrapper exactly) */}
           <nav className="w-52 shrink-0 border-r border-border pt-5 pr-2">
@@ -1256,7 +1356,10 @@ export function StackDetailPage() {
 
             {/* Advanced */}
             {activeSubTab === "Advanced" && (
-              <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />
+              <>
+                <AdvancedSettings stackId={Number(id)} inputs={data.inputs} />
+                <PostStartCommandCard stack={data} onOperation={setOperationId} />
+              </>
             )}
 
             {/* Git Source */}
@@ -1314,6 +1417,7 @@ export function StackDetailPage() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* ── Other tabs ── */}

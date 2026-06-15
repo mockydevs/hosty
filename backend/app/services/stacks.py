@@ -123,6 +123,185 @@ async def stack_children(
     return list(services), list(volumes), list(endpoints)
 
 
+_FQDN_ENV_KEYS = ("FQDN", "APP_URL", "SITE_URL", "PUBLIC_URL", "NEXT_PUBLIC_SITE_URL")
+
+
+def _detect_fqdn_endpoint(
+    services: list[StackService], settings: Settings
+) -> EndpointSpec | None:
+    """Scan env vars for a public domain when no endpoint is explicitly configured.
+    Checks FQDN first (universal convention), then common framework-specific names.
+    Only fires when the stack has zero configured endpoints — never overrides a
+    manually set domain."""
+    from urllib.parse import urlparse
+
+    ordered = sorted(services, key=lambda s: (not s.is_web, s.name))
+    for key in _FQDN_ENV_KEYS:
+        for svc in ordered:
+            if svc.internal_port is None:
+                continue
+            env = decrypt_env(svc, settings)
+            raw = env.get(key, "").strip()
+            if not raw:
+                continue
+            try:
+                parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+                domain = parsed.hostname
+                if domain and "." in domain:
+                    return EndpointSpec(domain=domain, service=svc.name)
+            except Exception:
+                pass
+    return None
+
+
+def _magic_service_env(endpoints: tuple) -> dict[str, str]:
+    """Build SERVICE_FQDN_<NAME> and SERVICE_URL_<NAME> vars from configured
+    endpoints — injected into every container so services can reference each
+    other's public URLs without manual env wiring.  User-set vars always win."""
+    magic: dict[str, str] = {}
+    for ep in endpoints:
+        key = ep.service.upper().replace("-", "_")
+        magic[f"SERVICE_FQDN_{key}"] = f"https://{ep.domain}"
+        magic[f"SERVICE_URL_{key}"] = ep.domain
+    return magic
+
+
+def update_env_for_domain(
+    inputs: dict,
+    new_domain: str,
+    old_domain: str | None,
+    *,
+    allow_fallback: bool = True,
+) -> tuple[dict, bool]:
+    """Direction 1 bi-directional sync: when a domain is set via UI, update
+    any env var whose value pointed to the old domain URL.
+
+    If no value-matched var is found and allow_fallback is True (safe only for
+    single-service stacks), updates the first _FQDN_ENV_KEYS key instead.
+    Returns (updated_inputs, changed)."""
+    env = dict(inputs.get("env") or {})
+    new_url = f"https://{new_domain}"
+    changed = False
+
+    if old_domain:
+        old_forms = {
+            f"https://{old_domain}",
+            f"http://{old_domain}",
+            f"https://{old_domain}/",
+            f"http://{old_domain}/",
+        }
+        for key, val in list(env.items()):
+            if isinstance(val, str) and val.rstrip("/") in {v.rstrip("/") for v in old_forms}:
+                env[key] = new_url
+                changed = True
+
+    if not changed and allow_fallback:
+        for key in _FQDN_ENV_KEYS:
+            if key in env:
+                env[key] = new_url
+                changed = True
+                break
+
+    return {**inputs, "env": env}, changed
+
+
+def sync_endpoints_from_env_change(
+    old_env: dict[str, str],
+    new_env: dict[str, str],
+    services: list,
+    endpoints: list,
+    stack_id: int,
+    behind_cloudflare: bool = False,
+) -> tuple[list, list]:
+    """Direction 2 bi-directional sync: when FQDN env vars change, update
+    the corresponding StackEndpoint records.
+
+    Matching strategy: find the endpoint whose domain equals the OLD value of
+    the changed env var — that links the var to its service.  For single-
+    service stacks where no endpoint existed yet, a new one is created.
+
+    Returns (endpoints_to_delete, list_of_dicts_for_new_StackEndpoints)."""
+    from urllib.parse import urlparse
+
+    def _parse_domain(raw: str) -> str | None:
+        if not isinstance(raw, str):
+            return None
+        raw = raw.strip()
+        if not raw:
+            return None
+        try:
+            parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+            host = parsed.hostname
+            return host if host and "." in host else None
+        except Exception:
+            return None
+
+    port_services = [s for s in services if s.internal_port is not None]
+    by_domain = {ep.domain: ep for ep in endpoints}
+    by_service = {ep.service_name: ep for ep in endpoints}
+
+    to_delete: list = []
+    to_add: list = []
+
+    for key in _FQDN_ENV_KEYS:
+        old_raw = old_env.get(key, "")
+        new_raw = new_env.get(key, "")
+        if old_raw == new_raw:
+            continue
+
+        new_domain = _parse_domain(new_raw)
+        if not new_domain:
+            continue
+
+        old_domain = _parse_domain(old_raw)
+
+        if old_domain and old_domain in by_domain:
+            old_ep = by_domain[old_domain]
+            if old_ep not in to_delete:
+                to_delete.append(old_ep)
+            to_add.append(
+                {
+                    "stack_id": stack_id,
+                    "domain": new_domain,
+                    "service_name": old_ep.service_name,
+                    "behind_cloudflare": old_ep.behind_cloudflare,
+                }
+            )
+        elif not old_domain and len(port_services) == 1:
+            svc = port_services[0]
+            existing = by_service.get(svc.name)
+            if existing and existing not in to_delete:
+                to_delete.append(existing)
+            to_add.append(
+                {
+                    "stack_id": stack_id,
+                    "domain": new_domain,
+                    "service_name": svc.name,
+                    "behind_cloudflare": behind_cloudflare,
+                }
+            )
+
+    return to_delete, to_add
+
+
+def _build_endpoints(
+    endpoints: list[StackEndpoint],
+    services: list[StackService],
+    settings: Settings,
+) -> tuple[EndpointSpec, ...]:
+    if endpoints:
+        return tuple(
+            EndpointSpec(
+                domain=ep.domain,
+                service=ep.service_name,
+                behind_cloudflare=ep.behind_cloudflare,
+            )
+            for ep in sorted(endpoints, key=lambda e: e.domain)
+        )
+    auto = _detect_fqdn_endpoint(services, settings)
+    return (auto,) if auto else ()
+
+
 def spec_for(
     stack: Stack,
     services: list[StackService],
@@ -135,6 +314,11 @@ def spec_for(
     """Rows -> validated StackSpec. Raises SpecValidationError on corrupt
     rows (the caller logs and excludes — one bad stack must not stop the
     world)."""
+    # Compute endpoints once so we can inject SERVICE_FQDN_* magic vars and
+    # also pass the same tuple to StackSpec.endpoints without double work.
+    built_endpoints = _build_endpoints(endpoints, services, settings)
+    magic_env = _magic_service_env(built_endpoints)
+
     return StackSpec(
         name=stack.name,
         tenant=tenant_for(stack.owner_id),
@@ -145,7 +329,10 @@ def spec_for(
             ServiceSpec(
                 name=svc.name,
                 image=svc.image_digest or svc.image,
-                env=tuple(sorted(decrypt_env(svc, settings).items())),
+                # Magic vars (SERVICE_FQDN_*, SERVICE_URL_*) are injected as a
+                # base layer; user-set vars override them — union then sort for
+                # canonical form required by ServiceSpec.
+                env=tuple(sorted({**magic_env, **decrypt_env(svc, settings)}.items())),
                 internal_port=svc.internal_port,
                 memory_mb=svc.memory_mb,
                 cpu_percent=svc.cpu_percent,
@@ -160,6 +347,7 @@ def spec_for(
                 ),
                 exposed=svc.publicly_exposed,
                 depends_on=tuple(json.loads(svc.depends_on_json or "[]")),
+                post_start_command=svc.post_start_command or "",
             )
             for svc in sorted(services, key=lambda s: s.name)
         ),
@@ -167,14 +355,7 @@ def spec_for(
             VolumeSpec(name=vol.name, service=vol.service_name, mount_path=vol.mount_path)
             for vol in sorted(volumes, key=lambda v: v.name)
         ),
-        endpoints=tuple(
-            EndpointSpec(
-                domain=ep.domain,
-                service=ep.service_name,
-                behind_cloudflare=ep.behind_cloudflare,
-            )
-            for ep in sorted(endpoints, key=lambda e: e.domain)
-        ),
+        endpoints=built_endpoints,
         suspended=owner_suspended,
     )
 

@@ -259,6 +259,9 @@ class StackService(Base):
     # Opt-in: publish on 0.0.0.0 (reachable on the server's public IP) instead
     # of loopback-only — powers the external DB connection link.
     publicly_exposed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Optional shell command executed inside the container after it starts.
+    # Rendered as ExecStartPost= in the Quadlet unit (e.g. DB migrations).
+    post_start_command: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class StackVolume(Base):

@@ -155,6 +155,9 @@ def container_unit(stack: StackSpec, service: ServiceSpec) -> str:
         lines.append(f"PublishPort={bind}:{host_port}:{service.internal_port}")
     if service.command:
         lines.append(f"Exec={' '.join(service.command)}")
+    if service.post_start_command:
+        # Run inside the container after it becomes active (e.g. DB migrations).
+        lines.append(f"ExecStartPost=/usr/bin/podman exec {stack.name}-{service.name} sh -c {service.post_start_command!r}")
     if service.env:
         lines.append(f"EnvironmentFile={env_file_path(stack.tenant, stack.name, service.name)}")
     # A volume mounted by exactly one service across the stack gets `:U` so

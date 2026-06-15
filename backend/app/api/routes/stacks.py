@@ -66,6 +66,7 @@ class StackServiceResponse(BaseModel):
     cpu_percent: int | None
     is_web: bool
     publicly_exposed: bool
+    post_start_command: str | None
 
 
 class StackVolumeResponse(BaseModel):
@@ -123,6 +124,8 @@ class StackOperationAccepted(BaseModel):
     # Secrets generated at create time, shown exactly once (never returned
     # again; persisted only encrypted).
     show_once: dict[str, str] = Field(default_factory=dict)
+    # Non-fatal advisory messages (e.g. PORT mismatch, magic var conflicts).
+    warnings: list[str] = Field(default_factory=list)
 
 
 class StackActionRequest(BaseModel):
@@ -541,6 +544,8 @@ class SetStackDomainRequest(BaseModel):
     # Blank/omitted → generate one (wildcard base or sslip.io).
     domain: str | None = Field(default=None, max_length=253)
     behind_cloudflare: bool = False
+    # Which service to route to. Omit to use the first web-facing service.
+    service_name: str | None = None
 
 
 @router.put(
@@ -563,14 +568,22 @@ async def set_stack_domain(
         raise ConflictError("Stack is being deleted")
     settings = _settings(request)
     services, _, endpoints = await stacks_service.stack_children(db, stack.id)
-    web = next((s for s in services if s.is_web and s.internal_port is not None), None)
-    if web is None:
-        web = next((s for s in services if s.internal_port is not None), None)
-    if web is None:
+    port_services = [s for s in services if s.internal_port is not None]
+    if not port_services:
         raise StackValidationError("This stack has no web-facing service to route a domain to")
 
+    # Resolve target service: explicit name > first is_web > first with port
+    if body.service_name:
+        web = next((s for s in port_services if s.name == body.service_name), None)
+        if web is None:
+            raise StackValidationError(f"Service {body.service_name!r} not found or has no port")
+    else:
+        web = next((s for s in port_services if s.is_web), None) or port_services[0]
+
+    # Suggested domain uses stack name for primary service, stack-service for others
+    slug = stack.name if web.is_web or len(port_services) == 1 else f"{stack.name}-{web.name}"
     raw = (body.domain or "").strip().lower()
-    domain = raw or stacks_service.suggested_domain(stack.name, settings)
+    domain = raw or stacks_service.suggested_domain(slug, settings)
     if not domain:
         raise ConflictError(
             "No domain provided and none can be generated — set an apps base domain "
@@ -582,8 +595,11 @@ async def set_stack_domain(
         raise StackValidationError(str(exc)) from exc
     await _refuse_domain_conflicts(db, [domain], exclude_stack_id=stack.id)
 
+    # Replace only the endpoint for this service; leave other services' endpoints intact
+    old_domain = next((ep.domain for ep in endpoints if ep.service_name == web.name), None)
     for endpoint in endpoints:
-        await db.delete(endpoint)
+        if endpoint.service_name == web.name:
+            await db.delete(endpoint)
     db.add(
         StackEndpoint(
             stack_id=stack.id,
@@ -592,6 +608,17 @@ async def set_stack_domain(
             behind_cloudflare=body.behind_cloudflare,
         )
     )
+
+    # Direction 1 bi-directional sync: update env vars that pointed to old domain.
+    # Fallback (update any FQDN key) is safe only for single-service stacks where
+    # there is no ambiguity about which service's URL to update.
+    inputs = stacks_service.decrypt_inputs(stack, settings)
+    updated_inputs, env_changed = stacks_service.update_env_for_domain(
+        inputs, domain, old_domain, allow_fallback=len(port_services) == 1
+    )
+    if env_changed:
+        stack.inputs_encrypted = stacks_service.encrypt_inputs(updated_inputs, settings)
+
     stack.generation += 1
     op = Operation(kind="converge_stack", stack_id=stack.id, domain=domain)
     db.add(op)
@@ -620,12 +647,35 @@ async def set_stack_env(
 
     settings = request.app.state.settings
     inputs = stacks_service.decrypt_inputs(stack, settings)
-    
-    # Merge or overwrite env block
+    old_env: dict[str, str] = inputs.get("env") or {}
+
     inputs["env"] = body.env
-    
     stack.inputs_encrypted = stacks_service.encrypt_inputs(inputs, settings)
     stack.generation += 1
+
+    # Direction 2 bi-directional sync: update endpoints when FQDN env vars change
+    services, _, endpoints = await stacks_service.stack_children(db, stack.id)
+    to_delete, to_add_data = stacks_service.sync_endpoints_from_env_change(
+        old_env, body.env, services, endpoints, stack.id
+    )
+    for ep in to_delete:
+        await db.delete(ep)
+    for data in to_add_data:
+        db.add(StackEndpoint(**data))
+    domain_synced = bool(to_delete or to_add_data)
+
+    # PORT mismatch advisory: warn if PORT env var doesn't match internal_port
+    warnings: list[str] = []
+    port_raw = body.env.get("PORT", "").strip()
+    if port_raw.isdigit():
+        env_port = int(port_raw)
+        for svc in services:
+            if svc.internal_port is not None and svc.internal_port != env_port:
+                warnings.append(
+                    f'PORT={env_port} in env vars does not match service "{svc.name}" '
+                    f"internal_port={svc.internal_port} — this may cause 502 Bad Gateway errors"
+                )
+
     op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
     db.add(op)
     await db.commit()
@@ -633,7 +683,13 @@ async def set_stack_env(
 
     reconciler = request.app.state.reconciler
     reconciler.enqueue(stack.name, op.id)
-    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+    if domain_synced:
+        asyncio.create_task(reconciler.resync_ingress())
+    return StackOperationAccepted(
+        stack=await stack_response(db, stack, request),
+        operation_id=op.id,
+        warnings=warnings,
+    )
 
 
 @router.post("/{stack_id}/actions/{action_name}", response_model=StackActionResponse)
@@ -778,6 +834,46 @@ async def set_service_exposure(
 
     request.app.state.reconciler.enqueue(stack.name, op.id)
     return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+
+
+class SetPostStartCommandRequest(BaseModel):
+    service_name: str
+    command: str = Field(default="", max_length=1024)
+
+
+@router.put(
+    "/{stack_id}/post-start-command",
+    response_model=StackOperationAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def set_post_start_command(
+    request: Request,
+    stack_id: int,
+    body: SetPostStartCommandRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Any:
+    """Set (or clear) the post-start command for one service. The command runs
+    inside the container after it starts — use it for DB migrations, cache
+    warming, etc. An empty command disables the feature."""
+    stack = await fetch_owned_stack(db, user, stack_id)
+    if stack.status == "deleting":
+        raise ConflictError("Stack is being deleted")
+    services, _, _ = await stacks_service.stack_children(db, stack.id)
+    svc = next((s for s in services if s.name == body.service_name), None)
+    if svc is None:
+        raise NotFoundError(f"Service {body.service_name!r} not found")
+
+    svc.post_start_command = body.command.strip() or None
+    stack.generation += 1
+    op = Operation(kind="converge_stack", stack_id=stack.id, domain=stack.name)
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+
+    request.app.state.reconciler.enqueue(stack.name, op.id)
+    return StackOperationAccepted(stack=await stack_response(db, stack, request), operation_id=op.id)
+
 
 # ==============================================================================
 # COOLIFY-STYLE MOCK ENDPOINTS (Tags, Scheduled Tasks, Deployments, Metrics, etc)

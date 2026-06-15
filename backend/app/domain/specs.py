@@ -75,6 +75,9 @@ class ServiceSpec:
     # Override the container image's default command (compose `command:`).
     # Each element is one shell word; Quadlet emits Exec= with space-joining.
     command: tuple[str, ...] = ()
+    # Shell command run inside the container after it starts (e.g. DB migrations).
+    # Rendered as ExecStartPost= in the systemd unit.  Empty string = disabled.
+    post_start_command: str = ""
 
     def __post_init__(self) -> None:
         validate_slug(self.name, what="service name")
@@ -233,6 +236,7 @@ def spec_hash(stack: StackSpec, service: ServiceSpec) -> str:
         "volumes": [(v.name, v.mount_path) for v in stack.volumes_for(service.name)],
         "depends_on": list(service.depends_on),
         "command": list(service.command),
+        "post_start_command": service.post_start_command,
         "generation": stack.generation,  # bump forces planner to rewrite+restart on git.rebuild
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
