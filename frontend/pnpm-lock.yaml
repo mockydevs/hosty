@@ -30,8 +30,8 @@ importers:
         specifier: ^0.510.0
         version: 0.510.0(react@19.2.7)
       openapi-fetch:
-        specifier: ^0.13.5
-        version: 0.13.8
+        specifier: ^0.17.0
+        version: 0.17.0
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -1292,11 +1292,11 @@ packages:
   nwsapi@2.2.24:
     resolution: {integrity: sha512-7YRhZ3jS45LwmSCT4b2sVFHt/WuovaktDU07QrtOBY2PXskss5a9jfmR9jptyumwXST+rFjrmppMY1KT/yn35A==}
 
-  openapi-fetch@0.13.8:
-    resolution: {integrity: sha512-yJ4QKRyNxE44baQ9mY5+r/kAzZ8yXMemtNAOFwOzRXJscdjSxxzWSNlyBAr+o5JjkUw9Lc3W7OIoca0cY3PYnQ==}
+  openapi-fetch@0.17.0:
+    resolution: {integrity: sha512-PsbZR1wAPcG91eEthKhN+Zn92FMHxv+/faECIwjXdxfTODGSGegYv0sc1Olz+HYPvKOuoXfp+0pA2XVt2cI0Ig==}
 
-  openapi-typescript-helpers@0.0.15:
-    resolution: {integrity: sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw==}
+  openapi-typescript-helpers@0.1.0:
+    resolution: {integrity: sha512-OKTGPthhivLw/fHz6c3OPtg72vi86qaMlqbJuVJ23qOvQ+53uw1n7HdmkJFibloF7QEjDrDkzJiOJuockM/ljw==}
 
   openapi-typescript@7.13.0:
     resolution: {integrity: sha512-EFP392gcqXS7ntPvbhBzbF8TyBA+baIYEm791Hy5YkjDYKTnk/Tn5OQeKm5BIZvJihpp8Zzr4hzx0Irde1LNGQ==}
@@ -2675,11 +2675,11 @@ snapshots:
 
   nwsapi@2.2.24: {}
 
-  openapi-fetch@0.13.8:
+  openapi-fetch@0.17.0:
     dependencies:
-      openapi-typescript-helpers: 0.0.15
+      openapi-typescript-helpers: 0.1.0
 
-  openapi-typescript-helpers@0.0.15: {}
+  openapi-typescript-helpers@0.1.0: {}
 
   openapi-typescript@7.13.0(typescript@5.9.3):
     dependencies:
