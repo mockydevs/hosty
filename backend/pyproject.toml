@@ -15,7 +15,7 @@ dependencies = [
     "structlog>=24.1",
     "psutil>=6.0",
     "boto3>=1.34",
-    "cryptography>=42.0",
+    "cryptography>=49.0.0",
     "httpx>=0.27",
     "asyncssh>=2.18",
 ]
